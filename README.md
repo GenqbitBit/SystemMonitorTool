@@ -1,2 +1,2 @@
 # SystemMonitorTool
-Cross-platform desktop system monitor (CPU, RAM, Disk, Network, Processes etc...)
+Cross-platform desktop system monitoring application (CPU, RAM, Disk, Network, Processes, etc.)
