@@ -13,10 +13,15 @@
         <vm:MainWindowViewModel />
     </Design.DataContext>
 
-    <TextBlock Text="{Binding CpuUsage, StringFormat=Cpu: {0:F0}%}"
-        FontFamily="Consolas"
-        FontSize="24"
-        HorizontalAlignment="Center"
-        VerticalAlignment="Center"/>
+    <StackPanel HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="8">
+        <TextBlock Text="{Binding CpuUsage, StringFormat=Cpu: {0:F0}%}"
+                FontFamily="JetBrains Mono"
+                FontSize="24" />
+        <TextBlock Text="{Binding MemoryUsageDisplay}"
+                FontFamily="JetBrains Mono"
+                FontSize="24" />
+    </StackPanel>
 
 </Window>

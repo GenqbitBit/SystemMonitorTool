@@ -22,6 +22,7 @@ public partial class App : Avalonia.Application
     {
         var services = new ServiceCollection();
         services.AddSingleton<ICpuMonitorService, CpuMonitorService>();
+        services.AddSingleton<IMemoryMonitorService, MemoryMonitorService>();
         services.AddTransient<MainWindowViewModel>();
         var provider = services.BuildServiceProvider();
 
