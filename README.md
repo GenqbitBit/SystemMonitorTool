@@ -146,6 +146,23 @@ The application follows **Clean Architecture** for modularity, maintainability, 
 │                               │  hardware monitoring libraries
 └─────────────────────────────┘
 ```
+## Project Layers
+
+### Domain
+
+Defines what a CPU, memory reading, network statistic, or alert is.
+
+### Application
+
+Decides when and why those readings should be collected, processed, or refreshed.
+
+### Infrastructure
+
+Actually retrieves those readings from Windows, Linux, or macOS APIs.
+
+### Presentation
+
+Displays the readings as dashboards, charts, tables, and controls.
 
 The **Domain** layer stays independent of the UI, operating system, and database — it only knows about business rules and models.
 
