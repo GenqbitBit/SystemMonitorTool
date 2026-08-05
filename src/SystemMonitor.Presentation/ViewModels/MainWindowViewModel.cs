@@ -11,10 +11,12 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly ICpuMonitorService _cpuMonitorService;
     private readonly IMemoryMonitorService _memoryMonitorService;
+    private readonly IDiskMonitorService _diskMonitorService;
     private readonly DispatcherTimer _timer;
 
     private readonly Queue<double> _recentCpuSamples = new();
     private readonly Queue<double> _recentMemorySamples = new();
+    private readonly Queue<double> _recentDiskSamples = new();
     private const int SmoothingWindow = 4;
 
     [ObservableProperty]
@@ -26,15 +28,26 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string memoryUsageDisplay = string.Empty;
 
+    [ObservableProperty]
+    private double diskUsage;
+
+    [ObservableProperty]
+    private string diskUsageDisplay = string.Empty;
+
     // Design-time only — used by the XAML previewer, never by the real running app
-    public MainWindowViewModel() : this(new DesignTimeCpuMonitorService(), new DesignTimeMemoryMonitorService())
+    public MainWindowViewModel()
+        : this(new DesignTimeCpuMonitorService(), new DesignTimeMemoryMonitorService(), new DesignTimeDiskMonitorService())
     {
     }
 
-    public MainWindowViewModel(ICpuMonitorService cpuMonitorService, IMemoryMonitorService memoryMonitorService)
+    public MainWindowViewModel(
+        ICpuMonitorService cpuMonitorService,
+        IMemoryMonitorService memoryMonitorService,
+        IDiskMonitorService diskMonitorService)
     {
         _cpuMonitorService = cpuMonitorService;
         _memoryMonitorService = memoryMonitorService;
+        _diskMonitorService = diskMonitorService;
 
         _timer = new DispatcherTimer
         {
@@ -61,5 +74,15 @@ public partial class MainWindowViewModel : ViewModelBase
         var usedGB = memoryInfo.UsedMB / 1024.0;
         var totalGB = memoryInfo.TotalMB / 1024.0;
         MemoryUsageDisplay = $"Mem: {MemoryUsage:F0}% ({usedGB:F1} GB / {totalGB:F1} GB)";
+
+        var diskInfo = _diskMonitorService.GetCurrentUsage();
+        _recentDiskSamples.Enqueue(diskInfo.UsagePercent);
+        if (_recentDiskSamples.Count > SmoothingWindow)
+            _recentDiskSamples.Dequeue();
+        DiskUsage = _recentDiskSamples.Average();
+
+        DiskUsageDisplay =
+            $"Disk Read: {diskInfo.ReadMBPerSec:F1} MB/s Disk Write: {diskInfo.WriteMBPerSec:F1} MB/s " +
+            $"Disk Usage({diskInfo.DriveName}): {DiskUsage:F0}% ({diskInfo.UsedGB:F0} GB / {diskInfo.TotalGB:F0} GB) ";
     }
 }

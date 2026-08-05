@@ -24,6 +24,7 @@ public partial class App : Avalonia.Application
         services.AddSingleton<ICpuMonitorService, CpuMonitorService>();
         services.AddSingleton<IMemoryMonitorService, MemoryMonitorService>();
         services.AddTransient<MainWindowViewModel>();
+        services.AddSingleton<IDiskMonitorService, DiskMonitorService>();
         var provider = services.BuildServiceProvider();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
