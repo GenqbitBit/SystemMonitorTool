@@ -4,6 +4,11 @@ using Avalonia.Markup.Xaml;
 using SystemMonitor.Presentation.ViewModels;
 using SystemMonitor.Presentation.Views;
 
+using Microsoft.Extensions.DependencyInjection;
+using SystemMonitor.Application.Interfaces;
+using SystemMonitor.Infrastructure.Monitoring;
+
+
 namespace SystemMonitor.Presentation;
 
 public partial class App : Avalonia.Application
@@ -15,11 +20,16 @@ public partial class App : Avalonia.Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        var services = new ServiceCollection();
+        services.AddSingleton<ICpuMonitorService, CpuMonitorService>();
+        services.AddTransient<MainWindowViewModel>();
+        var provider = services.BuildServiceProvider();
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainViewModel(),
+                DataContext = provider.GetRequiredService<MainWindowViewModel>(),
             };
         }
 
