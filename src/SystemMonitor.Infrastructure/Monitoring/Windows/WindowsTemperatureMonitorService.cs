@@ -23,16 +23,11 @@ public class WindowsTemperatureMonitorService : ITemperatureMonitorService, IDis
 
         _computer.Open();
 
-        // Warm-up pass — same reasoning as CpuMonitorService's PerformanceCounter
-        // warm-up: some sensors return meaningless values on their first
-        // Update() call and only report real data from the second call onward.
         foreach (var hardware in _computer.Hardware)
         {
             hardware.Update();
             foreach (var subHardware in hardware.SubHardware)
-            {
                 subHardware.Update();
-            }
         }
     }
 
@@ -51,6 +46,8 @@ public class WindowsTemperatureMonitorService : ITemperatureMonitorService, IDis
                 CollectTemperatureSensors(subHardware, readings);
             }
         }
+
+        DisambiguateDuplicateLabels(readings);
 
         return readings;
     }
@@ -72,19 +69,40 @@ public class WindowsTemperatureMonitorService : ITemperatureMonitorService, IDis
             .Where(s => s.SensorType == SensorType.Temperature)
             .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
                      && !s.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)
-                     && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase));
+                     && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase)
+                     && !s.Name.Contains("Distance to TjMax", StringComparison.OrdinalIgnoreCase));
 
         foreach (var sensor in temperatureSensors)
         {
-            // Some systems report 0°C when the temperature sensor is present but unreadable.
+            // A reading of exactly 0°C is never real for these components — see
+            // investigation notes: confirmed not permissions/version/AV related,
+            // appears to be OEM firmware restricting SMU telemetry on some laptops.
             var isRealReading = sensor.Value.HasValue && sensor.Value.Value != 0;
 
             readings.Add(new TemperatureReading
             {
-                ComponentLabel = $"{category} - {sensor.Name}",
+                Category = category,
+                SensorLabel = sensor.Name,
                 IsAvailable = isRealReading,
                 TemperatureCelsius = isRealReading ? sensor.Value!.Value : 0
             });
+        }
+    }
+
+    // Some hardware reports multiple sensors with the identical name (e.g. two
+    // drives both named "Temperature") — number them so the UI can tell them apart
+    private static void DisambiguateDuplicateLabels(List<TemperatureReading> readings)
+    {
+        var groups = readings.GroupBy(r => (r.Category, r.SensorLabel));
+
+        foreach (var group in groups.Where(g => g.Count() > 1))
+        {
+            var index = 1;
+            foreach (var reading in group)
+            {
+                reading.SensorLabel = $"{reading.SensorLabel} #{index}";
+                index++;
+            }
         }
     }
 

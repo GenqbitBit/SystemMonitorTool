@@ -8,12 +8,10 @@ internal class DesignTimeTemperatureMonitorService : ITemperatureMonitorService
 {
     public List<TemperatureReading> GetCurrentUsage() => new()
     {
-        new TemperatureReading { ComponentLabel = "CPU - Core (Tctl/Tdie)", IsAvailable = true, TemperatureCelsius = 0.0 },
-        new TemperatureReading { ComponentLabel = "GPU - GPU VR SoC", IsAvailable = true, TemperatureCelsius = 48.0 },
-        new TemperatureReading { ComponentLabel = "GPU - GPU Core", IsAvailable = true, TemperatureCelsius = 48.0 },
-        new TemperatureReading { ComponentLabel = "GPU - GPU Hot Spot", IsAvailable = true, TemperatureCelsius = 56.5 },
-        new TemperatureReading { ComponentLabel = "GPU - GPU Memory Junction", IsAvailable = true, TemperatureCelsius = 46.0 },
-        new TemperatureReading { ComponentLabel = "Disk - Temperature #1", IsAvailable = true, TemperatureCelsius = 38.0 },
-        new TemperatureReading { ComponentLabel = "Disk - Temperature #2", IsAvailable = true, TemperatureCelsius = 41.5 }
+        new TemperatureReading { Category = "CPU", SensorLabel = "Core (Tctl/Tdie)", IsAvailable = false, TemperatureCelsius = 0 },
+        new TemperatureReading { Category = "GPU", SensorLabel = "GPU Core", IsAvailable = true, TemperatureCelsius = 45.0 },
+        new TemperatureReading { Category = "GPU", SensorLabel = "GPU Hot Spot", IsAvailable = true, TemperatureCelsius = 52.2 },
+        new TemperatureReading { Category = "Disk", SensorLabel = "Temperature #1", IsAvailable = true, TemperatureCelsius = 40.0 },
+        new TemperatureReading { Category = "Disk", SensorLabel = "Temperature #2", IsAvailable = true, TemperatureCelsius = 40.0 }
     };
 }
