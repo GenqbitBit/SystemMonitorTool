@@ -5,18 +5,45 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="SystemMonitor.Presentation.Views.MainWindow"
-        x:DataType="vm:MainViewModel"
+        x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
         Title="SystemMonitor.Presentation">
 
     <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
-        <vm:MainViewModel />
+        <vm:MainWindowViewModel />
     </Design.DataContext>
 
-    <TextBox Text="{Binding Greeting}"
-             HorizontalAlignment="Center"
-             VerticalAlignment="Center" />
+        <StackPanel HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Spacing="8">
+                <TextBlock Text="{Binding CpuUsage, StringFormat=Cpu: {0:F0}%}"
+                        FontFamily="JetBrains Mono"
+                        FontSize="24" />
+                <TextBlock Text="{Binding MemoryUsageDisplay}"
+                        FontFamily="JetBrains Mono"
+                        FontSize="24" />
+                <TextBlock Text="{Binding DiskUsageDisplay}"
+                        FontFamily="JetBrains Mono"
+                        FontSize="20" />
+                <TextBlock Text="{Binding NetworkUsageDisplay}"
+                        FontFamily="JetBrains Mono"
+                        FontSize="24" />
+                        
+                <ItemsControl ItemsSource="{Binding TemperatureReadings}">
+                        <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                <TextBlock Text="{Binding}"
+                                        FontFamily="JetBrains Mono"
+                                        FontSize="19" />
+                                </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+        </StackPanel>
+
+
+       
+
+
 
 </Window>
