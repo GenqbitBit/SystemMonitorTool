@@ -25,6 +25,9 @@
                 <TextBlock Text="{Binding DiskUsageDisplay}"
                         FontFamily="JetBrains Mono"
                         FontSize="20" />
+                <TextBlock Text="{Binding NetworkUsageDisplay}"
+                        FontFamily="JetBrains Mono"
+                        FontSize="24" />
         </StackPanel>
 
 </Window>

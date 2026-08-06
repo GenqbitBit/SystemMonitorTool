@@ -12,6 +12,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly ICpuMonitorService _cpuMonitorService;
     private readonly IMemoryMonitorService _memoryMonitorService;
     private readonly IDiskMonitorService _diskMonitorService;
+    private readonly INetworkMonitorService _networkMonitorService;
     private readonly DispatcherTimer _timer;
 
     private readonly Queue<double> _recentCpuSamples = new();
@@ -34,20 +35,26 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string diskUsageDisplay = string.Empty;
 
+    [ObservableProperty]
+    private string networkUsageDisplay = string.Empty;
+
     // Design-time only — used by the XAML previewer, never by the real running app
     public MainWindowViewModel()
-        : this(new DesignTimeCpuMonitorService(), new DesignTimeMemoryMonitorService(), new DesignTimeDiskMonitorService())
-    {
-    }
+            :this(new DesignTimeCpuMonitorService(), new DesignTimeMemoryMonitorService(),
+                  new DesignTimeDiskMonitorService(), new DesignTimeNetworkMonitorService())
+        {
+        }
 
     public MainWindowViewModel(
-        ICpuMonitorService cpuMonitorService,
-        IMemoryMonitorService memoryMonitorService,
-        IDiskMonitorService diskMonitorService)
+                ICpuMonitorService cpuMonitorService,
+                IMemoryMonitorService memoryMonitorService,
+                IDiskMonitorService diskMonitorService,
+                INetworkMonitorService networkMonitorService)
     {
         _cpuMonitorService = cpuMonitorService;
         _memoryMonitorService = memoryMonitorService;
         _diskMonitorService = diskMonitorService;
+        _networkMonitorService = networkMonitorService;
 
         _timer = new DispatcherTimer
         {
@@ -84,5 +91,8 @@ public partial class MainWindowViewModel : ViewModelBase
         DiskUsageDisplay =
             $"Disk Read: {diskInfo.ReadMBPerSec:F1} MB/s Disk Write: {diskInfo.WriteMBPerSec:F1} MB/s " +
             $"Disk Usage({diskInfo.DriveName}): {DiskUsage:F0}% ({diskInfo.UsedGB:F0} GB / {diskInfo.TotalGB:F0} GB) ";
+
+        var networkInfo = _networkMonitorService.GetCurrentUsage();
+        NetworkUsageDisplay = $"Net: ↓ {networkInfo.DownloadKBPerSec:F0} KB/s  ↑ {networkInfo.UploadKBPerSec:F0} KB/s";
     }
 }
