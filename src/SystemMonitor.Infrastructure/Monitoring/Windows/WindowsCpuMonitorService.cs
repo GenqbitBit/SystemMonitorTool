@@ -2,13 +2,13 @@ using System.Diagnostics;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
-namespace SystemMonitor.Infrastructure.Monitoring;
+namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
-public class CpuMonitorService : ICpuMonitorService
+public class WindowsCpuMonitorService : ICpuMonitorService
 {
     private readonly PerformanceCounter _cpuCounter;
 
-    public CpuMonitorService()
+    public WindowsCpuMonitorService()
     {
         _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
         _cpuCounter.NextValue(); // first call always returns 0 — "warms up" the counter

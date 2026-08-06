@@ -4,15 +4,15 @@ using System.Net.NetworkInformation;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
-namespace SystemMonitor.Infrastructure.Monitoring;
+namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
-public class NetworkMonitorService : INetworkMonitorService
+public class WindowsNetworkMonitorService : INetworkMonitorService
 {
     private long _lastBytesReceived;
     private long _lastBytesSent;
     private DateTime _lastSampleTime;
 
-    public NetworkMonitorService()
+    public WindowsNetworkMonitorService()
     {
         (_lastBytesReceived, _lastBytesSent) = GetTotalBytes();
         _lastSampleTime = DateTime.UtcNow;

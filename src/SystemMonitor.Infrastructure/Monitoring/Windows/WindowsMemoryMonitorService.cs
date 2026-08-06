@@ -2,9 +2,9 @@ using System.Runtime.InteropServices;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
-namespace SystemMonitor.Infrastructure.Monitoring;
+namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
-public class MemoryMonitorService : IMemoryMonitorService
+public class WindowsMemoryMonitorService : IMemoryMonitorService
 {
     [StructLayout(LayoutKind.Sequential)]
     private struct MEMORYSTATUSEX

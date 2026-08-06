@@ -7,7 +7,7 @@ using SystemMonitor.Presentation.Views;
 using Microsoft.Extensions.DependencyInjection;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Infrastructure.Monitoring;
-
+using SystemMonitor.Infrastructure;
 
 namespace SystemMonitor.Presentation;
 
@@ -21,11 +21,8 @@ public partial class App : Avalonia.Application
     public override void OnFrameworkInitializationCompleted()
     {
         var services = new ServiceCollection();
-        services.AddSingleton<ICpuMonitorService, CpuMonitorService>();
-        services.AddSingleton<IMemoryMonitorService, MemoryMonitorService>();
+        services.AddPlatformMonitoringServices();
         services.AddTransient<MainWindowViewModel>();
-        services.AddSingleton<IDiskMonitorService, DiskMonitorService>();
-        services.AddSingleton<INetworkMonitorService, NetworkMonitorService>();
         var provider = services.BuildServiceProvider();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)

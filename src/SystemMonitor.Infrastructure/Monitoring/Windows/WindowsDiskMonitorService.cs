@@ -4,16 +4,16 @@ using System.IO;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
-namespace SystemMonitor.Infrastructure.Monitoring;
+namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
-public class DiskMonitorService : IDiskMonitorService
+public class WindowsDiskMonitorService : IDiskMonitorService
 {
     private readonly string _driveName;
     private readonly PerformanceCounter _readCounter;
     private readonly PerformanceCounter _writeCounter;
 
     // Defaults to the system drive; pass a different letter later if you want to monitor multiple drives
-    public DiskMonitorService(string driveName = "C:\\")
+    public WindowsDiskMonitorService(string driveName = "C:\\")
     {
         _driveName = driveName;
 
