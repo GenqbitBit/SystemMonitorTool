@@ -4,6 +4,8 @@ using System.Linq;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SystemMonitor.Application.Interfaces;
+using System.Collections.ObjectModel;
+
 
 namespace SystemMonitor.Presentation.ViewModels;
 
@@ -13,6 +15,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IMemoryMonitorService _memoryMonitorService;
     private readonly IDiskMonitorService _diskMonitorService;
     private readonly INetworkMonitorService _networkMonitorService;
+    private readonly ITemperatureMonitorService _temperatureMonitorService;
     private readonly DispatcherTimer _timer;
 
     private readonly Queue<double> _recentCpuSamples = new();
@@ -38,23 +41,29 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string networkUsageDisplay = string.Empty;
 
+    [ObservableProperty]
+    private ObservableCollection<string> temperatureReadings = new();
+
     // Design-time only — used by the XAML previewer, never by the real running app
     public MainWindowViewModel()
-            :this(new DesignTimeCpuMonitorService(), new DesignTimeMemoryMonitorService(),
-                  new DesignTimeDiskMonitorService(), new DesignTimeNetworkMonitorService())
-        {
-        }
+    : this(new DesignTimeCpuMonitorService(), new DesignTimeMemoryMonitorService(),
+           new DesignTimeDiskMonitorService(), new DesignTimeNetworkMonitorService(),
+           new DesignTimeTemperatureMonitorService())
+            {
+            }
 
     public MainWindowViewModel(
-                ICpuMonitorService cpuMonitorService,
-                IMemoryMonitorService memoryMonitorService,
-                IDiskMonitorService diskMonitorService,
-                INetworkMonitorService networkMonitorService)
+        ICpuMonitorService cpuMonitorService,
+        IMemoryMonitorService memoryMonitorService,
+        IDiskMonitorService diskMonitorService,
+        INetworkMonitorService networkMonitorService,
+        ITemperatureMonitorService temperatureMonitorService)
     {
         _cpuMonitorService = cpuMonitorService;
         _memoryMonitorService = memoryMonitorService;
         _diskMonitorService = diskMonitorService;
         _networkMonitorService = networkMonitorService;
+        _temperatureMonitorService = temperatureMonitorService;
 
         _timer = new DispatcherTimer
         {
@@ -94,5 +103,11 @@ public partial class MainWindowViewModel : ViewModelBase
 
         var networkInfo = _networkMonitorService.GetCurrentUsage();
         NetworkUsageDisplay = $"Net: ↓ {networkInfo.DownloadKBPerSec:F0} KB/s  ↑ {networkInfo.UploadKBPerSec:F0} KB/s";
+
+       var temperatureReadings = _temperatureMonitorService.GetCurrentUsage();
+            TemperatureReadings = new ObservableCollection<string>(
+            temperatureReadings.Select(r => r.IsAvailable
+        ? $"{r.ComponentLabel} Temp: {r.TemperatureCelsius:F1}°C"
+        : $"{r.ComponentLabel} Temp: N/A"));
     }
 }

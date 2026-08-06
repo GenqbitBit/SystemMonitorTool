@@ -28,6 +28,22 @@
                 <TextBlock Text="{Binding NetworkUsageDisplay}"
                         FontFamily="JetBrains Mono"
                         FontSize="24" />
+                        
+                <ItemsControl ItemsSource="{Binding TemperatureReadings}">
+                        <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                <TextBlock Text="{Binding}"
+                                        FontFamily="JetBrains Mono"
+                                        FontSize="19" />
+                                </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
         </StackPanel>
+
+
+       
+
+
 
 </Window>
