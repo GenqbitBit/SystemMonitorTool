@@ -65,6 +65,8 @@ public partial class MainWindowViewModel : ViewModelBase
         _networkMonitorService = networkMonitorService;
         _temperatureMonitorService = temperatureMonitorService;
 
+        UpdateUsage();
+
         _timer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(700)
@@ -104,22 +106,25 @@ public partial class MainWindowViewModel : ViewModelBase
         var networkInfo = _networkMonitorService.GetCurrentUsage();
         NetworkUsageDisplay = $"Net: ↓ {networkInfo.DownloadKBPerSec:F0} KB/s  ↑ {networkInfo.UploadKBPerSec:F0} KB/s";
 
-       var rawTemperatureReadings = _temperatureMonitorService.GetCurrentUsage();
+        var rawTemperatureReadings = _temperatureMonitorService.GetCurrentUsage();
         var displayLines = new List<string>();
         foreach (var categoryGroup in rawTemperatureReadings.GroupBy(r => r.Category))
         {
             var availableReadings = categoryGroup.Where(r => r.IsAvailable).ToList();
+
             if (availableReadings.Count > 0)
             {
                 displayLines.AddRange(availableReadings.Select(r =>
-                    $"{categoryGroup.Key} - {r.SensorLabel} Temp: {r.TemperatureCelsius:F1}°C"));
+                    $"{categoryGroup.Key} - {r.SensorLabel} Temp: {r.TemperatureCelsius:F1}°C " +
+                    $"(min {r.MinCelsius:F1} / max {r.MaxCelsius:F1} / avg {r.AverageCelsius:F1})"));
             }
             else
             {
                 displayLines.Add($"{categoryGroup.Key} Temp: N/A");
             }
         }
-        TemperatureReadings = new ObservableCollection<string>(displayLines);
+    
+    TemperatureReadings = new ObservableCollection<string>(displayLines);
 
         
     }
