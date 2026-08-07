@@ -33,7 +33,9 @@
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="GPU" />
                 
             </StackPanel>
-        </Border>   
+        </Border>  
+        
+        
         <!--test layout-->
         <Border Grid.Row="1">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
@@ -43,7 +45,25 @@
                         Metrics="{Binding Metrics}"
                         HistoryStore="{Binding HistoryStore}"
                         MetricId="cpu.usage"
-                        Width="300" Height="80" />
+                        Width="110" Height="80" />
+                </Border>
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" MetricId="memory.usage" ShowLabel="True"/>
+                <Border BorderBrush="{x:Static local:DebugSettings.BorderBrush}" BorderThickness="1">
+                    <panels:MetricGraphView
+                        Metrics="{Binding Metrics}"
+                        HistoryStore="{Binding HistoryStore}"
+                        MetricId="memory.usage"
+                        LineBrush="DeepSkyBlue"
+                        Width="110" Height="80" />
+                </Border>
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="GPU" MetricId="gpu.usage" ShowLabel="True"/>
+                <Border BorderBrush="{x:Static local:DebugSettings.BorderBrush}" BorderThickness="1">
+                    <panels:MetricGraphView
+                        Metrics="{Binding Metrics}"
+                        HistoryStore="{Binding HistoryStore}"
+                        MetricId="gpu.usage"
+                        LineBrush="#FF1900"
+                        Width="110" Height="80" />
                 </Border>
             </StackPanel>
         </Border> 

@@ -4,5 +4,6 @@
     <Project Path="src/SystemMonitor.Domain/SystemMonitor.Domain.csproj" />
     <Project Path="src/SystemMonitor.Infrastructure/SystemMonitor.Infrastructure.csproj" />
     <Project Path="src/SystemMonitor.Presentation/SystemMonitor.Presentation.csproj" />
+    <Project Path="src/SystemMonitor.Tests/SystemMonitor.Tests.csproj" />
   </Folder>
 </Solution>
