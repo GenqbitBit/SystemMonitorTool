@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Infrastructure.Monitoring.Windows;
+using SystemMonitor.Application.UseCases;
 
 namespace SystemMonitor.Infrastructure;
 
@@ -16,6 +17,7 @@ public static class PlatformMonitoringRegistration
             services.AddSingleton<INetworkMonitorService, WindowsNetworkMonitorService>();
             services.AddSingleton<ITemperatureMonitorService, WindowsTemperatureMonitorService>();
             services.AddSingleton<IGpuMonitorService, WindowsGpuMonitorService>();
+            services.AddSingleton<IMetricsSnapshotProvider, MetricsSnapshotProvider>();
         }
         else if (OperatingSystem.IsLinux())
         {

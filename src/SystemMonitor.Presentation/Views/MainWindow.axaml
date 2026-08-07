@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
+        xmlns:panels="using:SystemMonitor.Presentation.Views.PanelsAndTemplates"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
@@ -13,40 +14,29 @@
         <vm:MainWindowViewModel />
     </Design.DataContext>
 
-        <StackPanel HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            Spacing="8">
-                <TextBlock Text="{Binding CpuUsage, StringFormat=Cpu: {0:F0}%}"
-                        FontFamily="JetBrains Mono"
-                        FontSize="24" />
-                <TextBlock Text="{Binding MemoryUsageDisplay}"
-                        FontFamily="JetBrains Mono"
-                        FontSize="24" />
-                <TextBlock Text="{Binding DiskUsageDisplay}"
-                        FontFamily="JetBrains Mono"
-                        FontSize="20" />
-                <TextBlock Text="{Binding NetworkUsageDisplay}"
-                        FontFamily="JetBrains Mono"
-                        FontSize="24" />
-                <TextBlock Text="{Binding GpuUsageDisplay}"
-                        FontFamily="JetBrains Mono"
-                        FontSize="24" />
-                        
-                <ItemsControl ItemsSource="{Binding TemperatureReadings}">
-                        <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                <TextBlock Text="{Binding}"
-                                        FontFamily="JetBrains Mono"
-                                        FontSize="19" />
-                                </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                </ItemsControl>
+    <!--border for debug-->
+    <!--grid layout == root ui-->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-        </StackPanel>
-
-
-       
-
-
+        <Border Grid.Row="0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" />
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" />
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Disk" />
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Network" />
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="GPU" />
+            </StackPanel>
+        </Border>   
+        <!--test layout-->
+        <Border Grid.Row="4">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" MetricId="cpu.usage" ShowLabel="True"/>
+            </StackPanel>
+        </Border> 
+    </Grid>
 
 </Window>
