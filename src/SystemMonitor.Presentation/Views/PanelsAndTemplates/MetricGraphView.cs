@@ -1,6 +1,4 @@
-using System;
 using System.Collections.ObjectModel;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -20,6 +18,21 @@ public class MetricGraphView : Control
     public static readonly StyledProperty<string?> MetricIdProperty =
         AvaloniaProperty.Register<MetricGraphView, string?>(nameof(MetricId));
 
+    public static readonly StyledProperty<IBrush> LineBrushProperty =
+        AvaloniaProperty.Register<MetricGraphView, IBrush>(
+            nameof(LineBrush),
+            Brushes.LimeGreen);
+
+    public static readonly StyledProperty<double> LineThicknessProperty =
+        AvaloniaProperty.Register<MetricGraphView, double>(
+            nameof(LineThickness),
+            1.5);
+
+    public static readonly StyledProperty<IBrush> GraphBackgroundProperty =
+        AvaloniaProperty.Register<MetricGraphView, IBrush>(
+            nameof(GraphBackground),
+            Brushes.Black);
+
     public ObservableCollection<MetricReading>? Metrics
     {
         get => GetValue(MetricsProperty);
@@ -38,9 +51,33 @@ public class MetricGraphView : Control
         set => SetValue(MetricIdProperty, value);
     }
 
+    public IBrush LineBrush
+    {
+        get => GetValue(LineBrushProperty);
+        set => SetValue(LineBrushProperty, value);
+    }
+
+    public double LineThickness
+    {
+        get => GetValue(LineThicknessProperty);
+        set => SetValue(LineThicknessProperty, value);
+    }
+
+    public IBrush GraphBackground
+    {
+        get => GetValue(GraphBackgroundProperty);
+        set => SetValue(GraphBackgroundProperty, value);
+    }
+
     static MetricGraphView()
     {
-        AffectsRender<MetricGraphView>(MetricsProperty, HistoryStoreProperty, MetricIdProperty);
+        AffectsRender<MetricGraphView>(
+            MetricsProperty,
+            HistoryStoreProperty,
+            MetricIdProperty,
+            LineBrushProperty,
+            LineThicknessProperty,
+            GraphBackgroundProperty);
     }
 
     protected override Size MeasureOverride(Size availableSize)
@@ -55,45 +92,32 @@ public class MetricGraphView : Control
         base.Render(context);
 
         var bounds = Bounds;
-        context.FillRectangle(Brushes.Black, new Rect(bounds.Size));
+        context.FillRectangle(GraphBackground, new Rect(bounds.Size));
+
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+            return;
 
         if (HistoryStore is null || string.IsNullOrEmpty(MetricId))
             return;
 
         var history = HistoryStore.GetHistory(MetricId);
-        if (history.Count < 2)
+        var points = MetricGraphMath.ComputePoints(history, bounds.Width, bounds.Height);
+
+        if (points.Count == 0)
             return;
 
-        var minValue = history.Min(p => p.Value);
-        var maxValue = history.Max(p => p.Value);
-        if (Math.Abs(maxValue - minValue) < 0.0001)
-        {
-            minValue -= 1;
-            maxValue += 1;
-        }
-
-        var minTime = history[0].Timestamp;
-        var maxTime = history[^1].Timestamp;
-        var timeSpanSeconds = (maxTime - minTime).TotalSeconds;
-        if (timeSpanSeconds <= 0) timeSpanSeconds = 1;
-
         var geometry = new StreamGeometry();
+
         using (var ctx = geometry.Open())
         {
-            for (int i = 0; i < history.Count; i++)
-            {
-                var point = history[i];
-                var x = (point.Timestamp - minTime).TotalSeconds / timeSpanSeconds * bounds.Width;
-                var normalized = (point.Value - minValue) / (maxValue - minValue);
-                var y = bounds.Height - (normalized * bounds.Height);
+            ctx.BeginFigure(new Point(points[0].X, points[0].Y), isFilled: false);
 
-                if (i == 0)
-                    ctx.BeginFigure(new Point(x, y), isFilled: false);
-                else
-                    ctx.LineTo(new Point(x, y));
+            for (int i = 1; i < points.Count; i++)
+            {
+                ctx.LineTo(new Point(points[i].X, points[i].Y));
             }
         }
 
-        context.DrawGeometry(null, new Pen(Brushes.LimeGreen, 1.5), geometry);
+        context.DrawGeometry(null, new Pen(LineBrush, LineThickness), geometry);
     }
 }
