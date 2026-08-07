@@ -4,6 +4,7 @@
         xmlns:panels="using:SystemMonitor.Presentation.Views.PanelsAndTemplates"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="using:SystemMonitor.Presentation"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="SystemMonitor.Presentation.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
@@ -33,10 +34,10 @@
             </StackPanel>
         </Border>   
         <!--test layout-->
-        <Border Grid.Row="2">
+        <Border Grid.Row="1">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" MetricId="cpu.usage" ShowLabel="True"/>
-                <Border x:Name="GraphDebugBorder">
+                <Border BorderBrush="{x:Static local:DebugSettings.BorderBrush}" BorderThickness="1">
                     <panels:MetricGraphView
                         Metrics="{Binding Metrics}"
                         HistoryStore="{Binding HistoryStore}"

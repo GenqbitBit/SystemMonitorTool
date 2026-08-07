@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:models="using:SystemMonitor.Domain.Models"
+             xmlns:local="using:SystemMonitor.Presentation"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="200" d:DesignHeight="150"
@@ -8,9 +9,8 @@
              x:Name="Root">
     <!-- debug border -->
     <Border
-        BorderBrush="#7800FF00"
-        BorderThickness="1" 
-        Background="#FD323230"
+        BorderBrush="{x:Static local:DebugSettings.BorderBrush}"
+        BorderThickness="1"
         Padding="8">
     <!-- General Layout Container -->
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
