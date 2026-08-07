@@ -86,7 +86,16 @@ public class WindowsGpuMonitorService : IGpuMonitorService
             _isIntegrated = chosenIsIntegrated;
         }
 
-        _luidFilter = ResolveLuidFilter(_name);
+        var (luidFilter, accurateMemoryMb) = ResolveGpuDetailsFromDxgi(_name);
+        _luidFilter = luidFilter;
+
+        // DXGI's DedicatedVideoMemory is a 64-bit value with no size cap,
+        // unlike WMI's AdapterRAM (32-bit, caps out around 4095MB). Prefer
+        // it when DXGI successfully matched our GPU.
+        if (accurateMemoryMb.HasValue)
+        {
+            _totalMemoryMb = accurateMemoryMb.Value;
+        }
 
         // Prime whatever GPU Engine counter instances exist right now, same
         // idea as WindowsCpuMonitorService warming up its counter in the
@@ -99,11 +108,14 @@ public class WindowsGpuMonitorService : IGpuMonitorService
     }
 
     // DXGI is Microsoft's own graphics API (ships with Windows), not a
-    // vendor SDK — we use it only to match our chosen GPU's name to its
-    // LUID, a unique adapter identifier. That LUID shows up as text
-    // inside "GPU Engine"/"GPU Process Memory" counter instance names,
-    // which is what lets us filter to THIS GPU instead of summing all of them.
-    private static string? ResolveLuidFilter(string gpuName)
+    // vendor SDK. We use it for two things once at startup:
+    //   1. Matching our chosen GPU's name to its LUID, a unique adapter
+    //      identifier, which lets us filter Performance Counter instances
+    //      to just this GPU (see MatchesChosenGpu).
+    //   2. Reading DedicatedVideoMemory — a 64-bit VRAM total with no
+    //      size cap, unlike WMI's 32-bit AdapterRAM field which maxes
+    //      out around 4095MB on cards with more VRAM than that.
+    private static (string? luidFilter, double? memoryMb) ResolveGpuDetailsFromDxgi(string gpuName)
     {
         try
         {
@@ -117,7 +129,9 @@ public class WindowsGpuMonitorService : IGpuMonitorService
                     if (string.Equals(desc.Description, gpuName, StringComparison.OrdinalIgnoreCase))
                     {
                         var luid = desc.Luid;
-                        return $"0x{(uint)luid.HighPart:x8}_0x{luid.LowPart:x8}";
+                        var luidFilter = $"0x{(uint)luid.HighPart:x8}_0x{luid.LowPart:x8}";
+                        var memoryMb = desc.DedicatedVideoMemory / (1024.0 * 1024.0);
+                        return (luidFilter, memoryMb);
                     }
                 }
             }
@@ -125,10 +139,11 @@ public class WindowsGpuMonitorService : IGpuMonitorService
         catch
         {
             // If DXGI enumeration fails for any reason, fall back to
-            // summing all GPUs rather than crashing GPU monitoring entirely.
+            // summing all GPUs for usage/memory and keeping WMI's
+            // (possibly capped) total, rather than crashing entirely.
         }
 
-        return null;
+        return (null, null);
     }
 
     // Heuristic only — Windows doesn't expose an "integrated vs dedicated"
