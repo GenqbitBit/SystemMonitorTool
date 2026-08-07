@@ -1,11 +1,12 @@
-namespace SystemMonitor.Domain.Models;
+﻿namespace SystemMonitor.Domain.Models;
 
 public enum MetricKind
 {
     Percentage,
     DataRate,      // KB/s, MB/s — exact unit now comes from Unit, not inferred from Kind
     DataSize,      // GB, MB
-    Temperature
+    Temperature,
+    Text           // identity facts (model, chipset) — the value lives in TextValue
 }
 
 public class MetricReading
@@ -21,6 +22,11 @@ public class MetricReading
     public double? Max { get; set; }
     public double? Average { get; set; }
 
+    /// <summary>For Text-kind metrics the value IS this string; numeric metrics leave it null.</summary>
+    public string? TextValue { get; set; }
+
     /// <summary>Value formatted with its actual unit — e.g. "42%", "10.2 GB", "1200 KB/s".</summary>
-    public string DisplayValue => Unit == "%" ? $"{Value}{Unit}" : $"{Value} {Unit}";
+    public string DisplayValue => TextValue is not null
+        ? TextValue
+        : Unit == "%" ? $"{Value}{Unit}" : $"{Value} {Unit}";
 }

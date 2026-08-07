@@ -26,6 +26,7 @@
         <Border Grid.Row="0">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" />
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Motherboard" />
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" />
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Disk" />
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Network" />

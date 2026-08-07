@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace SystemMonitor.Domain.Models;
 
@@ -25,7 +25,8 @@ public sealed record MetricCatalogEntry(
     double SampleValue,
     double? SampleMin = null,
     double? SampleMax = null,
-    double? SampleAverage = null);
+    double? SampleAverage = null,
+    string? SampleText = null);
 
 public static class MetricCatalog
 {
@@ -59,7 +60,15 @@ public static class MetricCatalog
     public static readonly MetricCatalogEntry NetworkUpload =
         new("network.upload", "Network", "Upload", MetricKind.DataRate, "KB/s", 300.00);
 
-    // GPU
+    // Motherboard — identity rows are Text; temperature stays numeric.
+    public static readonly MetricCatalogEntry MotherboardModel =
+        new("motherboard.model", "Motherboard", "Model", MetricKind.Text, "", 0, SampleText: "TUF GAMING B550M");
+    public static readonly MetricCatalogEntry MotherboardChipset =
+        new("motherboard.chipset", "Motherboard", "Chipset", MetricKind.Text, "", 0, SampleText: "AMD B550");
+    public static readonly MetricCatalogEntry MotherboardTemperature =
+        new("motherboard.temperature", "Motherboard", "Temperature", MetricKind.Temperature, "°C", 42.50);
+
+    // GPU — teammate's entries, restored.
     public static readonly MetricCatalogEntry GpuUsage =
         new("gpu.usage", "GPU", "Usage", MetricKind.Percentage, "%", 37.00);
     public static readonly MetricCatalogEntry GpuMemoryUsed =
@@ -81,6 +90,7 @@ public static class MetricCatalog
         MemoryUsage, MemoryUsed, MemoryTotal,
         DiskUsage, DiskUsed, DiskTotal, DiskRead, DiskWrite,
         NetworkDownload, NetworkUpload,
+        MotherboardModel, MotherboardChipset, MotherboardTemperature,
         GpuUsage, GpuMemoryUsed, GpuMemoryTotal,
         TempCpuCore, TempGpuCore, TempGpuHotSpot
     };
