@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using SystemMonitor.Application.Interfaces;
@@ -13,6 +13,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private readonly IDiskMonitorService _disk;
     private readonly INetworkMonitorService _network;
     private readonly ITemperatureMonitorService _temperature;
+    private readonly IMotherboardMonitorService _motherboard;
 
     private readonly Dictionary<string, Queue<double>> _smoothingWindows = new();
     private const int SmoothingWindow = 4;
@@ -20,9 +21,11 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
 
     public MetricsSnapshotProvider(
         ICpuMonitorService cpu, IMemoryMonitorService memory, IDiskMonitorService disk,
-        INetworkMonitorService network, ITemperatureMonitorService temperature)
+        INetworkMonitorService network, ITemperatureMonitorService temperature,
+        IMotherboardMonitorService motherboard)
     {
-        _cpu = cpu; _memory = memory; _disk = disk; _network = network; _temperature = temperature;
+        _cpu = cpu; _memory = memory; _disk = disk; _network = network;
+        _temperature = temperature; _motherboard = motherboard;
     }
 
     public IReadOnlyList<MetricReading> GetSnapshot()
@@ -32,6 +35,25 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         // CPU
         var cpuInfo = _cpu.GetCurrentUsage();
         readings.Add(BuildReading(MetricCatalog.CpuUsage, cpuInfo.UsagePercent, smooth: true));
+
+        // Motherboard — identity rows are text; if detection failed, the section skips itself.
+        var boardInfo = _motherboard.GetCurrentInfo();
+        if (boardInfo is not null)
+        {
+            readings.Add(BuildTextReading(MetricCatalog.MotherboardModel, boardInfo.Model));
+            readings.Add(BuildTextReading(MetricCatalog.MotherboardChipset, boardInfo.Chipset));
+
+            readings.Add(new MetricReading
+            {
+                Id = MetricCatalog.MotherboardTemperature.Id,
+                Category = MetricCatalog.MotherboardTemperature.Category,
+                Label = MetricCatalog.MotherboardTemperature.Label,
+                Kind = MetricCatalog.MotherboardTemperature.Kind,
+                Unit = MetricCatalog.MotherboardTemperature.Unit,
+                IsAvailable = boardInfo.TemperatureCelsius.HasValue,
+                Value = Round(boardInfo.TemperatureCelsius ?? 0)
+            });
+        }
 
         // Memory
         var memInfo = _memory.GetCurrentUsage();
@@ -60,8 +82,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         readings.Add(BuildReading(MetricCatalog.NetworkDownload, networkInfo.DownloadKBPerSec));
         readings.Add(BuildReading(MetricCatalog.NetworkUpload, networkInfo.UploadKBPerSec));
 
-        // Temperature — one MetricReading per sensor; runtime-discovered, so it
-        // can't go through BuildReading/MetricCatalog like the sections above.
+        // Temperature — one MetricReading per sensor; runtime-discovered.
         var rawTemperatureReadings = _temperature.GetCurrentUsage();
         foreach (var reading in rawTemperatureReadings)
         {
@@ -83,12 +104,6 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         return readings;
     }
 
-    /// <summary>
-    /// Builds a MetricReading from a MetricCatalog entry plus a live value.
-    /// Centralizes the field-copying that used to be repeated per metric —
-    /// pass smooth: true to run the value through the smoothing window first,
-    /// and labelOverride when the label needs runtime info (e.g. a drive name).
-    /// </summary>
     private MetricReading BuildReading(
         MetricCatalogEntry entry, double rawValue, bool smooth = false, string? labelOverride = null)
     {
@@ -105,6 +120,17 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             Value = Round(value)
         };
     }
+
+    private static MetricReading BuildTextReading(MetricCatalogEntry entry, string? text) => new()
+    {
+        Id = entry.Id,
+        Category = entry.Category,
+        Label = entry.Label,
+        Kind = entry.Kind,
+        Unit = entry.Unit,
+        IsAvailable = text is not null,
+        TextValue = text
+    };
 
     private double Smooth(string id, double newValue)
     {

@@ -1,21 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace SystemMonitor.Domain.Models;
 
-/// <summary>
-/// Static, compile-time known metadata for every metric with a fixed identity
-/// (id/category/label/kind). Single source of truth for "shape" — consumed by
-/// MetricsSnapshotProvider (which supplies live values) and by
-/// CatalogDesignTimeMetricsSnapshotProvider (which supplies sample values for
-/// the Avalonia previewer). Add/remove/rename a metric here and both update.
-///
-/// Not every metric fits this model — the Temperature entries below are
-/// illustrative only. Real temperature sensors are discovered at runtime via
-/// LibreHardwareMonitorLib and vary by machine (sensor count/labels aren't
-/// knowable ahead of time), so the runtime provider does NOT read Id/Category/
-/// Label from this catalog for temperature. These three entries exist purely
-/// so the design-time preview has representative temperature rows to render.
-/// </summary>
 public sealed record MetricCatalogEntry(
     string Id,
     string Category,
@@ -25,7 +11,8 @@ public sealed record MetricCatalogEntry(
     double SampleValue,
     double? SampleMin = null,
     double? SampleMax = null,
-    double? SampleAverage = null);
+    double? SampleAverage = null,
+    string? SampleText = null);
 
 public static class MetricCatalog
 {
@@ -59,7 +46,15 @@ public static class MetricCatalog
     public static readonly MetricCatalogEntry NetworkUpload =
         new("network.upload", "Network", "Upload", MetricKind.DataRate, "KB/s", 300.00);
 
-    // Temperature — illustrative only, see remarks below.
+    // Motherboard — identity rows are Text; temperature stays numeric.
+    public static readonly MetricCatalogEntry MotherboardModel =
+        new("motherboard.model", "Motherboard", "Model", MetricKind.Text, "", 0, SampleText: "TUF GAMING B550M");
+    public static readonly MetricCatalogEntry MotherboardChipset =
+        new("motherboard.chipset", "Motherboard", "Chipset", MetricKind.Text, "", 0, SampleText: "AMD B550");
+    public static readonly MetricCatalogEntry MotherboardTemperature =
+        new("motherboard.temperature", "Motherboard", "Temperature", MetricKind.Temperature, "°C", 42.50);
+
+    // Temperature — illustrative only.
     public static readonly MetricCatalogEntry TempCpuCore =
         new("temp.cpu.core", "CPU", "Core Temp", MetricKind.Temperature, "°C", 55.00, 40.00, 70.00, 55.00);
     public static readonly MetricCatalogEntry TempGpuCore =
@@ -73,6 +68,7 @@ public static class MetricCatalog
         MemoryUsage, MemoryUsed, MemoryTotal,
         DiskUsage, DiskUsed, DiskTotal, DiskRead, DiskWrite,
         NetworkDownload, NetworkUpload,
+        MotherboardModel, MotherboardChipset, MotherboardTemperature,
         TempCpuCore, TempGpuCore, TempGpuHotSpot
     };
 }
