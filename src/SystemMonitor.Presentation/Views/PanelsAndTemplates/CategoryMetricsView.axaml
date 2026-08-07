@@ -8,9 +8,9 @@
              x:Name="Root">
     <!-- debug border -->
     <Border
-        BorderBrush="#6600FF00"
+        BorderBrush="#7800FF00"
         BorderThickness="1" 
-        Background="#108EE61C"
+        Background="#FD323230"
         Padding="8">
     <!-- General Layout Container -->
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">

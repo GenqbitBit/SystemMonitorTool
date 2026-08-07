@@ -59,6 +59,14 @@ public static class MetricCatalog
     public static readonly MetricCatalogEntry NetworkUpload =
         new("network.upload", "Network", "Upload", MetricKind.DataRate, "KB/s", 300.00);
 
+    // GPU
+    public static readonly MetricCatalogEntry GpuUsage =
+        new("gpu.usage", "GPU", "Usage", MetricKind.Percentage, "%", 37.00);
+    public static readonly MetricCatalogEntry GpuMemoryUsed =
+        new("gpu.memory.used", "GPU", "VRAM Used", MetricKind.DataSize, "GB", 2.00);
+    public static readonly MetricCatalogEntry GpuMemoryTotal =
+        new("gpu.memory.total", "GPU", "VRAM Total", MetricKind.DataSize, "GB", 8.00);
+
     // Temperature — illustrative only, see remarks below.
     public static readonly MetricCatalogEntry TempCpuCore =
         new("temp.cpu.core", "CPU", "Core Temp", MetricKind.Temperature, "°C", 55.00, 40.00, 70.00, 55.00);
@@ -73,6 +81,7 @@ public static class MetricCatalog
         MemoryUsage, MemoryUsed, MemoryTotal,
         DiskUsage, DiskUsed, DiskTotal, DiskRead, DiskWrite,
         NetworkDownload, NetworkUpload,
+        GpuUsage, GpuMemoryUsed, GpuMemoryTotal,
         TempCpuCore, TempGpuCore, TempGpuHotSpot
     };
 }
