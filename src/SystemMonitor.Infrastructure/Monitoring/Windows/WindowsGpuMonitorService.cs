@@ -3,11 +3,30 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Management; // requires the "System.Management" NuGet package
+using Vortice.DXGI;       // requires the "Vortice.DXGI" NuGet package
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
+/// <summary>
+/// Windows implementation of IGpuMonitorService.
+///
+/// Deliberately avoids vendor SDKs (NVML, ADL, etc.) as instructed.
+/// Instead it uses three built-in/OS-level Windows sources:
+///   1. WMI (Win32_VideoController) — static info: name, vendor,
+///      driver version, total memory.
+///   2. Performance Counters ("GPU Engine" / "GPU Process Memory") —
+///      live usage % and VRAM used. Available since Windows 10, works
+///      for any GPU brand.
+///   3. DXGI (via the Vortice.DXGI wrapper) — a core Windows graphics
+///      API, not a vendor SDK, used only to resolve which LUID belongs
+///      to our chosen GPU, so we can filter the counters above to that
+///      SPECIFIC adapter instead of summing every GPU on the system.
+///
+/// Trade-off: without a vendor SDK we can't get exact temperature,
+/// fan speed, or power draw on Windows — those fields stay null here.
+/// </summary>
 public class WindowsGpuMonitorService : IGpuMonitorService
 {
     // Static hardware facts don't change while the app is running,
@@ -18,6 +37,12 @@ public class WindowsGpuMonitorService : IGpuMonitorService
     private readonly string _driverVersion = "Unknown";
     private readonly double _totalMemoryMb;
     private readonly bool _isIntegrated;
+
+    // The specific fragment of a counter instance name that identifies
+    // OUR chosen GPU (e.g. "luid_0x00000000_0x0000abcd"). Null if DXGI
+    // couldn't resolve a match — in that case we fall back to summing
+    // every GPU on the system rather than reporting nothing.
+    private readonly string? _luidFilter;
 
     // Counters must stay alive between calls — rate-based counters like
     // "Utilization Percentage" always return 0 on their first-ever read,
@@ -61,6 +86,8 @@ public class WindowsGpuMonitorService : IGpuMonitorService
             _isIntegrated = chosenIsIntegrated;
         }
 
+        _luidFilter = ResolveLuidFilter(_name);
+
         // Prime whatever GPU Engine counter instances exist right now, same
         // idea as WindowsCpuMonitorService warming up its counter in the
         // constructor. This fixes the "first read is always 0%" issue for
@@ -69,6 +96,39 @@ public class WindowsGpuMonitorService : IGpuMonitorService
         // instances will still report 0% on their own first read, since
         // there's no way to prime a counter that doesn't exist yet.
         GetGpuUsagePercent();
+    }
+
+    // DXGI is Microsoft's own graphics API (ships with Windows), not a
+    // vendor SDK — we use it only to match our chosen GPU's name to its
+    // LUID, a unique adapter identifier. That LUID shows up as text
+    // inside "GPU Engine"/"GPU Process Memory" counter instance names,
+    // which is what lets us filter to THIS GPU instead of summing all of them.
+    private static string? ResolveLuidFilter(string gpuName)
+    {
+        try
+        {
+            using var factory = DXGI.CreateDXGIFactory1<IDXGIFactory1>();
+
+            for (uint i = 0; factory.EnumAdapters1(i, out var adapter).Success; i++)
+            {
+                using (adapter)
+                {
+                    var desc = adapter.Description1;
+                    if (string.Equals(desc.Description, gpuName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var luid = desc.Luid;
+                        return $"0x{(uint)luid.HighPart:x8}_0x{luid.LowPart:x8}";
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // If DXGI enumeration fails for any reason, fall back to
+            // summing all GPUs rather than crashing GPU monitoring entirely.
+        }
+
+        return null;
     }
 
     // Heuristic only — Windows doesn't expose an "integrated vs dedicated"
@@ -105,45 +165,20 @@ public class WindowsGpuMonitorService : IGpuMonitorService
         };
     }
 
-    // "GPU Process Memory" is a separate counter category from "GPU Engine",
-    // with one instance per process using the GPU. "Dedicated Usage" is a
-    // raw instantaneous counter (bytes currently in use) — unlike
-    // Utilization Percentage, it does NOT need priming/warm-up, since it's
-    // not rate-based. We sum across every process to get total VRAM in use.
-    // Caveat: on a hybrid system this sums usage from ALL GPUs' processes
-    // combined, since there's no vendor SDK to filter by which physical
-    // GPU a given process's memory belongs to.
-    private double GetGpuMemoryUsedMb()
-    {
-        var category = new PerformanceCounterCategory("GPU Process Memory");
-        double totalBytes = 0;
-
-        foreach (var instance in category.GetInstanceNames())
-        {
-            foreach (var counter in category.GetCounters(instance))
-            {
-                if (counter.CounterName == "Dedicated Usage")
-                {
-                    totalBytes += counter.RawValue;
-                }
-            }
-        }
-
-        return totalBytes / (1024 * 1024);
-    }
-
     // Unlike CPU's single "_Total" counter, GPU Engine exposes one counter
     // instance per active engine (3D, copy, video decode, etc.), and those
     // instances can appear/disappear as apps use the GPU. We cache one
     // PerformanceCounter per instance so repeated calls read the SAME
     // object over time (required for a rate-based counter to report
     // anything other than 0) rather than creating a fresh one every call.
-    // We sum just the 3D engine instances to approximate Task Manager's GPU %.
+    // Filtered to _luidFilter so only OUR chosen GPU's 3D engine counts —
+    // without this, a hybrid system's integrated GPU usage would get
+    // added into the total alongside the dedicated card.
     private double GetGpuUsagePercent()
     {
         var category = new PerformanceCounterCategory("GPU Engine");
         var currentInstances = category.GetInstanceNames()
-            .Where(i => i.Contains("engtype_3D"))
+            .Where(i => i.Contains("engtype_3D") && MatchesChosenGpu(i))
             .ToHashSet();
 
         // Drop counters for instances that no longer exist (e.g. the app
@@ -173,4 +208,36 @@ public class WindowsGpuMonitorService : IGpuMonitorService
 
         return Math.Round(total, 2);
     }
+
+    // "GPU Process Memory" is a separate counter category from "GPU Engine",
+    // with one instance per process using the GPU. "Dedicated Usage" is a
+    // raw instantaneous counter (bytes currently in use) — it does NOT need
+    // priming/warm-up, since it's not rate-based. Filtered to _luidFilter
+    // for the same reason as usage above: isolate to just our chosen GPU.
+    private double GetGpuMemoryUsedMb()
+    {
+        var category = new PerformanceCounterCategory("GPU Process Memory");
+        double totalBytes = 0;
+
+        foreach (var instance in category.GetInstanceNames())
+        {
+            if (!MatchesChosenGpu(instance)) continue;
+
+            foreach (var counter in category.GetCounters(instance))
+            {
+                if (counter.CounterName == "Dedicated Usage")
+                {
+                    totalBytes += counter.RawValue;
+                }
+            }
+        }
+
+        return totalBytes / (1024 * 1024);
+    }
+
+    // If DXGI couldn't resolve a LUID for our chosen GPU (rare — falls
+    // back gracefully), we accept every instance rather than reporting
+    // nothing, same spirit as the original "sum everything" behavior.
+    private bool MatchesChosenGpu(string instanceName) =>
+        _luidFilter == null || instanceName.Contains(_luidFilter, StringComparison.OrdinalIgnoreCase);
 }
