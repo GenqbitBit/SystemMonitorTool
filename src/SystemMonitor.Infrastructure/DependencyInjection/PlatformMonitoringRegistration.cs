@@ -18,6 +18,7 @@ public static class PlatformMonitoringRegistration
             services.AddSingleton<ITemperatureMonitorService, WindowsTemperatureMonitorService>();
             services.AddSingleton<IGpuMonitorService, WindowsGpuMonitorService>();
             services.AddSingleton<IMetricsSnapshotProvider, MetricsSnapshotProvider>();
+            services.AddSingleton<IMetricHistoryStore>(_ => new MetricHistoryStore(TimeSpan.FromSeconds(60)));
         }
         else if (OperatingSystem.IsLinux())
         {
