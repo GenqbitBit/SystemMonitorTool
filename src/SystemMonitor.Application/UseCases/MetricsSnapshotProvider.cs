@@ -14,18 +14,28 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private readonly INetworkMonitorService _network;
     private readonly ITemperatureMonitorService _temperature;
     private readonly IMotherboardMonitorService _motherboard;
+    private readonly IGpuMonitorService _gpu; // Added to support teammate's GPU code
 
     private readonly Dictionary<string, Queue<double>> _smoothingWindows = new();
     private const int SmoothingWindow = 4;
     private const int DecimalPlaces = 2;
 
     public MetricsSnapshotProvider(
-        ICpuMonitorService cpu, IMemoryMonitorService memory, IDiskMonitorService disk,
-        INetworkMonitorService network, ITemperatureMonitorService temperature,
-        IMotherboardMonitorService motherboard)
+        ICpuMonitorService cpu, 
+        IMemoryMonitorService memory, 
+        IDiskMonitorService disk,
+        INetworkMonitorService network, 
+        ITemperatureMonitorService temperature,
+        IMotherboardMonitorService motherboard, 
+        IGpuMonitorService gpu)
     {
-        _cpu = cpu; _memory = memory; _disk = disk; _network = network;
-        _temperature = temperature; _motherboard = motherboard;
+        _cpu = cpu; 
+        _memory = memory; 
+        _disk = disk; 
+        _network = network; 
+        _temperature = temperature; 
+        _motherboard = motherboard; 
+        _gpu = gpu;
     }
 
     public IReadOnlyList<MetricReading> GetSnapshot()
@@ -82,7 +92,19 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         readings.Add(BuildReading(MetricCatalog.NetworkDownload, networkInfo.DownloadKBPerSec));
         readings.Add(BuildReading(MetricCatalog.NetworkUpload, networkInfo.UploadKBPerSec));
 
-        // Temperature — one MetricReading per sensor; runtime-discovered.
+        // GPU (Teammate's addition)
+        var gpuInfo = _gpu.GetCurrentUsage();
+        var gpuUsedGB = gpuInfo.DedicatedMemoryUsedMb / 1024.0;
+        var gpuTotalGB = gpuInfo.DedicatedMemoryTotalMb / 1024.0;
+        var gpuLabelSuffix = $" ({gpuInfo.Name})";
+
+        readings.Add(BuildReading(MetricCatalog.GpuUsage, gpuInfo.UsagePercent, smooth: true,
+            labelOverride: MetricCatalog.GpuUsage.Label + gpuLabelSuffix));
+        readings.Add(BuildReading(MetricCatalog.GpuMemoryUsed, gpuUsedGB));
+        readings.Add(BuildReading(MetricCatalog.GpuMemoryTotal, gpuTotalGB));
+
+        // Temperature — one MetricReading per sensor; runtime-discovered, so it
+        // can't go through BuildReading/MetricCatalog like the sections above.
         var rawTemperatureReadings = _temperature.GetCurrentUsage();
         foreach (var reading in rawTemperatureReadings)
         {

@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Extensions.DependencyInjection;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Infrastructure.Monitoring.Windows;
@@ -17,7 +18,9 @@ public static class PlatformMonitoringRegistration
             services.AddSingleton<INetworkMonitorService, WindowsNetworkMonitorService>();
             services.AddSingleton<ITemperatureMonitorService, WindowsTemperatureMonitorService>();
             services.AddSingleton<IMotherboardMonitorService, WindowsMotherboardMonitorService>();
+            services.AddSingleton<IGpuMonitorService, WindowsGpuMonitorService>();
             services.AddSingleton<IMetricsSnapshotProvider, MetricsSnapshotProvider>();
+            services.AddSingleton<IMetricHistoryStore>(_ => new MetricHistoryStore(TimeSpan.FromSeconds(60)));
         }
         else if (OperatingSystem.IsLinux())
         {
