@@ -1,0 +1,128 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using SystemMonitor.Application.Interfaces;
+using SystemMonitor.Domain.Models;
+
+namespace SystemMonitor.Application.UseCases;
+
+public class MetricsSnapshotProvider : IMetricsSnapshotProvider
+{
+    private readonly ICpuMonitorService _cpu;
+    private readonly IMemoryMonitorService _memory;
+    private readonly IDiskMonitorService _disk;
+    private readonly INetworkMonitorService _network;
+    private readonly ITemperatureMonitorService _temperature;
+
+    private readonly Dictionary<string, Queue<double>> _smoothingWindows = new();
+    private const int SmoothingWindow = 4;
+    private const int DecimalPlaces = 2;
+
+    public MetricsSnapshotProvider(
+        ICpuMonitorService cpu, IMemoryMonitorService memory, IDiskMonitorService disk,
+        INetworkMonitorService network, ITemperatureMonitorService temperature)
+    {
+        _cpu = cpu; _memory = memory; _disk = disk; _network = network; _temperature = temperature;
+    }
+
+    public IReadOnlyList<MetricReading> GetSnapshot()
+    {
+        var readings = new List<MetricReading>();
+
+        // CPU
+        var cpuInfo = _cpu.GetCurrentUsage();
+        readings.Add(BuildReading(MetricCatalog.CpuUsage, cpuInfo.UsagePercent, smooth: true));
+
+        // Memory
+        var memInfo = _memory.GetCurrentUsage();
+        var usedGB = memInfo.UsedMB / 1024.0;
+        var totalGB = memInfo.TotalMB / 1024.0;
+
+        readings.Add(BuildReading(MetricCatalog.MemoryUsage, memInfo.UsagePercent, smooth: true));
+        readings.Add(BuildReading(MetricCatalog.MemoryUsed, usedGB));
+        readings.Add(BuildReading(MetricCatalog.MemoryTotal, totalGB));
+
+        // Disk
+        var diskInfo = _disk.GetCurrentUsage();
+        var diskLabelSuffix = $" ({diskInfo.DriveName})";
+
+        readings.Add(BuildReading(MetricCatalog.DiskUsage, diskInfo.UsagePercent, smooth: true,
+            labelOverride: MetricCatalog.DiskUsage.Label + diskLabelSuffix));
+        readings.Add(BuildReading(MetricCatalog.DiskUsed, diskInfo.UsedGB,
+            labelOverride: MetricCatalog.DiskUsed.Label + diskLabelSuffix));
+        readings.Add(BuildReading(MetricCatalog.DiskTotal, diskInfo.TotalGB,
+            labelOverride: MetricCatalog.DiskTotal.Label + diskLabelSuffix));
+        readings.Add(BuildReading(MetricCatalog.DiskRead, diskInfo.ReadMBPerSec));
+        readings.Add(BuildReading(MetricCatalog.DiskWrite, diskInfo.WriteMBPerSec));
+
+        // Network
+        var networkInfo = _network.GetCurrentUsage();
+        readings.Add(BuildReading(MetricCatalog.NetworkDownload, networkInfo.DownloadKBPerSec));
+        readings.Add(BuildReading(MetricCatalog.NetworkUpload, networkInfo.UploadKBPerSec));
+
+        // Temperature — one MetricReading per sensor; runtime-discovered, so it
+        // can't go through BuildReading/MetricCatalog like the sections above.
+        var rawTemperatureReadings = _temperature.GetCurrentUsage();
+        foreach (var reading in rawTemperatureReadings)
+        {
+            readings.Add(new MetricReading
+            {
+                Id = $"temp.{reading.Category}.{reading.SensorLabel}".ToLowerInvariant(),
+                Category = reading.Category,
+                Label = reading.SensorLabel,
+                Kind = MetricKind.Temperature,
+                Unit = "°C",
+                IsAvailable = reading.IsAvailable,
+                Value = Round(reading.TemperatureCelsius),
+                Min = RoundNullable(reading.MinCelsius),
+                Max = RoundNullable(reading.MaxCelsius),
+                Average = RoundNullable(reading.AverageCelsius)
+            });
+        }
+
+        return readings;
+    }
+
+    /// <summary>
+    /// Builds a MetricReading from a MetricCatalog entry plus a live value.
+    /// Centralizes the field-copying that used to be repeated per metric —
+    /// pass smooth: true to run the value through the smoothing window first,
+    /// and labelOverride when the label needs runtime info (e.g. a drive name).
+    /// </summary>
+    private MetricReading BuildReading(
+        MetricCatalogEntry entry, double rawValue, bool smooth = false, string? labelOverride = null)
+    {
+        var value = smooth ? Smooth(entry.Id, rawValue) : rawValue;
+
+        return new MetricReading
+        {
+            Id = entry.Id,
+            Category = entry.Category,
+            Label = labelOverride ?? entry.Label,
+            Kind = entry.Kind,
+            Unit = entry.Unit,
+            IsAvailable = true,
+            Value = Round(value)
+        };
+    }
+
+    private double Smooth(string id, double newValue)
+    {
+        if (!_smoothingWindows.TryGetValue(id, out var window))
+        {
+            window = new Queue<double>();
+            _smoothingWindows[id] = window;
+        }
+
+        window.Enqueue(newValue);
+        if (window.Count > SmoothingWindow)
+            window.Dequeue();
+
+        return window.Average();
+    }
+
+    private static double Round(double value) => Math.Round(value, DecimalPlaces);
+
+    private static double? RoundNullable(double? value) =>
+        value.HasValue ? Math.Round(value.Value, DecimalPlaces) : null;
+}

@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="using:SystemMonitor.Domain.Models"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="200" d:DesignHeight="150"
+             x:Class="SystemMonitor.Presentation.Views.PanelsAndTemplates.CategoryMetricsView"
+             x:Name="Root">
+    <!-- debug border -->
+    <Border
+        BorderBrush="#6600FF00"
+        BorderThickness="1" 
+        Background="#108EE61C"
+        Padding="8">
+    <!-- General Layout Container -->
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock
+                Text="{Binding #Root.CategoryLabel}"
+                FontSize="12"
+                Opacity="0.6"
+                HorizontalAlignment="Center"
+                TextAlignment="Center"
+                IsVisible="{Binding #Root.ShowCategoryHeader}" />
+            <ItemsControl
+                ItemsSource="{Binding #Root.FilteredMetrics}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="models:MetricReading">
+                        <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding Label}" FontWeight="SemiBold"
+                                    IsVisible="{Binding #Root.ShowLabel}" />
+                            <TextBlock Text="{Binding DisplayValue}" Opacity="0.8"
+                                    IsVisible="{Binding #Root.ShowValue}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>   
+        </StackPanel>
+    </Border>
+    
+
+
+</UserControl>
