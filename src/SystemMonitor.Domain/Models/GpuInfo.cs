@@ -14,6 +14,12 @@ public class GpuInfo
     public string Name { get; set; } = string.Empty;
     public string Vendor { get; set; } = string.Empty;
 
+    // True for integrated GPUs (e.g. Intel UHD/Iris, AMD APU graphics),
+    // false for dedicated cards (e.g. NVIDIA GeForce, AMD Radeon RX).
+    // Inferred heuristically — Windows doesn't expose this directly
+    // without a vendor SDK, so treat it as a best guess, not a guarantee.
+    public bool IsIntegrated { get; set; }
+
     // Utilization, 0-100
     public double UsagePercent { get; set; }
 

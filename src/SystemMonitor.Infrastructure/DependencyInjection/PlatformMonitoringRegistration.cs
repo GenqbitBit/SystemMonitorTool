@@ -15,6 +15,7 @@ public static class PlatformMonitoringRegistration
             services.AddSingleton<IDiskMonitorService, WindowsDiskMonitorService>();
             services.AddSingleton<INetworkMonitorService, WindowsNetworkMonitorService>();
             services.AddSingleton<ITemperatureMonitorService, WindowsTemperatureMonitorService>();
+            services.AddSingleton<IGpuMonitorService, WindowsGpuMonitorService>();
         }
         else if (OperatingSystem.IsLinux())
         {

@@ -28,6 +28,9 @@
                 <TextBlock Text="{Binding NetworkUsageDisplay}"
                         FontFamily="JetBrains Mono"
                         FontSize="24" />
+                <TextBlock Text="{Binding GpuUsageDisplay}"
+                        FontFamily="JetBrains Mono"
+                        FontSize="24" />
                         
                 <ItemsControl ItemsSource="{Binding TemperatureReadings}">
                         <ItemsControl.ItemTemplate>

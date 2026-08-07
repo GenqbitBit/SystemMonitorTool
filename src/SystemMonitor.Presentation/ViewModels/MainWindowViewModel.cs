@@ -16,11 +16,13 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IDiskMonitorService _diskMonitorService;
     private readonly INetworkMonitorService _networkMonitorService;
     private readonly ITemperatureMonitorService _temperatureMonitorService;
+    private readonly IGpuMonitorService _gpuMonitorService;
     private readonly DispatcherTimer _timer;
 
     private readonly Queue<double> _recentCpuSamples = new();
     private readonly Queue<double> _recentMemorySamples = new();
     private readonly Queue<double> _recentDiskSamples = new();
+    private readonly Queue<double> _recentGpuSamples = new();
     private const int SmoothingWindow = 4;
 
     [ObservableProperty]
@@ -44,11 +46,17 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private ObservableCollection<string> temperatureReadings = new();
 
+    [ObservableProperty]
+    private double gpuUsage;
+
+    [ObservableProperty]
+    private string gpuUsageDisplay = string.Empty;
+
     // Design-time only — used by the XAML previewer, never by the real running app
     public MainWindowViewModel()
     : this(new DesignTimeCpuMonitorService(), new DesignTimeMemoryMonitorService(),
            new DesignTimeDiskMonitorService(), new DesignTimeNetworkMonitorService(),
-           new DesignTimeTemperatureMonitorService())
+           new DesignTimeTemperatureMonitorService(), new DesignTimeGpuMonitorService())
             {
             }
 
@@ -57,13 +65,15 @@ public partial class MainWindowViewModel : ViewModelBase
         IMemoryMonitorService memoryMonitorService,
         IDiskMonitorService diskMonitorService,
         INetworkMonitorService networkMonitorService,
-        ITemperatureMonitorService temperatureMonitorService)
+        ITemperatureMonitorService temperatureMonitorService,
+        IGpuMonitorService gpuMonitorService)
     {
         _cpuMonitorService = cpuMonitorService;
         _memoryMonitorService = memoryMonitorService;
         _diskMonitorService = diskMonitorService;
         _networkMonitorService = networkMonitorService;
         _temperatureMonitorService = temperatureMonitorService;
+        _gpuMonitorService = gpuMonitorService;
 
         _timer = new DispatcherTimer
         {
@@ -103,6 +113,16 @@ public partial class MainWindowViewModel : ViewModelBase
 
         var networkInfo = _networkMonitorService.GetCurrentUsage();
         NetworkUsageDisplay = $"Net: ↓ {networkInfo.DownloadKBPerSec:F0} KB/s  ↑ {networkInfo.UploadKBPerSec:F0} KB/s";
+
+        var gpuInfo = _gpuMonitorService.GetCurrentUsage();
+        _recentGpuSamples.Enqueue(gpuInfo.UsagePercent);
+        if (_recentGpuSamples.Count > SmoothingWindow)
+            _recentGpuSamples.Dequeue();
+        GpuUsage = _recentGpuSamples.Average();
+
+        var gpuMemUsedGB = gpuInfo.DedicatedMemoryUsedMb / 1024.0;
+        var gpuMemTotalGB = gpuInfo.DedicatedMemoryTotalMb / 1024.0;
+        GpuUsageDisplay = $"GPU: {GpuUsage:F0}% ({gpuInfo.Name}) — {gpuMemUsedGB:F1} GB / {gpuMemTotalGB:F1} GB VRAM";
 
        var rawTemperatureReadings = _temperatureMonitorService.GetCurrentUsage();
         var displayLines = new List<string>();

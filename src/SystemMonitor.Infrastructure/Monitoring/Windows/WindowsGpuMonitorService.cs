@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Management; // requires the "System.Management" NuGet package
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
@@ -15,18 +17,77 @@ public class WindowsGpuMonitorService : IGpuMonitorService
     private readonly string _vendor = "Unknown";
     private readonly string _driverVersion = "Unknown";
     private readonly double _totalMemoryMb;
+    private readonly bool _isIntegrated;
+
+    // Counters must stay alive between calls — rate-based counters like
+    // "Utilization Percentage" always return 0 on their first-ever read,
+    // so a counter that's recreated every call would ALWAYS report 0%
+    // regardless of real GPU load. Keying by instance name also lets us
+    // handle instances appearing/disappearing as apps start/stop using the GPU.
+    private readonly Dictionary<string, PerformanceCounter> _engineCounters = new();
 
     public WindowsGpuMonitorService()
     {
+        // On hybrid systems (e.g. laptop with Intel iGPU + NVIDIA dGPU),
+        // WMI lists both. We look at every entry and prefer the dedicated
+        // one as "the" GPU this service reports on, instead of blindly
+        // taking whichever WMI happens to return first.
         using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController");
+
+        ManagementObject? chosen = null;
+        bool chosenIsIntegrated = true;
+
         foreach (ManagementObject obj in searcher.Get())
         {
-            _name = obj["Name"]?.ToString() ?? "Unknown";
-            _vendor = obj["AdapterCompatibility"]?.ToString() ?? "Unknown";
-            _driverVersion = obj["DriverVersion"]?.ToString() ?? "Unknown";
-            _totalMemoryMb = Convert.ToDouble(obj["AdapterRAM"] ?? 0) / (1024 * 1024);
-            break; // primary GPU only
+            var name = obj["Name"]?.ToString() ?? "Unknown";
+            var memoryMb = Convert.ToDouble(obj["AdapterRAM"] ?? 0) / (1024 * 1024);
+            var integrated = LooksIntegrated(name, memoryMb);
+
+            // First GPU found becomes the default; a later dedicated GPU
+            // always overrides an earlier integrated one.
+            if (chosen == null || (chosenIsIntegrated && !integrated))
+            {
+                chosen = obj;
+                chosenIsIntegrated = integrated;
+            }
         }
+
+        if (chosen != null)
+        {
+            _name = chosen["Name"]?.ToString() ?? "Unknown";
+            _vendor = chosen["AdapterCompatibility"]?.ToString() ?? "Unknown";
+            _driverVersion = chosen["DriverVersion"]?.ToString() ?? "Unknown";
+            _totalMemoryMb = Convert.ToDouble(chosen["AdapterRAM"] ?? 0) / (1024 * 1024);
+            _isIntegrated = chosenIsIntegrated;
+        }
+
+        // Prime whatever GPU Engine counter instances exist right now, same
+        // idea as WindowsCpuMonitorService warming up its counter in the
+        // constructor. This fixes the "first read is always 0%" issue for
+        // the common case. Caveat: GPU Engine instances can appear later
+        // too (e.g. when a new app starts using the GPU) — those brand-new
+        // instances will still report 0% on their own first read, since
+        // there's no way to prime a counter that doesn't exist yet.
+        GetGpuUsagePercent();
+    }
+
+    // Heuristic only — Windows doesn't expose an "integrated vs dedicated"
+    // flag directly without a vendor SDK. We combine two signals:
+    //  1. Name pattern: integrated GPUs have recognizable names.
+    //  2. Reported VRAM: integrated GPUs typically report little/no
+    //     dedicated memory since they borrow system RAM instead.
+    private static bool LooksIntegrated(string name, double memoryMb)
+    {
+        var lowerName = name.ToLowerInvariant();
+        bool nameLooksIntegrated =
+            lowerName.Contains("intel") ||
+            lowerName.Contains("uhd graphics") ||
+            lowerName.Contains("iris") ||
+            lowerName.Contains("radeon(tm) graphics"); // common AMD APU naming
+
+        bool memoryLooksIntegrated = memoryMb <= 512;
+
+        return nameLooksIntegrated || memoryLooksIntegrated;
     }
 
     public GpuInfo GetCurrentUsage()
@@ -37,32 +98,77 @@ public class WindowsGpuMonitorService : IGpuMonitorService
             Vendor = _vendor,
             DriverVersion = _driverVersion,
             DedicatedMemoryTotalMb = _totalMemoryMb,
+            DedicatedMemoryUsedMb = GetGpuMemoryUsedMb(),
+            IsIntegrated = _isIntegrated,
             UsagePercent = GetGpuUsagePercent(),
             Timestamp = DateTime.UtcNow
         };
     }
 
+    // "GPU Process Memory" is a separate counter category from "GPU Engine",
+    // with one instance per process using the GPU. "Dedicated Usage" is a
+    // raw instantaneous counter (bytes currently in use) — unlike
+    // Utilization Percentage, it does NOT need priming/warm-up, since it's
+    // not rate-based. We sum across every process to get total VRAM in use.
+    // Caveat: on a hybrid system this sums usage from ALL GPUs' processes
+    // combined, since there's no vendor SDK to filter by which physical
+    // GPU a given process's memory belongs to.
+    private double GetGpuMemoryUsedMb()
+    {
+        var category = new PerformanceCounterCategory("GPU Process Memory");
+        double totalBytes = 0;
+
+        foreach (var instance in category.GetInstanceNames())
+        {
+            foreach (var counter in category.GetCounters(instance))
+            {
+                if (counter.CounterName == "Dedicated Usage")
+                {
+                    totalBytes += counter.RawValue;
+                }
+            }
+        }
+
+        return totalBytes / (1024 * 1024);
+    }
+
     // Unlike CPU's single "_Total" counter, GPU Engine exposes one counter
     // instance per active engine (3D, copy, video decode, etc.), and those
-    // instances can appear/disappear as apps use the GPU — so we can't warm
-    // these up once in the constructor the way the CPU counter is warmed up.
+    // instances can appear/disappear as apps use the GPU. We cache one
+    // PerformanceCounter per instance so repeated calls read the SAME
+    // object over time (required for a rate-based counter to report
+    // anything other than 0) rather than creating a fresh one every call.
     // We sum just the 3D engine instances to approximate Task Manager's GPU %.
     private double GetGpuUsagePercent()
     {
         var category = new PerformanceCounterCategory("GPU Engine");
-        double total = 0;
+        var currentInstances = category.GetInstanceNames()
+            .Where(i => i.Contains("engtype_3D"))
+            .ToHashSet();
 
-        foreach (var instance in category.GetInstanceNames())
+        // Drop counters for instances that no longer exist (e.g. the app
+        // using that engine slot was closed).
+        foreach (var staleKey in _engineCounters.Keys.Except(currentInstances).ToList())
         {
-            if (!instance.Contains("engtype_3D")) continue;
+            _engineCounters[staleKey].Dispose();
+            _engineCounters.Remove(staleKey);
+        }
 
-            foreach (var counter in category.GetCounters(instance))
+        double total = 0;
+        foreach (var instance in currentInstances)
+        {
+            if (!_engineCounters.TryGetValue(instance, out var counter))
             {
-                if (counter.CounterName == "Utilization Percentage")
-                {
-                    total += counter.NextValue();
-                }
+                // Brand-new instance: create and prime it. Its first real
+                // value will come on the NEXT call to this method, once
+                // this cached counter has been read a second time.
+                counter = new PerformanceCounter("GPU Engine", "Utilization Percentage", instance);
+                counter.NextValue();
+                _engineCounters[instance] = counter;
+                continue;
             }
+
+            total += counter.NextValue();
         }
 
         return Math.Round(total, 2);
