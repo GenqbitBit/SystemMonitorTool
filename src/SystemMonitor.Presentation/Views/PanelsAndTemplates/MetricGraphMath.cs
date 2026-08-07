@@ -13,14 +13,12 @@ namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 /// </summary>
 public static class MetricGraphMath
 {
-    /// <summary>
-    /// Returns (min, max) across all points. If every value is
-    /// (near-)identical — e.g. an idle CPU sitting flat — the range is
-    /// padded by 1 in each direction so downstream normalization never
-    /// divides by ~zero.
-    /// </summary>
-    public static (double Min, double Max) GetValueRange(IReadOnlyList<MetricHistoryPoint> history)
+    public static (double Min, double Max) GetValueRange(
+        IReadOnlyList<MetricHistoryPoint> history, double? fixedMin = null, double? fixedMax = null)
     {
+        if (fixedMin.HasValue && fixedMax.HasValue)
+            return (fixedMin.Value, fixedMax.Value);
+
         var min = double.MaxValue;
         var max = double.MinValue;
 
@@ -39,21 +37,14 @@ public static class MetricGraphMath
         return (min, max);
     }
 
-    /// <summary>
-    /// Maps each history point to (x, y) pixel coordinates within a
-    /// widthxheight surface. X is proportional elapsed time since the
-    /// first point; Y is the value normalized against valueRange and
-    /// flipped (screen Y grows downward, graphs grow upward).
-    /// Returns an empty list if width/height are non-positive or fewer
-    /// than 2 points are available — a line needs at least 2 points.
-    /// </summary>
     public static IReadOnlyList<(double X, double Y)> ComputePoints(
-        IReadOnlyList<MetricHistoryPoint> history, double width, double height)
+        IReadOnlyList<MetricHistoryPoint> history, double width, double height,
+        double? fixedMin = null, double? fixedMax = null)
     {
         if (history.Count < 2 || width <= 0 || height <= 0)
             return Array.Empty<(double, double)>();
 
-        var (minValue, maxValue) = GetValueRange(history);
+        var (minValue, maxValue) = GetValueRange(history, fixedMin, fixedMax);
         var valueRange = maxValue - minValue;
 
         var minTime = history[0].Timestamp;

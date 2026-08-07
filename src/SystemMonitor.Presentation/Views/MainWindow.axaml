@@ -4,7 +4,7 @@
         xmlns:panels="using:SystemMonitor.Presentation.Views.PanelsAndTemplates"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="using:SystemMonitor.Presentation"
+        xmlns:debug="using:SystemMonitor.Presentation.Debugging"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="SystemMonitor.Presentation.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
@@ -40,28 +40,37 @@
         <Border Grid.Row="1">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" MetricId="cpu.usage" ShowLabel="True"/>
-                <Border BorderBrush="{x:Static local:DebugSettings.BorderBrush}" BorderThickness="1">
+                <Border debug:DebugBorder.IsEnabled="False"
+                Classes="feature" BorderBrush="Gray" BorderThickness="1">
                     <panels:MetricGraphView
                         Metrics="{Binding Metrics}"
                         HistoryStore="{Binding HistoryStore}"
                         MetricId="cpu.usage"
-                        Width="110" Height="80" />
+                        FixedMinValue="0"
+                        FixedMaxValue="100"
+                        Width="150" Height="150" />
                 </Border>
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" MetricId="memory.usage" ShowLabel="True"/>
-                <Border BorderBrush="{x:Static local:DebugSettings.BorderBrush}" BorderThickness="1">
+                <Border debug:DebugBorder.IsEnabled="False"
+                Classes="feature" BorderBrush="Gray" BorderThickness="1">
                     <panels:MetricGraphView
                         Metrics="{Binding Metrics}"
                         HistoryStore="{Binding HistoryStore}"
                         MetricId="memory.usage"
+                        FixedMinValue="0"
+                        FixedMaxValue="100"
                         LineBrush="DeepSkyBlue"
                         Width="110" Height="80" />
                 </Border>
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="GPU" MetricId="gpu.usage" ShowLabel="True"/>
-                <Border BorderBrush="{x:Static local:DebugSettings.BorderBrush}" BorderThickness="1">
+                <Border debug:DebugBorder.IsEnabled="False"
+                Classes="feature" BorderBrush="Gray" BorderThickness="1">
                     <panels:MetricGraphView
                         Metrics="{Binding Metrics}"
                         HistoryStore="{Binding HistoryStore}"
                         MetricId="gpu.usage"
+                        FixedMinValue="0"
+                        FixedMaxValue="100"
                         LineBrush="#FF1900"
                         Width="110" Height="80" />
                 </Border>
