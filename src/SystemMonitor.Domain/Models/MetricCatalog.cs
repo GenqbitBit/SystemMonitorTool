@@ -68,13 +68,35 @@ public static class MetricCatalog
     public static readonly MetricCatalogEntry MotherboardTemperature =
         new("motherboard.temperature", "Motherboard", "Temperature", MetricKind.Temperature, "°C", 42.50);
 
-    // GPU — teammate's entries, restored.
+    // GPU — shape template only (Category/Kind/Unit/Label-stem). Deliberately
+    // NOT included in `All` below — these aren't real rows, just what
+    // MetricsSnapshotProvider.BuildGpuReading uses to stamp out per-device Ids
+    // at runtime (gpu.usage.0, gpu.usage.1, ...). The previewer never sees these
+    // directly; see GpuUsage0/GpuUsage1 etc. below for that.
     public static readonly MetricCatalogEntry GpuUsage =
         new("gpu.usage", "GPU", "Usage", MetricKind.Percentage, "%", 37.00);
     public static readonly MetricCatalogEntry GpuMemoryUsed =
         new("gpu.memory.used", "GPU", "VRAM Used", MetricKind.DataSize, "GB", 2.00);
     public static readonly MetricCatalogEntry GpuMemoryTotal =
         new("gpu.memory.total", "GPU", "VRAM Total", MetricKind.DataSize, "GB", 8.00);
+
+    // GPU — illustrative only, IS included in `All`. Two devices (dedicated +
+    // integrated) so the previewer demonstrates multi-GPU rendering. Ids match
+    // the ".{index}" scheme BuildGpuReading produces at runtime, but these
+    // entries themselves are never read by runtime code.
+    public static readonly MetricCatalogEntry GpuUsage0 =
+        new("gpu.usage.0", "GPU", "Usage (GPU 0 - Dedicated: NVIDIA GeForce RTX 4060)", MetricKind.Percentage, "%", 37.00);
+    public static readonly MetricCatalogEntry GpuMemoryUsed0 =
+        new("gpu.memory.used.0", "GPU", "VRAM Used (GPU 0 - Dedicated: NVIDIA GeForce RTX 4060)", MetricKind.DataSize, "GB", 2.00);
+    public static readonly MetricCatalogEntry GpuMemoryTotal0 =
+        new("gpu.memory.total.0", "GPU", "VRAM Total (GPU 0 - Dedicated: NVIDIA GeForce RTX 4060)", MetricKind.DataSize, "GB", 8.00);
+
+    public static readonly MetricCatalogEntry GpuUsage1 =
+        new("gpu.usage.1", "GPU", "Usage (GPU 1 - Integrated: AMD Radeon Graphics)", MetricKind.Percentage, "%", 8.00);
+    public static readonly MetricCatalogEntry GpuMemoryUsed1 =
+        new("gpu.memory.used.1", "GPU", "VRAM Used (GPU 1 - Integrated: AMD Radeon Graphics)", MetricKind.DataSize, "GB", 0.30);
+    public static readonly MetricCatalogEntry GpuMemoryTotal1 =
+        new("gpu.memory.total.1", "GPU", "VRAM Total (GPU 1 - Integrated: AMD Radeon Graphics)", MetricKind.DataSize, "GB", 2.00);
 
     // Temperature — illustrative only, see remarks below.
     public static readonly MetricCatalogEntry TempCpuCore =
@@ -91,7 +113,8 @@ public static class MetricCatalog
         DiskUsage, DiskUsed, DiskTotal, DiskRead, DiskWrite,
         NetworkDownload, NetworkUpload,
         MotherboardModel, MotherboardChipset, MotherboardTemperature,
-        GpuUsage, GpuMemoryUsed, GpuMemoryTotal,
+        GpuUsage0, GpuMemoryUsed0, GpuMemoryTotal0,
+        GpuUsage1, GpuMemoryUsed1, GpuMemoryTotal1,
         TempCpuCore, TempGpuCore, TempGpuHotSpot
     };
 }
