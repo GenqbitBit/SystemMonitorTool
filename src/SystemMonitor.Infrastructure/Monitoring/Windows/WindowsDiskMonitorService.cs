@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Management;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
@@ -12,31 +14,145 @@ public class WindowsDiskMonitorService : IDiskMonitorService
     private readonly PerformanceCounter _readCounter;
     private readonly PerformanceCounter _writeCounter;
 
-    // Defaults to the system drive; pass a different letter later if you want to monitor multiple drives
+    private readonly string _model;
+    private readonly string _diskType;
+    private readonly string _busType;
+    private readonly string _fileSystem;
+
     public WindowsDiskMonitorService(string driveName = "C:\\")
     {
         _driveName = driveName;
 
-        // "_Total" aggregates across all physical disks — swap to a specific
-        // instance name (e.g. "0 C:") later if you want per-drive I/O specifically
         _readCounter = new PerformanceCounter("PhysicalDisk", "Disk Read Bytes/sec", "_Total");
         _writeCounter = new PerformanceCounter("PhysicalDisk", "Disk Write Bytes/sec", "_Total");
-
         _readCounter.NextValue();  // warm-up, same reasoning as CpuMonitorService
         _writeCounter.NextValue();
+
+        try
+        {
+            var drive = new DriveInfo(_driveName);
+            _fileSystem = drive.DriveFormat;
+        }
+        catch
+        {
+            _fileSystem = "Unknown";
+        }
+
+        (_model, _diskType, _busType) = ReadDiskIdentity(_driveName);
+    }
+
+    // Traces C: -> partition -> physical disk, then asks the modern Windows
+    // Storage namespace for model / SSD-vs-HDD / bus type.
+    private static (string Model, string DiskType, string BusType) ReadDiskIdentity(string driveLetter)
+    {
+        string model = "Unknown";
+        string diskType = "Unknown";
+        string busType = "Unknown";
+
+        try
+        {
+            string deviceId = driveLetter.TrimEnd('\\', '/').ToUpperInvariant();
+            if (!deviceId.EndsWith(":")) deviceId += ":";
+
+            // 1. Logical disk (C:) -> partition
+            string? partDeviceId = null;
+            using (var logToPartSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_LogicalDiskToPartition"))
+            {
+                foreach (ManagementObject assoc in logToPartSearcher.Get())
+                {
+                    var dep = assoc["Dependent"]?.ToString() ?? "";
+                    if (dep.Contains($"\"{deviceId}\""))
+                    {
+                        partDeviceId = ExtractQuoted(assoc["Antecedent"]?.ToString());
+                        break;
+                    }
+                }
+            }
+            if (partDeviceId == null) return (model, diskType, busType);
+
+            // 2. Partition -> physical disk drive
+            string? diskDriveDeviceId = null;
+            using (var partToDriveSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_DiskDriveToDiskPartition"))
+            {
+                foreach (ManagementObject assoc in partToDriveSearcher.Get())
+                {
+                    var dep = assoc["Dependent"]?.ToString() ?? "";
+                    if (dep.Contains($"\"{partDeviceId}\""))
+                    {
+                        diskDriveDeviceId = ExtractQuoted(assoc["Antecedent"]?.ToString());
+                        break;
+                    }
+                }
+            }
+            if (diskDriveDeviceId == null) return (model, diskType, busType);
+
+            // "\\.\PHYSICALDRIVE0" -> "0"
+            string indexStr = diskDriveDeviceId.Split('\\').LastOrDefault()?.Replace("PHYSICALDRIVE", "") ?? "0";
+
+            // 3. MSFT_PhysicalDisk — DeviceId is a STRING property, so quote it.
+            using var physDiskSearcher = new ManagementObjectSearcher(
+                @"root\Microsoft\Windows\Storage",
+                $"SELECT Model, MediaType, BusType FROM MSFT_PhysicalDisk WHERE DeviceId = '{indexStr}'");
+
+            var physDisk = physDiskSearcher.Get().Cast<ManagementBaseObject>().FirstOrDefault();
+            if (physDisk != null)
+            {
+                model = physDisk["Model"]?.ToString()?.Trim() ?? "Unknown";
+
+                diskType = Convert.ToInt32(physDisk["MediaType"] ?? 0) switch
+                {
+                    3 => "HDD",
+                    4 => "SSD",
+                    5 => "SCM",
+                    _ => "Unspecified"
+                };
+
+                busType = Convert.ToInt32(physDisk["BusType"] ?? 0) switch
+                {
+                    7 => "USB",
+                    11 => "SATA",
+                    17 => "NVMe",
+                    _ => "Other"
+                };
+            }
+            else
+            {
+                // Fallback: older Win32_DiskDrive at least gives us the model.
+                using var driveSearcher = new ManagementObjectSearcher(
+                    $"SELECT Model FROM Win32_DiskDrive WHERE DeviceID = '{diskDriveDeviceId.Replace("\\", "\\\\")}'");
+                var drive = driveSearcher.Get().Cast<ManagementBaseObject>().FirstOrDefault();
+                if (drive != null)
+                    model = drive["Model"]?.ToString()?.Trim() ?? "Unknown";
+            }
+        }
+        catch
+        {
+            // WMI failed — keep the "Unknown" defaults.
+        }
+
+        return (model, diskType, busType);
+    }
+
+    // Pulls the text between the quotes of a WMI reference string,
+    // e.g. 'Win32_DiskPartition.DeviceID="Disk #0, Partition #1"' -> 'Disk #0, Partition #1'
+    private static string? ExtractQuoted(string? wmiReference)
+    {
+        if (wmiReference == null) return null;
+        int start = wmiReference.IndexOf('"') + 1;
+        int end = wmiReference.LastIndexOf('"');
+        return start > 0 && end > start ? wmiReference.Substring(start, end - start) : null;
     }
 
     public DiskInfo GetCurrentUsage()
     {
         var drive = new DriveInfo(_driveName);
-
         const double bytesPerGB = 1024L * 1024 * 1024;
         const double bytesPerMB = 1024 * 1024;
 
         var totalGB = drive.TotalSize / bytesPerGB;
         var freeGB = drive.TotalFreeSpace / bytesPerGB;
         var usedGB = totalGB - freeGB;
-        var usagePercent = usedGB / totalGB * 100;
+        var usagePercent = totalGB > 0 ? usedGB / totalGB * 100 : 0;
 
         return new DiskInfo
         {
@@ -46,7 +162,11 @@ public class WindowsDiskMonitorService : IDiskMonitorService
             UsedGB = usedGB,
             UsagePercent = usagePercent,
             ReadMBPerSec = _readCounter.NextValue() / bytesPerMB,
-            WriteMBPerSec = _writeCounter.NextValue() / bytesPerMB
+            WriteMBPerSec = _writeCounter.NextValue() / bytesPerMB,
+            Model = _model,
+            DiskType = _diskType,
+            BusType = _busType,
+            FileSystem = _fileSystem
         };
     }
 }

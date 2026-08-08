@@ -9,4 +9,10 @@ public class DiskInfo
     public double UsagePercent { get; set; }
     public double ReadMBPerSec { get; set; }
     public double WriteMBPerSec { get; set; }
+
+    // Identity facts from WMI
+    public string Model { get; set; } = string.Empty;      // e.g. "KINGSTON SNV2S500G"
+    public string DiskType { get; set; } = string.Empty;   // "SSD" / "HDD"
+    public string BusType { get; set; } = string.Empty;    // "NVMe" / "SATA" / ...
+    public string FileSystem { get; set; } = string.Empty; // "NTFS"
 }

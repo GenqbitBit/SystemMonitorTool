@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+﻿﻿﻿using System.Collections.Generic;
 
 namespace SystemMonitor.Domain.Models;
 
@@ -13,7 +13,7 @@ namespace SystemMonitor.Domain.Models;
 /// illustrative only. Real temperature sensors are discovered at runtime via
 /// LibreHardwareMonitorLib and vary by machine (sensor count/labels aren't
 /// knowable ahead of time), so the runtime provider does NOT read Id/Category/
-/// Label from this catalog for temperature. These three entries exist purely
+/// Label from this catalog for temperature. These entries exist purely
 /// so the design-time preview has representative temperature rows to render.
 /// </summary>
 public sealed record MetricCatalogEntry(
@@ -31,10 +31,30 @@ public sealed record MetricCatalogEntry(
 public static class MetricCatalog
 {
     // CPU
+    public static readonly MetricCatalogEntry CpuModel =
+        new("cpu.model", "CPU", "Model", MetricKind.Text, "", 0, SampleText: "AMD Ryzen 5 5600G with Radeon Graphics");
     public static readonly MetricCatalogEntry CpuUsage =
         new("cpu.usage", "CPU", "Usage", MetricKind.Percentage, "%", 42.00);
+    public static readonly MetricCatalogEntry CpuClock =
+        new("cpu.clock", "CPU", "Clock", MetricKind.Text, "", 0, SampleText: "4.39 GHz");
+    public static readonly MetricCatalogEntry CpuCores =
+        new("cpu.cores", "CPU", "Cores", MetricKind.Text, "", 0, SampleText: "6");
+    public static readonly MetricCatalogEntry CpuThreads =
+        new("cpu.threads", "CPU", "Threads", MetricKind.Text, "", 0, SampleText: "12");
+    public static readonly MetricCatalogEntry CpuPackagePower =
+        new("cpu.power", "CPU", "Package", MetricKind.Text, "", 0, SampleText: "65.00 W");
 
     // Memory
+    public static readonly MetricCatalogEntry MemoryName =
+        new("memory.name", "Memory", "Name", MetricKind.Text, "", 0, SampleText: "KF432C16BB/16");
+    public static readonly MetricCatalogEntry MemoryType =
+        new("memory.type", "Memory", "Type", MetricKind.Text, "", 0, SampleText: "DDR4");
+    public static readonly MetricCatalogEntry MemorySpeed =
+        new("memory.speed", "Memory", "Speed", MetricKind.Text, "", 0, SampleText: "3200 MHz");
+    public static readonly MetricCatalogEntry MemoryModules =
+        new("memory.modules", "Memory", "Modules", MetricKind.Text, "", 0, SampleText: "2 x 8 GB");
+    public static readonly MetricCatalogEntry MemoryManufacturer =
+        new("memory.manufacturer", "Memory", "Manufacturer", MetricKind.Text, "", 0, SampleText: "Corsair");
     public static readonly MetricCatalogEntry MemoryUsage =
         new("memory.usage", "Memory", "Usage", MetricKind.Percentage, "%", 63.00);
     public static readonly MetricCatalogEntry MemoryUsed =
@@ -43,6 +63,14 @@ public static class MetricCatalog
         new("memory.total", "Memory", "Total", MetricKind.DataSize, "GB", 16.00);
 
     // Disk
+    public static readonly MetricCatalogEntry DiskModel =
+        new("disk.model", "Disk", "Model", MetricKind.Text, "", 0, SampleText: "KINGSTON SNV3S500G");
+    public static readonly MetricCatalogEntry DiskType =
+        new("disk.type", "Disk", "Type", MetricKind.Text, "", 0, SampleText: "SSD");
+    public static readonly MetricCatalogEntry DiskBus =
+        new("disk.bus", "Disk", "Bus", MetricKind.Text, "", 0, SampleText: "NVMe");
+    public static readonly MetricCatalogEntry DiskFileSystem =
+        new("disk.filesystem", "Disk", "File System", MetricKind.Text, "", 0, SampleText: "NTFS");
     public static readonly MetricCatalogEntry DiskUsage =
         new("disk.usage", "Disk", "Usage", MetricKind.Percentage, "%", 55.00);
     public static readonly MetricCatalogEntry DiskUsed =
@@ -60,23 +88,24 @@ public static class MetricCatalog
     public static readonly MetricCatalogEntry NetworkUpload =
         new("network.upload", "Network", "Upload", MetricKind.DataRate, "KB/s", 300.00);
 
-    // Motherboard — identity rows are Text; temperature stays numeric.
+    // Motherboard — identity rows only; the temperature row was removed
+    // because this machine's Super I/O channel never reports a real value.
     public static readonly MetricCatalogEntry MotherboardModel =
         new("motherboard.model", "Motherboard", "Model", MetricKind.Text, "", 0, SampleText: "TUF GAMING B550M");
     public static readonly MetricCatalogEntry MotherboardChipset =
         new("motherboard.chipset", "Motherboard", "Chipset", MetricKind.Text, "", 0, SampleText: "AMD B550");
-    public static readonly MetricCatalogEntry MotherboardTemperature =
-        new("motherboard.temperature", "Motherboard", "Temperature", MetricKind.Temperature, "°C", 42.50);
 
-    // GPU — teammate's entries, restored.
+    // GPU
     public static readonly MetricCatalogEntry GpuUsage =
         new("gpu.usage", "GPU", "Usage", MetricKind.Percentage, "%", 37.00);
     public static readonly MetricCatalogEntry GpuMemoryUsed =
         new("gpu.memory.used", "GPU", "VRAM Used", MetricKind.DataSize, "GB", 2.00);
     public static readonly MetricCatalogEntry GpuMemoryTotal =
         new("gpu.memory.total", "GPU", "VRAM Total", MetricKind.DataSize, "GB", 8.00);
+    public static readonly MetricCatalogEntry GpuPackagePower =
+        new("gpu.power", "GPU", "Package", MetricKind.Text, "", 0, SampleText: "12.50 W");
 
-    // Temperature — illustrative only, see remarks below.
+    // Temperature — illustrative only (runtime sensors come from LHM).
     public static readonly MetricCatalogEntry TempCpuCore =
         new("temp.cpu.core", "CPU", "Core Temp", MetricKind.Temperature, "°C", 55.00, 40.00, 70.00, 55.00);
     public static readonly MetricCatalogEntry TempGpuCore =
@@ -86,12 +115,12 @@ public static class MetricCatalog
 
     public static IReadOnlyList<MetricCatalogEntry> All { get; } = new[]
     {
-        CpuUsage,
-        MemoryUsage, MemoryUsed, MemoryTotal,
-        DiskUsage, DiskUsed, DiskTotal, DiskRead, DiskWrite,
+        CpuModel, CpuUsage, CpuClock, CpuCores, CpuThreads, CpuPackagePower,
+        MemoryName, MemoryType, MemorySpeed, MemoryModules, MemoryManufacturer, MemoryUsage, MemoryUsed, MemoryTotal,
+        DiskModel, DiskType, DiskBus, DiskFileSystem, DiskUsage, DiskUsed, DiskTotal, DiskRead, DiskWrite,
         NetworkDownload, NetworkUpload,
-        MotherboardModel, MotherboardChipset, MotherboardTemperature,
-        GpuUsage, GpuMemoryUsed, GpuMemoryTotal,
+        MotherboardModel, MotherboardChipset,
+        GpuUsage, GpuMemoryUsed, GpuMemoryTotal, GpuPackagePower,
         TempCpuCore, TempGpuCore, TempGpuHotSpot
     };
 }

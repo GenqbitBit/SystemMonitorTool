@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Management; // requires the "System.Management" NuGet package
+using LibreHardwareMonitor.Hardware;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
@@ -33,16 +34,13 @@ public class WindowsGpuMonitorService : IGpuMonitorService
         // one as "the" GPU this service reports on, instead of blindly
         // taking whichever WMI happens to return first.
         using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController");
-
         ManagementObject? chosen = null;
         bool chosenIsIntegrated = true;
-
         foreach (ManagementObject obj in searcher.Get())
         {
             var name = obj["Name"]?.ToString() ?? "Unknown";
             var memoryMb = Convert.ToDouble(obj["AdapterRAM"] ?? 0) / (1024 * 1024);
             var integrated = LooksIntegrated(name, memoryMb);
-
             // First GPU found becomes the default; a later dedicated GPU
             // always overrides an earlier integrated one.
             if (chosen == null || (chosenIsIntegrated && !integrated))
@@ -51,7 +49,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService
                 chosenIsIntegrated = integrated;
             }
         }
-
         if (chosen != null)
         {
             _name = chosen["Name"]?.ToString() ?? "Unknown";
@@ -60,7 +57,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService
             _totalMemoryMb = Convert.ToDouble(chosen["AdapterRAM"] ?? 0) / (1024 * 1024);
             _isIntegrated = chosenIsIntegrated;
         }
-
         // Prime whatever GPU Engine counter instances exist right now, same
         // idea as WindowsCpuMonitorService warming up its counter in the
         // constructor. This fixes the "first read is always 0%" issue for
@@ -84,9 +80,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService
             lowerName.Contains("uhd graphics") ||
             lowerName.Contains("iris") ||
             lowerName.Contains("radeon(tm) graphics"); // common AMD APU naming
-
         bool memoryLooksIntegrated = memoryMb <= 512;
-
         return nameLooksIntegrated || memoryLooksIntegrated;
     }
 
@@ -101,8 +95,20 @@ public class WindowsGpuMonitorService : IGpuMonitorService
             DedicatedMemoryUsedMb = GetGpuMemoryUsedMb(),
             IsIntegrated = _isIntegrated,
             UsagePercent = GetGpuUsagePercent(),
+            PowerUsage = ReadPackagePowerWatts(),
             Timestamp = DateTime.UtcNow
         };
+    }
+
+    // Watts come from the shared LibreHardwareMonitor host (NVAPI-backed on
+    // NVIDIA) — a different channel than the performance counters above.
+    // Ask NVIDIA first, then AMD, then Intel; first non-null answer wins.
+    private static double? ReadPackagePowerWatts()
+    {
+        var host = LibreHardwareMonitorHost.Instance;
+        return host.GetPackagePowerWatts(HardwareType.GpuNvidia)
+            ?? host.GetPackagePowerWatts(HardwareType.GpuAmd)
+            ?? host.GetPackagePowerWatts(HardwareType.GpuIntel);
     }
 
     // "GPU Process Memory" is a separate counter category from "GPU Engine",
@@ -117,7 +123,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService
     {
         var category = new PerformanceCounterCategory("GPU Process Memory");
         double totalBytes = 0;
-
         foreach (var instance in category.GetInstanceNames())
         {
             foreach (var counter in category.GetCounters(instance))
@@ -128,7 +133,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService
                 }
             }
         }
-
         return totalBytes / (1024 * 1024);
     }
 
@@ -145,7 +149,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService
         var currentInstances = category.GetInstanceNames()
             .Where(i => i.Contains("engtype_3D"))
             .ToHashSet();
-
         // Drop counters for instances that no longer exist (e.g. the app
         // using that engine slot was closed).
         foreach (var staleKey in _engineCounters.Keys.Except(currentInstances).ToList())
@@ -153,7 +156,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService
             _engineCounters[staleKey].Dispose();
             _engineCounters.Remove(staleKey);
         }
-
         double total = 0;
         foreach (var instance in currentInstances)
         {
@@ -167,10 +169,8 @@ public class WindowsGpuMonitorService : IGpuMonitorService
                 _engineCounters[instance] = counter;
                 continue;
             }
-
             total += counter.NextValue();
         }
-
         return Math.Round(total, 2);
     }
 }
