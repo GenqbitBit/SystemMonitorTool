@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Management;
+using LibreHardwareMonitor.Hardware;
 using Vortice.DXGI;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
-public class WindowsGpuMonitorService : IGpuMonitorService
+public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 {
     private sealed record GpuDevice(
         int Index,
@@ -17,15 +18,18 @@ public class WindowsGpuMonitorService : IGpuMonitorService
         string Vendor,
         string DriverVersion,
         bool IsIntegrated,
-        string? LuidFilter,
-        IDXGIAdapter3? Adapter3,      
-        double WmiFallbackMemoryMb);  
+        string? LuidFilter,          // used only for GPU Engine (usage %) perf-counter matching
+        IHardware? LibreHardware);   // used only for VRAM total/used sensors
 
     private readonly List<GpuDevice> _devices = new();
     private readonly Dictionary<string, PerformanceCounter> _engineCounters = new();
+    private readonly Computer _computer;
 
     public WindowsGpuMonitorService()
     {
+        _computer = new Computer { IsGpuEnabled = true };
+        _computer.Open();
+
         using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController");
 
         int index = 0;
@@ -37,7 +41,8 @@ public class WindowsGpuMonitorService : IGpuMonitorService
             var wmiMemoryMb = Convert.ToDouble(obj["AdapterRAM"] ?? 0) / (1024 * 1024);
             var integrated = LooksIntegrated(name, wmiMemoryMb);
 
-            var (luidFilter, adapter3) = ResolveGpuAdapterFromDxgi(name);
+            var luidFilter = ResolveGpuLuidFromDxgi(name);
+            var libreHardware = ResolveGpuHardwareFromLibre(name);
 
             _devices.Add(new GpuDevice(
                 Index: index,
@@ -46,8 +51,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService
                 DriverVersion: driverVersion,
                 IsIntegrated: integrated,
                 LuidFilter: luidFilter,
-                Adapter3: adapter3,
-                WmiFallbackMemoryMb: wmiMemoryMb));
+                LibreHardware: libreHardware));
 
             index++;
         }
@@ -58,8 +62,11 @@ public class WindowsGpuMonitorService : IGpuMonitorService
         }
     }
 
-    private static (string? luidFilter, IDXGIAdapter3? adapter3) ResolveGpuAdapterFromDxgi(string gpuName)
+    // Unchanged: still needed for GPU Engine (usage %) perf-counter matching, out of scope for this pass.
+    private static string? ResolveGpuLuidFromDxgi(string gpuName)
     {
+        var seenDxgiNames = new List<string>();
+
         try
         {
             using var factory = DXGI.CreateDXGIFactory1<IDXGIFactory1>();
@@ -67,24 +74,49 @@ public class WindowsGpuMonitorService : IGpuMonitorService
             for (uint i = 0; factory.EnumAdapters1(i, out var adapter).Success; i++)
             {
                 var desc = adapter.Description1;
-                if (string.Equals(desc.Description, gpuName, StringComparison.OrdinalIgnoreCase))
+                var dxgiName = (desc.Description ?? string.Empty).Trim();
+                seenDxgiNames.Add(dxgiName);
+
+                if (string.Equals(dxgiName, gpuName.Trim(), StringComparison.OrdinalIgnoreCase))
                 {
                     var luid = desc.Luid;
-                    var luidFilter = $"0x{(uint)luid.HighPart:x8}_0x{luid.LowPart:x8}";
-
-                    var adapter3 = adapter.QueryInterface<IDXGIAdapter3>();
-                    return (luidFilter, adapter3);
+                    adapter.Dispose();
+                    return $"0x{(uint)luid.HighPart:x8}_0x{luid.LowPart:x8}";
                 }
 
                 adapter.Dispose();
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // fall back to unfiltered/WMI rather than crashing
+            Debug.WriteLine($"[GPU] DXGI adapter enumeration failed while resolving '{gpuName}': {ex}");
+            return null;
         }
 
-        return (null, null);
+        Debug.WriteLine(
+            $"[GPU] No DXGI adapter matched WMI name '{gpuName}'. " +
+            $"DXGI adapters seen: {string.Join(", ", seenDxgiNames.Select(n => $"'{n}'"))}");
+        return null;
+    }
+
+    // New: resolves the LibreHardwareMonitor GPU hardware handle used for VRAM total/used.
+    private IHardware? ResolveGpuHardwareFromLibre(string gpuName)
+    {
+        var candidates = _computer.Hardware
+            .Where(h => h.HardwareType is HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel)
+            .ToList();
+
+        var match = candidates.FirstOrDefault(h =>
+            string.Equals(h.Name?.Trim(), gpuName.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (match is null)
+        {
+            Debug.WriteLine(
+                $"[GPU] No LibreHardwareMonitor device matched WMI name '{gpuName}'. " +
+                $"Devices seen: {string.Join(", ", candidates.Select(h => $"'{h.Name}'"))}");
+        }
+
+        return match;
     }
 
     private static bool LooksIntegrated(string name, double memoryMb)
@@ -103,58 +135,63 @@ public class WindowsGpuMonitorService : IGpuMonitorService
 
     public IReadOnlyList<GpuInfo> GetCurrentUsage()
     {
-        return _devices.Select(device => new GpuInfo
+        return _devices.Select(device =>
         {
-            IsAvailable = true,
-            Index = device.Index,
-            Name = device.Name,
-            Vendor = device.Vendor,
-            DriverVersion = device.DriverVersion,
-            DedicatedMemoryTotalMb = GetLiveMemoryBudgetMb(device),
-            DedicatedMemoryUsedMb = GetGpuMemoryUsedMb(device),
-            IsIntegrated = device.IsIntegrated,
-            UsagePercent = GetGpuUsagePercent(device.LuidFilter),
-            Timestamp = DateTime.UtcNow
+            var (totalMb, usedMb) = GetGpuMemoryMb(device);
+
+            return new GpuInfo
+            {
+                IsAvailable = true,
+                Index = device.Index,
+                Name = device.Name,
+                Vendor = device.Vendor,
+                DriverVersion = device.DriverVersion,
+                DedicatedMemoryTotalMb = totalMb,
+                DedicatedMemoryUsedMb = usedMb,
+                IsIntegrated = device.IsIntegrated,
+                UsagePercent = GetGpuUsagePercent(device.LuidFilter),
+                Timestamp = DateTime.UtcNow
+            };
         }).ToList();
     }
 
-    private static double GetLiveMemoryBudgetMb(GpuDevice device)
+    // Replaces old DXGI static bytes + WMI AdapterRAM fallback. Single Update() call
+    // per read so Total/Used come from the same sensor snapshot.
+    private static (double totalMb, double usedMb) GetGpuMemoryMb(GpuDevice device)
     {
-        if (device.Adapter3 is not null)
+        if (device.LibreHardware is null)
         {
-            try
+            // No matching LibreHardwareMonitor device — memory reporting unavailable
+            // for this GPU. 0 here means "unknown", same caveat as before.
+            return (0, 0);
+        }
+
+        device.LibreHardware.Update();
+
+        double totalMb = 0;
+        double usedMb = 0;
+
+        foreach (var sensor in device.LibreHardware.Sensors)
+        {
+            if (sensor.SensorType != SensorType.SmallData || sensor.Value is not float value)
             {
-                var info = device.Adapter3.QueryVideoMemoryInfo(0, MemorySegmentGroup.Local);
-                return Math.Round(info.Budget / (1024.0 * 1024.0), 2);
+                continue;
             }
-            catch
+
+            if (sensor.Name == "GPU Memory Total")
             {
-                // fall through to WMI fallback below
+                totalMb = Math.Round(value, 2);
+            }
+            else if (sensor.Name == "GPU Memory Used")
+            {
+                usedMb = Math.Round(value, 2);
             }
         }
 
-        return device.WmiFallbackMemoryMb;
+        return (totalMb, usedMb);
     }
 
-    private static double GetGpuMemoryUsedMb(GpuDevice device)
-    {
-        if (device.Adapter3 is not null)
-        {
-            try
-            {
-                // Queries current hardware VRAM usage directly from DXGI
-                var info = device.Adapter3.QueryVideoMemoryInfo(0, MemorySegmentGroup.Local);
-                return Math.Round(info.CurrentUsage / (1024.0 * 1024.0), 2);
-            }
-            catch
-            {
-                // DXGI query fallback
-            }
-        }
-
-        return 0;
-    }
-
+    // Unchanged: GPU Engine usage % still comes from PerformanceCounter, out of scope for this pass.
     private double GetGpuUsagePercent(string? luidFilter)
     {
         var category = new PerformanceCounterCategory("GPU Engine");
@@ -187,4 +224,15 @@ public class WindowsGpuMonitorService : IGpuMonitorService
 
     private static bool MatchesGpu(string instanceName, string? luidFilter) =>
         luidFilter == null || instanceName.Contains(luidFilter, StringComparison.OrdinalIgnoreCase);
+
+    // New: Computer is a disposable resource introduced by LibreHardwareMonitorLib.
+    public void Dispose()
+    {
+        foreach (var counter in _engineCounters.Values)
+        {
+            counter.Dispose();
+        }
+
+        _computer.Close();
+    }
 }
