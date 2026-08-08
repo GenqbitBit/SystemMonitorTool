@@ -25,6 +25,14 @@ public class MetricReading
     /// <summary>For Text-kind metrics the value IS this string; numeric metrics leave it null.</summary>
     public string? TextValue { get; set; }
 
+    /// <summary>
+    /// True for a device's main/core reading (e.g. GPU Core temp); false for
+    /// sub-readings under the same device (Hot Spot, Memory Junction, etc.).
+    /// Defaults true — only Temperature readings for GPU devices currently
+    /// set this to false, everything else is unaffected.
+    /// </summary>
+    public bool IsPrimary { get; set; } = true;
+
     /// <summary>Value formatted with its actual unit — e.g. "42%", "10.2 GB", "1200 KB/s".</summary>
     public string DisplayValue => TextValue is not null
         ? TextValue

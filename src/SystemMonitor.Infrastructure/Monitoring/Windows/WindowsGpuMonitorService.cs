@@ -225,6 +225,12 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
     private static bool MatchesGpu(string instanceName, string? luidFilter) =>
         luidFilter == null || instanceName.Contains(luidFilter, StringComparison.OrdinalIgnoreCase);
 
+    // New: exposes the same WMI-ordered Index/Name/IsIntegrated used by GetCurrentUsage(),
+    // so WindowsTemperatureMonitorService (or anything else) can match its own GPU hardware
+    // handles to these same indices instead of enumerating GPUs independently.
+    public IReadOnlyList<GpuDeviceIdentity> GetDeviceIdentities() =>
+        _devices.Select(d => new GpuDeviceIdentity(d.Index, d.Name, d.IsIntegrated)).ToList();
+
     // New: Computer is a disposable resource introduced by LibreHardwareMonitorLib.
     public void Dispose()
     {

@@ -113,21 +113,38 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
 
         // Temperature — one MetricReading per sensor; runtime-discovered, so it
         // can't go through BuildReading/MetricCatalog like the sections above.
+        // GPU rows get the same "(GPU {index} - Dedicated/Integrated: {name})"
+        // suffix used for gpu.usage/gpu.memory above, using gpuInfos already
+        // fetched in this method — so a temp panel's "GPU 0" always refers to
+        // the same physical device as the usage/VRAM panel's "GPU 0".
         var rawTemperatureReadings = _temperature.GetCurrentUsage();
         foreach (var reading in rawTemperatureReadings)
         {
+            var label = reading.SensorLabel;
+            var idSuffix = reading.SensorLabel;
+
+            if (reading.GpuIndex is int gpuIndex)
+            {
+                var matchingGpu = gpuInfos.FirstOrDefault(g => g.Index == gpuIndex);
+                var deviceTag = reading.GpuIsIntegrated == true ? "Integrated" : "Dedicated";
+                var gpuName = matchingGpu?.Name ?? "Unknown";
+                label = $"{reading.SensorLabel} (GPU {gpuIndex} - {deviceTag}: {gpuName})";
+                idSuffix = $"{gpuIndex}.{reading.SensorLabel}";
+            }
+
             readings.Add(new MetricReading
             {
-                Id = $"temp.{reading.Category}.{reading.SensorLabel}".ToLowerInvariant(),
+                Id = $"temp.{reading.Category}.{idSuffix}".ToLowerInvariant(),
                 Category = reading.Category,
-                Label = reading.SensorLabel,
+                Label = label,
                 Kind = MetricKind.Temperature,
                 Unit = "°C",
                 IsAvailable = reading.IsAvailable,
                 Value = Round(reading.TemperatureCelsius),
                 Min = RoundNullable(reading.MinCelsius),
                 Max = RoundNullable(reading.MaxCelsius),
-                Average = RoundNullable(reading.AverageCelsius)
+                Average = RoundNullable(reading.AverageCelsius),
+                IsPrimary = reading.IsPrimary
             });
         }
 

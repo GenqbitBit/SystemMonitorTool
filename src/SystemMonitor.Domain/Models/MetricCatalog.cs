@@ -13,8 +13,8 @@ namespace SystemMonitor.Domain.Models;
 /// illustrative only. Real temperature sensors are discovered at runtime via
 /// LibreHardwareMonitorLib and vary by machine (sensor count/labels aren't
 /// knowable ahead of time), so the runtime provider does NOT read Id/Category/
-/// Label from this catalog for temperature. These three entries exist purely
-/// so the design-time preview has representative temperature rows to render.
+/// Label from this catalog for temperature. These entries exist purely so the
+/// design-time preview has representative temperature rows to render.
 /// </summary>
 public sealed record MetricCatalogEntry(
     string Id,
@@ -26,7 +26,8 @@ public sealed record MetricCatalogEntry(
     double? SampleMin = null,
     double? SampleMax = null,
     double? SampleAverage = null,
-    string? SampleText = null);
+    string? SampleText = null,
+    bool SampleIsPrimary = true);
 
 public static class MetricCatalog
 {
@@ -98,13 +99,27 @@ public static class MetricCatalog
     public static readonly MetricCatalogEntry GpuMemoryTotal1 =
         new("gpu.memory.total.1", "GPU", "VRAM Total (GPU 1 - Integrated: AMD Radeon Graphics)", MetricKind.DataSize, "GB", 2.00);
 
-    // Temperature — illustrative only, see remarks below.
+    // Temperature — illustrative only. GPU entries deliberately mirror real
+    // runtime shape: device-suffixed labels (same "(GPU {index} - Dedicated/
+    // Integrated: {name})" pattern as the usage/VRAM rows above), and
+    // SampleIsPrimary set the way WindowsTemperatureMonitorService actually
+    // determines it — one primary "core" reading per device, everything else
+    // on that device a sub-reading. The dedicated card shows the common case
+    // (a real "GPU Core" sensor); the integrated entry shows the AMD-style
+    // case where there's no "Core" sensor at all and a different one (here,
+    // "VR SoC") ends up primary by fallback — so the previewer doesn't imply
+    // every device has a Hot Spot/etc. sub-reading when some don't.
     public static readonly MetricCatalogEntry TempCpuCore =
         new("temp.cpu.core", "CPU", "Core Temp", MetricKind.Temperature, "°C", 55.00, 40.00, 70.00, 55.00);
-    public static readonly MetricCatalogEntry TempGpuCore =
-        new("temp.gpu.core", "GPU", "Core Temp", MetricKind.Temperature, "°C", 62.00, 45.00, 80.00, 60.00);
-    public static readonly MetricCatalogEntry TempGpuHotSpot =
-        new("temp.gpu.hotspot", "GPU", "Hot Spot", MetricKind.Temperature, "°C", 78.00, 50.00, 95.00, 75.00);
+    public static readonly MetricCatalogEntry TempGpuCoreDedicated =
+        new("temp.gpu.core.0", "GPU", "GPU Core (GPU 0 - Dedicated: NVIDIA GeForce RTX 4060)",
+            MetricKind.Temperature, "°C", 62.00, 45.00, 80.00, 60.00, SampleIsPrimary: true);
+    public static readonly MetricCatalogEntry TempGpuSubDedicated =
+        new("temp.gpu.hotspot.0", "GPU", "GPU Hot Spot (GPU 0 - Dedicated: NVIDIA GeForce RTX 4060)",
+            MetricKind.Temperature, "°C", 78.00, 50.00, 95.00, 75.00, SampleIsPrimary: false);
+    public static readonly MetricCatalogEntry TempGpuPrimaryIntegrated =
+        new("temp.gpu.vrsoc.1", "GPU", "GPU VR SoC (GPU 1 - Integrated: AMD Radeon Graphics)",
+            MetricKind.Temperature, "°C", 43.00, 35.00, 55.00, 44.00, SampleIsPrimary: true);
 
     public static IReadOnlyList<MetricCatalogEntry> All { get; } = new[]
     {
@@ -115,6 +130,6 @@ public static class MetricCatalog
         MotherboardModel, MotherboardChipset, MotherboardTemperature,
         GpuUsage0, GpuMemoryUsed0, GpuMemoryTotal0,
         GpuUsage1, GpuMemoryUsed1, GpuMemoryTotal1,
-        TempCpuCore, TempGpuCore, TempGpuHotSpot
+        TempCpuCore, TempGpuCoreDedicated, TempGpuSubDedicated, TempGpuPrimaryIntegrated
     };
 }
