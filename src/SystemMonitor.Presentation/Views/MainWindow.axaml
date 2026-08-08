@@ -1,0 +1,74 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
+        xmlns:panels="using:SystemMonitor.Presentation.Views.PanelsAndTemplates"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="using:SystemMonitor.Presentation"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="SystemMonitor.Presentation.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="SystemMonitor.Presentation">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel />
+    </Design.DataContext>
+
+    <!--border for debug-->
+    <!--grid layout == root ui-->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" />
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Motherboard" />
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" />
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Disk" />
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Network" />
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="GPU" />
+                
+            </StackPanel>
+        </Border>  
+        
+        
+        <!--test layout-->
+        <Border Grid.Row="1">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" MetricId="cpu.usage" ShowLabel="True"/>
+                <Border BorderBrush="{x:Static local:DebugSettings.BorderBrush}" BorderThickness="1">
+                    <panels:MetricGraphView
+                        Metrics="{Binding Metrics}"
+                        HistoryStore="{Binding HistoryStore}"
+                        MetricId="cpu.usage"
+                        Width="110" Height="80" />
+                </Border>
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" MetricId="memory.usage" ShowLabel="True"/>
+                <Border BorderBrush="{x:Static local:DebugSettings.BorderBrush}" BorderThickness="1">
+                    <panels:MetricGraphView
+                        Metrics="{Binding Metrics}"
+                        HistoryStore="{Binding HistoryStore}"
+                        MetricId="memory.usage"
+                        LineBrush="DeepSkyBlue"
+                        Width="110" Height="80" />
+                </Border>
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="GPU" MetricId="gpu.usage" ShowLabel="True"/>
+                <Border BorderBrush="{x:Static local:DebugSettings.BorderBrush}" BorderThickness="1">
+                    <panels:MetricGraphView
+                        Metrics="{Binding Metrics}"
+                        HistoryStore="{Binding HistoryStore}"
+                        MetricId="gpu.usage"
+                        LineBrush="#FF1900"
+                        Width="110" Height="80" />
+                </Border>
+            </StackPanel>
+        </Border> 
+    </Grid>
+
+   
+
+</Window>
