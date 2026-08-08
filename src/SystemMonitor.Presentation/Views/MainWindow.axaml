@@ -17,12 +17,15 @@
 
     <!--border for debug-->
     <!--grid layout == root ui-->
+    <!--beta not final just for demo of ui and back end-->
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
+        <!--row 0: info panels-->
         <Border Grid.Row="0">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" />
@@ -30,29 +33,27 @@
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" />
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Disk" />
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Network" />
-                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="GPU" />
-                
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="GPU"/>
             </StackPanel>
-        </Border>  
-        
-        
-        <!--test layout-->
+        </Border>
+
+        <!--row 1: cpu + memory graphs-->
         <Border Grid.Row="1">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" MetricId="cpu.usage" ShowLabel="True"/>
                 <Border debug:DebugBorder.IsEnabled="False"
-                Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                        Classes="feature" BorderBrush="Gray" BorderThickness="1">
                     <panels:MetricGraphView
                         Metrics="{Binding Metrics}"
                         HistoryStore="{Binding HistoryStore}"
                         MetricId="cpu.usage"
                         FixedMinValue="0"
                         FixedMaxValue="100"
-                        Width="150" Height="150" />
+                        Width="150" Height="130" />
                 </Border>
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" MetricId="memory.usage" ShowLabel="True"/>
                 <Border debug:DebugBorder.IsEnabled="False"
-                Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                        Classes="feature" BorderBrush="Gray" BorderThickness="1">
                     <panels:MetricGraphView
                         Metrics="{Binding Metrics}"
                         HistoryStore="{Binding HistoryStore}"
@@ -60,22 +61,49 @@
                         FixedMinValue="0"
                         FixedMaxValue="100"
                         LineBrush="DeepSkyBlue"
-                        Width="110" Height="80" />
+                        Width="150" Height="130" />
                 </Border>
-                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="GPU" MetricId="gpu.usage" ShowLabel="True"/>
+            </StackPanel>
+        </Border>
+
+        <!--row 2: gpu graph-->
+        <Border Grid.Row="2">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
+
+                <!--GPU 0 stats (dedicated, if present)-->
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="GPU 0" MetricId="gpu.usage.0" ShowLabel="True"/>
+
+                <!--GPU 0 usage graph-->
                 <Border debug:DebugBorder.IsEnabled="False"
-                Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                        Classes="feature" BorderBrush="Gray" BorderThickness="1">
                     <panels:MetricGraphView
                         Metrics="{Binding Metrics}"
                         HistoryStore="{Binding HistoryStore}"
-                        MetricId="gpu.usage"
+                        MetricId="gpu.usage.0"
                         FixedMinValue="0"
                         FixedMaxValue="100"
                         LineBrush="#FF1900"
-                        Width="110" Height="80" />
+                        Width="110" Height="130" />
                 </Border>
+
+                <!--GPU 1 stats (integrated, if present)-->
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="GPU 1" MetricId="gpu.usage.1" ShowLabel="True"/>
+
+                <!--GPU 1 usage graph-->
+                <Border debug:DebugBorder.IsEnabled="False"
+                        Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                    <panels:MetricGraphView
+                        Metrics="{Binding Metrics}"
+                        HistoryStore="{Binding HistoryStore}"
+                        MetricId="gpu.usage.1"
+                        FixedMinValue="0"
+                        FixedMaxValue="100"
+                        LineBrush="#FF1900"
+                        Width="110" Height="130" />
+                </Border>
+
             </StackPanel>
-        </Border> 
+        </Border>
     </Grid>
 
    

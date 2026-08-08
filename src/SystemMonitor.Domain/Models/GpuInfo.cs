@@ -17,6 +17,12 @@ public class GpuInfo
     public bool IsAvailable { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Vendor { get; set; } = string.Empty;
+    
+    // Position in WMI enumeration order at startup. Stable for the lifetime of
+    // the app run, but not guaranteed stable across reboots/driver updates —
+    // used purely to give each detected GPU a distinct metric Id (gpu.usage.0,
+    // gpu.usage.1, ...), same role LUID plays internally in Infrastructure.
+    public int Index { get; set; }
 
     // True for integrated GPUs (e.g. Intel UHD/Iris, AMD APU graphics),
     // false for dedicated cards (e.g. NVIDIA GeForce, AMD Radeon RX).
@@ -43,4 +49,6 @@ public class GpuInfo
     public string DriverVersion { get; set; } = string.Empty;
 
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+
+    
 }
