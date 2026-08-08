@@ -11,6 +11,10 @@ namespace SystemMonitor.Domain.Models;
 /// </summary>
 public class GpuInfo
 {
+    // False when no GPU could be detected on this machine, or detection
+    // failed. When false, every other field should be treated as
+    // meaningless default data, not a real reading.
+    public bool IsAvailable { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Vendor { get; set; } = string.Empty;
 

@@ -37,6 +37,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService
     private readonly string _driverVersion = "Unknown";
     private readonly double _totalMemoryMb;
     private readonly bool _isIntegrated;
+    private readonly bool _isAvailable; // true only if WMI found a video controller
 
     // The specific fragment of a counter instance name that identifies
     // OUR chosen GPU (e.g. "luid_0x00000000_0x0000abcd"). Null if DXGI
@@ -84,6 +85,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService
             _driverVersion = chosen["DriverVersion"]?.ToString() ?? "Unknown";
             _totalMemoryMb = Convert.ToDouble(chosen["AdapterRAM"] ?? 0) / (1024 * 1024);
             _isIntegrated = chosenIsIntegrated;
+            _isAvailable = true;
         }
 
         var (luidFilter, accurateMemoryMb) = ResolveGpuDetailsFromDxgi(_name);
@@ -104,7 +106,9 @@ public class WindowsGpuMonitorService : IGpuMonitorService
         // too (e.g. when a new app starts using the GPU) — those brand-new
         // instances will still report 0% on their own first read, since
         // there's no way to prime a counter that doesn't exist yet.
-        GetGpuUsagePercent();
+        if (_isAvailable){
+            GetGpuUsagePercent();
+        }
     }
 
     // DXGI is Microsoft's own graphics API (ships with Windows), not a
@@ -169,13 +173,14 @@ public class WindowsGpuMonitorService : IGpuMonitorService
     {
         return new GpuInfo
         {
+            IsAvailable = _isAvailable,
             Name = _name,
             Vendor = _vendor,
             DriverVersion = _driverVersion,
             DedicatedMemoryTotalMb = _totalMemoryMb,
-            DedicatedMemoryUsedMb = GetGpuMemoryUsedMb(),
+            DedicatedMemoryUsedMb = _isAvailable ? GetGpuMemoryUsedMb() : 0,
             IsIntegrated = _isIntegrated,
-            UsagePercent = GetGpuUsagePercent(),
+            UsagePercent = _isAvailable ? GetGpuUsagePercent() : 0,
             Timestamp = DateTime.UtcNow
         };
     }

@@ -94,15 +94,19 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
 
         // GPU (Teammate's addition)
         var gpuInfo = _gpu.GetCurrentUsage();
-        var gpuUsedGB = gpuInfo.DedicatedMemoryUsedMb / 1024.0;
-        var gpuTotalGB = gpuInfo.DedicatedMemoryTotalMb / 1024.0;
-        var gpuLabelSuffix = $" ({gpuInfo.Name})";
+        if (gpuInfo.IsAvailable)
+        {
+            var gpuUsedGB = gpuInfo.DedicatedMemoryUsedMb / 1024.0;
+            var gpuTotalGB = gpuInfo.DedicatedMemoryTotalMb / 1024.0;
+            var gpuLabelSuffix = $" ({gpuInfo.Name})";
 
-        readings.Add(BuildReading(MetricCatalog.GpuUsage, gpuInfo.UsagePercent, smooth: true,
-            labelOverride: MetricCatalog.GpuUsage.Label + gpuLabelSuffix));
-        readings.Add(BuildReading(MetricCatalog.GpuMemoryUsed, gpuUsedGB));
-        readings.Add(BuildReading(MetricCatalog.GpuMemoryTotal, gpuTotalGB));
-
+            readings.Add(BuildReading(MetricCatalog.GpuUsage, gpuInfo.UsagePercent, smooth: true,
+                labelOverride: MetricCatalog.GpuUsage.Label + gpuLabelSuffix));
+            readings.Add(BuildReading(MetricCatalog.GpuMemoryUsed, gpuUsedGB,
+                labelOverride: MetricCatalog.GpuMemoryUsed.Label + gpuLabelSuffix));
+            readings.Add(BuildReading(MetricCatalog.GpuMemoryTotal, gpuTotalGB,
+                labelOverride: MetricCatalog.GpuMemoryTotal.Label + gpuLabelSuffix));
+        }
         // Temperature — one MetricReading per sensor; runtime-discovered, so it
         // can't go through BuildReading/MetricCatalog like the sections above.
         var rawTemperatureReadings = _temperature.GetCurrentUsage();
