@@ -94,10 +94,9 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         readings.Add(BuildReading(MetricCatalog.NetworkDownload, networkInfo.DownloadKBPerSec));
         readings.Add(BuildReading(MetricCatalog.NetworkUpload, networkInfo.UploadKBPerSec));
 
-        // GPU — runtime-discovered, zero or more devices. Not catalog-driven for
-        // Id/Label (same reasoning as Temperature): count and identity vary per
-        // machine, so MetricCatalog.GpuUsage/etc. now only supply Category/Kind/
-        // Unit/Label-stem plus design-time sample values, not the runtime Id.
+        // GPU — runtime-discovered, zero or more devices, each keyed by its
+        // stable DeviceId (not enumeration Index) so identity survives even if
+        // WMI's device order ever shifts between runs.
         var gpuInfos = _gpu.GetCurrentUsage();
         foreach (var gpuInfo in gpuInfos)
         {
@@ -108,9 +107,9 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             var deviceTag = gpuInfo.IsIntegrated ? "Integrated" : "Dedicated";
             var gpuLabelSuffix = $" (GPU {gpuInfo.Index} - {deviceTag}: {gpuInfo.Name})";
 
-            readings.Add(BuildGpuReading(MetricCatalog.GpuUsage, gpuInfo.Index, gpuInfo.IsIntegrated, gpuInfo.UsagePercent, smooth: true, gpuLabelSuffix));
-            readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryUsed, gpuInfo.Index, gpuInfo.IsIntegrated, gpuUsedGB, smooth: false, gpuLabelSuffix));
-            readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryTotal, gpuInfo.Index, gpuInfo.IsIntegrated, gpuTotalGB, smooth: false, gpuLabelSuffix));
+            readings.Add(BuildGpuReading(MetricCatalog.GpuUsage, gpuInfo, gpuInfo.UsagePercent, smooth: true, gpuLabelSuffix));
+            readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryUsed, gpuInfo, gpuUsedGB, smooth: false, gpuLabelSuffix));
+            readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryTotal, gpuInfo, gpuTotalGB, smooth: false, gpuLabelSuffix));
         }
 
         // Temperature — now bundled into each hardware's own Info model instead
@@ -137,10 +136,11 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             {
                 readings.Add(BuildTemperatureMetric(
                     "GPU", reading,
-                    idSuffix: $"{gpuInfo.Index}.{reading.SensorLabel}",
+                    idSuffix: $"{gpuInfo.DeviceId}.{reading.SensorLabel}",
                     labelSuffix: gpuLabelSuffix,
                     gpuIndex: gpuInfo.Index,
-                    gpuIsIntegrated: gpuInfo.IsIntegrated));
+                    gpuIsIntegrated: gpuInfo.IsIntegrated,
+                    gpuDeviceId: gpuInfo.DeviceId));
             }
         }
 
@@ -164,9 +164,9 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     }
 
     private MetricReading BuildGpuReading(
-    MetricCatalogEntry entry, int gpuIndex, bool gpuIsIntegrated, double rawValue, bool smooth, string labelSuffix)
+        MetricCatalogEntry entry, GpuInfo gpuInfo, double rawValue, bool smooth, string labelSuffix)
     {
-        var id = $"{entry.Id}.{gpuIndex}";
+        var id = $"{entry.Id}.{gpuInfo.DeviceId}";
         var value = smooth ? Smooth(id, rawValue) : rawValue;
 
         return new MetricReading
@@ -178,8 +178,9 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             Unit = entry.Unit,
             IsAvailable = true,
             Value = Round(value),
-            GpuIndex = gpuIndex,
-            GpuIsIntegrated = gpuIsIntegrated
+            GpuIndex = gpuInfo.Index,
+            GpuIsIntegrated = gpuInfo.IsIntegrated,
+            GpuDeviceId = gpuInfo.DeviceId
         };
     }
 
@@ -188,7 +189,8 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     // Id scheme ("temp.{category}.{idSuffix}"), same Min/Max/Average rounding.
     private static MetricReading BuildTemperatureMetric(
         string category, TemperatureReading reading, string idSuffix,
-        string? labelSuffix = null, int? gpuIndex = null, bool? gpuIsIntegrated = null) => new()
+        string? labelSuffix = null, int? gpuIndex = null, bool? gpuIsIntegrated = null,
+        string? gpuDeviceId = null) => new()
     {
         Id = $"temp.{category}.{idSuffix}".ToLowerInvariant(),
         Category = category,
@@ -202,7 +204,8 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         Average = RoundNullable(reading.AverageCelsius),
         IsPrimary = reading.IsPrimary,
         GpuIndex = gpuIndex,
-        GpuIsIntegrated = gpuIsIntegrated
+        GpuIsIntegrated = gpuIsIntegrated,
+        GpuDeviceId = gpuDeviceId
     };
 
     private static MetricReading BuildGpuTextReading(

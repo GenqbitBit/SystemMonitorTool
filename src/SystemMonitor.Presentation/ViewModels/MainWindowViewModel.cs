@@ -25,9 +25,13 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string? integratedGpuMetricId;
 
+    // One entry per physical GPU detected this snapshot, keyed on the real
+    // DeviceId — drives the dynamic per-GPU panel ItemsControl in MainWindow.axaml.
+    [ObservableProperty]
+    private ObservableCollection<GpuDeviceDisplayInfo> detectedGpus = new();
+
     public IMetricHistoryStore HistoryStore => _historyStore;
 
-    // Design-time only — used by the XAML previewer, never by the real running app
     public MainWindowViewModel()
         : this(new CatalogDesignTimeMetricsSnapshotProvider(), new MetricHistoryStore())
         {
@@ -58,17 +62,23 @@ public partial class MainWindowViewModel : ViewModelBase
             m.Id.StartsWith("gpu.usage.") && m.GpuIsIntegrated == false)?.Id;
         IntegratedGpuMetricId = snapshot.FirstOrDefault(m =>
             m.Id.StartsWith("gpu.usage.") && m.GpuIsIntegrated == true)?.Id;
+
+        DetectedGpus = new ObservableCollection<GpuDeviceDisplayInfo>(
+            snapshot
+                .Where(m => m.Id.StartsWith("gpu.usage.") && m.GpuDeviceId != null)
+                .Select(m => new GpuDeviceDisplayInfo(
+                    m.GpuDeviceId!,
+                    m.GpuIndex ?? 0,
+                    m.GpuIsIntegrated ?? false,
+                    $"GPU {m.GpuIndex} ({(m.GpuIsIntegrated == true ? "Integrated" : "Dedicated")})"))
+                .DistinctBy(g => g.DeviceId)
+                .OrderBy(g => g.Index));
     }
 
     private static string? FindGpuMetricId(IReadOnlyList<MetricReading> snapshot, bool isIntegrated)
     {
-        // Match on the label suffix MetricsSnapshotProvider bakes in
-        // ("... - Dedicated: ..." / "... - Integrated: ...") since MetricReading
-        // itself doesn't carry a raw IsIntegrated flag — only GpuInfo does, and
-        // that's not part of the snapshot's public shape.
         var tag = isIntegrated ? "Integrated" : "Dedicated";
         return snapshot.FirstOrDefault(m =>
             m.Id.StartsWith("gpu.usage.") && m.Label.Contains($"- {tag}:"))?.Id;
     }
-
 }

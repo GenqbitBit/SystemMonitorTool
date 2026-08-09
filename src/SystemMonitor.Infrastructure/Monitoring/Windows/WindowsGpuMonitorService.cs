@@ -18,15 +18,13 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         string Vendor,
         string DriverVersion,
         bool IsIntegrated,
+        string DeviceId,             // stable identity — LUID string, or index-based fallback
         string? LuidFilter,          // used only for GPU Engine (usage %) perf-counter matching
         IHardware? LibreHardware);   // used for VRAM total/used sensors AND temperature sensors
 
     private readonly List<GpuDevice> _devices = new();
     private readonly Dictionary<string, PerformanceCounter> _engineCounters = new();
     private readonly Computer _computer;
-
-    // Per-sensor running average, keyed by the ISensor reference itself. Shared
-    // across all devices — ISensor identity already disambiguates by device.
     private readonly Dictionary<ISensor, (double Sum, int Count)> _temperatureAveraging = new();
 
     public WindowsGpuMonitorService()
@@ -47,12 +45,26 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
             var luidFilter = ResolveGpuLuidFromDxgi(name);
             var libreHardware = ResolveGpuHardwareFromLibre(name);
 
+            // DeviceId is the identity every downstream layer keys on. LUID when
+            // DXGI resolved it; otherwise a logged fallback so a real resolution
+            // gap stays visible instead of silently degrading to enumeration order.
+            var deviceId = luidFilter;
+            if (deviceId is null)
+            {
+                deviceId = $"gpu-fallback-{index}";
+                Debug.WriteLine(
+                    $"[GPU] No stable LUID identity for '{name}' — falling back to " +
+                    $"'{deviceId}'. This device's identity is not guaranteed stable " +
+                    $"across refreshes if enumeration order changes.");
+            }
+
             _devices.Add(new GpuDevice(
                 Index: index,
                 Name: name,
                 Vendor: vendor,
                 DriverVersion: driverVersion,
                 IsIntegrated: integrated,
+                DeviceId: deviceId,
                 LuidFilter: luidFilter,
                 LibreHardware: libreHardware));
 
@@ -65,7 +77,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         }
     }
 
-    // Unchanged: still needed for GPU Engine (usage %) perf-counter matching, out of scope for this pass.
     private static string? ResolveGpuLuidFromDxgi(string gpuName)
     {
         var seenDxgiNames = new List<string>();
@@ -102,7 +113,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         return null;
     }
 
-    // Resolves the LibreHardwareMonitor GPU hardware handle used for VRAM AND temperature.
     private IHardware? ResolveGpuHardwareFromLibre(string gpuName)
     {
         var candidates = _computer.Hardware
@@ -144,6 +154,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
             return new GpuInfo
             {
                 IsAvailable = true,
+                DeviceId = device.DeviceId,
                 Index = device.Index,
                 Name = device.Name,
                 Vendor = device.Vendor,
@@ -158,8 +169,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         }).ToList();
     }
 
-    // Replaces old DXGI static bytes + WMI AdapterRAM fallback. Single Update() call
-    // per read so Total/Used come from the same sensor snapshot.
     private static (double totalMb, double usedMb) GetGpuMemoryMb(GpuDevice device)
     {
         if (device.LibreHardware is null)
@@ -192,8 +201,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         return (totalMb, usedMb);
     }
 
-    // Moved from the old WindowsTemperatureMonitorService, scoped to this device's
-    // own LibreHardware handle — the same one GetGpuMemoryMb already resolved.
     private List<TemperatureReading> GetGpuTemperatures(GpuDevice device)
     {
         if (device.LibreHardware is null)
@@ -230,9 +237,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 
     private TemperatureReading BuildTemperatureReading(ISensor sensor, bool isPrimary)
     {
-        // A reading of exactly 0°C is never real for these components — see
-        // investigation notes: confirmed not permissions/version/AV related,
-        // appears to be OEM firmware restricting SMU telemetry on some laptops.
         var isRealReading = sensor.Value.HasValue && sensor.Value.Value != 0;
         double average = 0, min = 0, max = 0;
 
@@ -267,13 +271,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         };
     }
 
-    // Picks which GPU sensor counts as the device's primary/"core" reading.
-    // Tier 1: exact "GPU Core" — LibreHardwareMonitorLib's usual name across
-    //         Nvidia/AMD/Intel.
-    // Tier 2: any sensor whose name contains "core" (case-insensitive) — covers
-    //         naming drift on less common Intel/driver combos.
-    // Tier 3: the first sensor in enumeration order — so a device NEVER ends up
-    //         with zero primary sensors; a fallback log line explains why.
     private static string? DeterminePrimaryGpuSensorName(List<ISensor> temperatureSensors, string hardwareName)
     {
         var exactMatch = temperatureSensors.FirstOrDefault(s =>
@@ -304,8 +301,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 
     private static void DisambiguateDuplicateLabels(List<TemperatureReading> readings)
     {
-        // Scoped to a single device's own sensor list now — no more grouping
-        // by GpuIndex needed, since each GPU's readings never mix with another's.
         var groups = readings.GroupBy(r => r.SensorLabel);
         foreach (var group in groups.Where(g => g.Count() > 1))
         {
@@ -318,7 +313,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         }
     }
 
-    // Unchanged: GPU Engine usage % still comes from PerformanceCounter, out of scope for this pass.
     private double GetGpuUsagePercent(string? luidFilter)
     {
         var category = new PerformanceCounterCategory("GPU Engine");
@@ -348,9 +342,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 
     private static bool MatchesGpu(string instanceName, string? luidFilter) =>
     luidFilter != null && instanceName.Contains(luidFilter, StringComparison.OrdinalIgnoreCase);
-
-    public IReadOnlyList<GpuDeviceIdentity> GetDeviceIdentities() =>
-        _devices.Select(d => new GpuDeviceIdentity(d.Index, d.Name, d.IsIntegrated)).ToList();
 
     public void Dispose()
     {

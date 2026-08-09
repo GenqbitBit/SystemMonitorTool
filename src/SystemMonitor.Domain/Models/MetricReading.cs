@@ -3,10 +3,10 @@
 public enum MetricKind
 {
     Percentage,
-    DataRate,      // KB/s, MB/s — exact unit now comes from Unit, not inferred from Kind
-    DataSize,      // GB, MB
+    DataRate,
+    DataSize,
     Temperature,
-    Text           // identity facts (model, chipset) — the value lives in TextValue
+    Text
 }
 
 public class MetricReading
@@ -24,11 +24,12 @@ public class MetricReading
     public string? TextValue { get; set; }
     public bool IsPrimary { get; set; } = true;
 
-    // New — only set for GPU-device readings (usage, VRAM, temperature);
-    // mirrors TemperatureReading's GpuIndex/GpuIsIntegrated so any GPU row
-    // can be matched to its physical device without parsing Label text.
     public int? GpuIndex { get; set; }
     public bool? GpuIsIntegrated { get; set; }
+
+    // Stable identity join key — mirrors GpuInfo.DeviceId. GpuIndex is kept
+    // alongside for display ordering; this is what to key matching logic on.
+    public string? GpuDeviceId { get; set; }
 
     public string DisplayValue => TextValue is not null
         ? TextValue

@@ -30,7 +30,34 @@
                     <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" /></Border>
                     <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Disk" /></Border>
                     <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Network" /></Border>
-                    <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" PrimaryTempOnly="True" CategoryLabel="GPU"/></Border>
+                    <!-- GPU/s area presented by BlueViolet border> 
+                    isflexible/initially empty > adapts on how many gpus are detected
+                    until runtime -->
+                     <Border Margin="12"
+                            debug:DebugBorder.IsEnabled="True"
+                            Classes="feature" BorderBrush="BlueViolet" BorderThickness="1">
+                    <ItemsControl ItemsSource="{Binding DetectedGpus}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:GpuDeviceDisplayInfo">
+                                <Border Margin="12">
+                                    <panels:CategoryMetricsView
+                                        Metrics="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Metrics}"
+                                        CategoryLabel="GPU"
+                                        GpuDeviceId="{Binding DeviceId}"
+                                        PrimaryTempOnly="True" />
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    </Border>
+                    <!-- GPU/s area presented by BlueViolet border> 
+                    isflexible/initially empty > adapts on how many gpus are detected
+                    until runtime -->
                 </WrapPanel>
             </Border>
 
