@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using SystemMonitor.Application.Interfaces;
@@ -21,20 +21,20 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private const int DecimalPlaces = 2;
 
     public MetricsSnapshotProvider(
-        ICpuMonitorService cpu, 
-        IMemoryMonitorService memory, 
+        ICpuMonitorService cpu,
+        IMemoryMonitorService memory,
         IDiskMonitorService disk,
-        INetworkMonitorService network, 
+        INetworkMonitorService network,
         ITemperatureMonitorService temperature,
-        IMotherboardMonitorService motherboard, 
+        IMotherboardMonitorService motherboard,
         IGpuMonitorService gpu)
     {
-        _cpu = cpu; 
-        _memory = memory; 
-        _disk = disk; 
-        _network = network; 
-        _temperature = temperature; 
-        _motherboard = motherboard; 
+        _cpu = cpu;
+        _memory = memory;
+        _disk = disk;
+        _network = network;
+        _temperature = temperature;
+        _motherboard = motherboard;
         _gpu = gpu;
     }
 
@@ -42,42 +42,47 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     {
         var readings = new List<MetricReading>();
 
-        // CPU
+        // CPU — identity rows first (emission order = display order).
         var cpuInfo = _cpu.GetCurrentUsage();
+        readings.Add(BuildTextReading(MetricCatalog.CpuModel, cpuInfo.ModelName));
         readings.Add(BuildReading(MetricCatalog.CpuUsage, cpuInfo.UsagePercent, smooth: true));
+        readings.Add(BuildTextReading(MetricCatalog.CpuClock, FormatClock(cpuInfo.ClockMhz)));
+        readings.Add(BuildTextReading(MetricCatalog.CpuCores, cpuInfo.CoreCount.ToString()));
+        readings.Add(BuildTextReading(MetricCatalog.CpuThreads, cpuInfo.ThreadCount.ToString()));
 
-        // Motherboard — identity rows are text; if detection failed, the section skips itself.
+        // Motherboard — identity rows only. The temperature row was removed:
+        // this machine's Super I/O channel never reports a real value, and a
+        // permanent "0 °C" is noise, not telemetry.
         var boardInfo = _motherboard.GetCurrentInfo();
         if (boardInfo is not null)
         {
             readings.Add(BuildTextReading(MetricCatalog.MotherboardModel, boardInfo.Model));
             readings.Add(BuildTextReading(MetricCatalog.MotherboardChipset, boardInfo.Chipset));
-
-            readings.Add(new MetricReading
-            {
-                Id = MetricCatalog.MotherboardTemperature.Id,
-                Category = MetricCatalog.MotherboardTemperature.Category,
-                Label = MetricCatalog.MotherboardTemperature.Label,
-                Kind = MetricCatalog.MotherboardTemperature.Kind,
-                Unit = MetricCatalog.MotherboardTemperature.Unit,
-                IsAvailable = boardInfo.TemperatureCelsius.HasValue,
-                Value = Round(boardInfo.TemperatureCelsius ?? 0)
-            });
         }
 
-        // Memory
+        // Memory — identity rows first (Name leads, mirroring CPU/Disk "Model"),
+        // then live usage.
         var memInfo = _memory.GetCurrentUsage();
         var usedGB = memInfo.UsedMB / 1024.0;
         var totalGB = memInfo.TotalMB / 1024.0;
-
+        readings.Add(BuildTextReading(MetricCatalog.MemoryName,
+            string.IsNullOrWhiteSpace(memInfo.PartNumber) ? null : memInfo.PartNumber));
+        readings.Add(BuildTextReading(MetricCatalog.MemoryType, memInfo.Type));
+        readings.Add(BuildTextReading(MetricCatalog.MemorySpeed,
+            memInfo.SpeedMhz > 0 ? $"{memInfo.SpeedMhz} MHz" : null));
+        readings.Add(BuildTextReading(MetricCatalog.MemoryModules, memInfo.ModuleConfig));
+        readings.Add(BuildTextReading(MetricCatalog.MemoryManufacturer, memInfo.Manufacturer));
         readings.Add(BuildReading(MetricCatalog.MemoryUsage, memInfo.UsagePercent, smooth: true));
         readings.Add(BuildReading(MetricCatalog.MemoryUsed, usedGB));
         readings.Add(BuildReading(MetricCatalog.MemoryTotal, totalGB));
 
-        // Disk
+        // Disk — identity rows first, then live usage.
         var diskInfo = _disk.GetCurrentUsage();
         var diskLabelSuffix = $" ({diskInfo.DriveName})";
-
+        readings.Add(BuildTextReading(MetricCatalog.DiskModel, diskInfo.Model));
+        readings.Add(BuildTextReading(MetricCatalog.DiskType, diskInfo.DiskType));
+        readings.Add(BuildTextReading(MetricCatalog.DiskBus, diskInfo.BusType));
+        readings.Add(BuildTextReading(MetricCatalog.DiskFileSystem, diskInfo.FileSystem));
         readings.Add(BuildReading(MetricCatalog.DiskUsage, diskInfo.UsagePercent, smooth: true,
             labelOverride: MetricCatalog.DiskUsage.Label + diskLabelSuffix));
         readings.Add(BuildReading(MetricCatalog.DiskUsed, diskInfo.UsedGB,
@@ -155,7 +160,6 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         MetricCatalogEntry entry, double rawValue, bool smooth = false, string? labelOverride = null)
     {
         var value = smooth ? Smooth(entry.Id, rawValue) : rawValue;
-
         return new MetricReading
         {
             Id = entry.Id,
@@ -186,6 +190,18 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         };
     }
 
+    private static MetricReading BuildGpuTextReading(
+        MetricCatalogEntry entry, int gpuIndex, string? text, string labelSuffix) => new()
+    {
+        Id = $"{entry.Id}.{gpuIndex}",
+        Category = entry.Category,
+        Label = entry.Label + labelSuffix,
+        Kind = entry.Kind,
+        Unit = entry.Unit,
+        IsAvailable = text is not null,
+        TextValue = text
+    };
+
     private static MetricReading BuildTextReading(MetricCatalogEntry entry, string? text) => new()
     {
         Id = entry.Id,
@@ -197,6 +213,14 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         TextValue = text
     };
 
+    private static string FormatWatts(double? watts) =>
+        watts.HasValue ? $"{watts.Value:F2} W" : "—";
+
+    private static string FormatClock(double? mhz) =>
+        mhz.HasValue
+            ? mhz.Value >= 1000 ? $"{mhz.Value / 1000:0.00} GHz" : $"{mhz.Value:0} MHz"
+            : "—";
+
     private double Smooth(string id, double newValue)
     {
         if (!_smoothingWindows.TryGetValue(id, out var window))
@@ -204,11 +228,9 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             window = new Queue<double>();
             _smoothingWindows[id] = window;
         }
-
         window.Enqueue(newValue);
         if (window.Count > SmoothingWindow)
             window.Dequeue();
-
         return window.Average();
     }
 

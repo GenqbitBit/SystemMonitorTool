@@ -129,7 +129,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
             lowerName.Contains("radeon(tm) graphics");
 
         bool memoryLooksIntegrated = memoryMb <= 512;
-
         return nameLooksIntegrated || memoryLooksIntegrated;
     }
 
@@ -204,7 +203,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
             _engineCounters[staleKey].Dispose();
             _engineCounters.Remove(staleKey);
         }
-
         double total = 0;
         foreach (var instance in allInstances.Where(i => MatchesGpu(i, luidFilter)))
         {
@@ -215,10 +213,8 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
                 _engineCounters[instance] = counter;
                 continue;
             }
-
             total += counter.NextValue();
         }
-
         return Math.Round(total, 2);
     }
 
