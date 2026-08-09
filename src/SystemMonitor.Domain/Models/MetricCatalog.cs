@@ -1,4 +1,4 @@
-﻿﻿﻿using System.Collections.Generic;
+﻿﻿using System.Collections.Generic;
 
 namespace SystemMonitor.Domain.Models;
 
@@ -41,8 +41,7 @@ public static class MetricCatalog
         new("cpu.cores", "CPU", "Cores", MetricKind.Text, "", 0, SampleText: "6");
     public static readonly MetricCatalogEntry CpuThreads =
         new("cpu.threads", "CPU", "Threads", MetricKind.Text, "", 0, SampleText: "12");
-    public static readonly MetricCatalogEntry CpuPackagePower =
-        new("cpu.power", "CPU", "Package", MetricKind.Text, "", 0, SampleText: "65.00 W");
+
 
     // Memory
     public static readonly MetricCatalogEntry MemoryName =
@@ -102,8 +101,6 @@ public static class MetricCatalog
         new("gpu.memory.used", "GPU", "VRAM Used", MetricKind.DataSize, "GB", 2.00);
     public static readonly MetricCatalogEntry GpuMemoryTotal =
         new("gpu.memory.total", "GPU", "VRAM Total", MetricKind.DataSize, "GB", 8.00);
-    public static readonly MetricCatalogEntry GpuPackagePower =
-        new("gpu.power", "GPU", "Package", MetricKind.Text, "", 0, SampleText: "12.50 W");
 
     // GPU — illustrative only, IS included in `All`. Two devices (dedicated +
     // integrated) so the previewer demonstrates multi-GPU rendering. Ids match
@@ -133,12 +130,13 @@ public static class MetricCatalog
 
     public static IReadOnlyList<MetricCatalogEntry> All { get; } = new[]
     {
-        CpuModel, CpuUsage, CpuClock, CpuCores, CpuThreads, CpuPackagePower,
+        CpuModel, CpuUsage, CpuClock, CpuCores, CpuThreads,   
         MemoryName, MemoryType, MemorySpeed, MemoryModules, MemoryManufacturer, MemoryUsage, MemoryUsed, MemoryTotal,
         DiskModel, DiskType, DiskBus, DiskFileSystem, DiskUsage, DiskUsed, DiskTotal, DiskRead, DiskWrite,
         NetworkDownload, NetworkUpload,
         MotherboardModel, MotherboardChipset,
-        GpuUsage, GpuMemoryUsed, GpuMemoryTotal, GpuPackagePower,
+        GpuUsage0, GpuMemoryUsed0, GpuMemoryTotal0,
+        GpuUsage1, GpuMemoryUsed1, GpuMemoryTotal1,
         TempCpuCore, TempGpuCore, TempGpuHotSpot
     };
 }

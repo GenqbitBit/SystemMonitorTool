@@ -1,4 +1,4 @@
-﻿﻿﻿using System;
+﻿﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using SystemMonitor.Application.Interfaces;
@@ -136,11 +136,6 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             });
         }
 
-        // Power rows after the temperature loop so they sit at the bottom of
-        // their sections (below Tctl/Tdie and GPU Hot Spot).
-        readings.Add(BuildTextReading(MetricCatalog.CpuPackagePower, FormatWatts(cpuInfo.PackagePowerWatts)));
-        readings.Add(BuildTextReading(MetricCatalog.GpuPackagePower, FormatWatts(gpuInfo.PowerUsage)));
-
         return readings;
     }
 
@@ -177,6 +172,18 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             Value = Round(value)
         };
     }
+
+    private static MetricReading BuildGpuTextReading(
+        MetricCatalogEntry entry, int gpuIndex, string? text, string labelSuffix) => new()
+    {
+        Id = $"{entry.Id}.{gpuIndex}",
+        Category = entry.Category,
+        Label = entry.Label + labelSuffix,
+        Kind = entry.Kind,
+        Unit = entry.Unit,
+        IsAvailable = text is not null,
+        TextValue = text
+    };
 
     private static MetricReading BuildTextReading(MetricCatalogEntry entry, string? text) => new()
     {
