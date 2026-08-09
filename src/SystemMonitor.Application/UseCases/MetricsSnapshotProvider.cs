@@ -97,15 +97,24 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         readings.Add(BuildReading(MetricCatalog.NetworkDownload, networkInfo.DownloadKBPerSec));
         readings.Add(BuildReading(MetricCatalog.NetworkUpload, networkInfo.UploadKBPerSec));
 
-        // GPU (Teammate's addition)
-        var gpuInfo = _gpu.GetCurrentUsage();
-        var gpuUsedGB = gpuInfo.DedicatedMemoryUsedMb / 1024.0;
-        var gpuTotalGB = gpuInfo.DedicatedMemoryTotalMb / 1024.0;
-        var gpuLabelSuffix = $" ({gpuInfo.Name})";
-        readings.Add(BuildReading(MetricCatalog.GpuUsage, gpuInfo.UsagePercent, smooth: true,
-            labelOverride: MetricCatalog.GpuUsage.Label + gpuLabelSuffix));
-        readings.Add(BuildReading(MetricCatalog.GpuMemoryUsed, gpuUsedGB));
-        readings.Add(BuildReading(MetricCatalog.GpuMemoryTotal, gpuTotalGB));
+        // GPU — runtime-discovered, zero or more devices. Not catalog-driven for
+        // Id/Label (same reasoning as Temperature): count and identity vary per
+        // machine, so MetricCatalog.GpuUsage/etc. now only supply Category/Kind/
+        // Unit/Label-stem plus design-time sample values, not the runtime Id.
+        var gpuInfos = _gpu.GetCurrentUsage();
+        foreach (var gpuInfo in gpuInfos)
+        {
+            if (!gpuInfo.IsAvailable) continue;
+
+            var gpuUsedGB = gpuInfo.DedicatedMemoryUsedMb / 1024.0;
+            var gpuTotalGB = gpuInfo.DedicatedMemoryTotalMb / 1024.0;
+            var deviceTag = gpuInfo.IsIntegrated ? "Integrated" : "Dedicated";
+            var gpuLabelSuffix = $" (GPU {gpuInfo.Index} - {deviceTag}: {gpuInfo.Name})";
+
+            readings.Add(BuildGpuReading(MetricCatalog.GpuUsage, gpuInfo.Index, gpuInfo.UsagePercent, smooth: true, gpuLabelSuffix));
+            readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryUsed, gpuInfo.Index, gpuUsedGB, smooth: false, gpuLabelSuffix));
+            readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryTotal, gpuInfo.Index, gpuTotalGB, smooth: false, gpuLabelSuffix));
+        }
 
         // Temperature — one MetricReading per sensor; runtime-discovered, so it
         // can't go through BuildReading/MetricCatalog like the sections above.
@@ -144,6 +153,24 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             Id = entry.Id,
             Category = entry.Category,
             Label = labelOverride ?? entry.Label,
+            Kind = entry.Kind,
+            Unit = entry.Unit,
+            IsAvailable = true,
+            Value = Round(value)
+        };
+    }
+
+    private MetricReading BuildGpuReading(
+        MetricCatalogEntry entry, int gpuIndex, double rawValue, bool smooth, string labelSuffix)
+    {
+        var id = $"{entry.Id}.{gpuIndex}";
+        var value = smooth ? Smooth(id, rawValue) : rawValue;
+
+        return new MetricReading
+        {
+            Id = id,
+            Category = entry.Category,
+            Label = entry.Label + labelSuffix,
             Kind = entry.Kind,
             Unit = entry.Unit,
             IsAvailable = true,

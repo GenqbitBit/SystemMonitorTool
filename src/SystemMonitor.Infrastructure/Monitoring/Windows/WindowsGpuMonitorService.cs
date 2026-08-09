@@ -2,76 +2,123 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Management; // requires the "System.Management" NuGet package
+using System.Management;
 using LibreHardwareMonitor.Hardware;
+using Vortice.DXGI;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
-public class WindowsGpuMonitorService : IGpuMonitorService
+public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 {
-    // Static hardware facts don't change while the app is running,
-    // so we read them once here instead of on every GetCurrentUsage() call —
-    // same idea as WindowsCpuMonitorService warming up its counter once.
-    private readonly string _name = "Unknown";
-    private readonly string _vendor = "Unknown";
-    private readonly string _driverVersion = "Unknown";
-    private readonly double _totalMemoryMb;
-    private readonly bool _isIntegrated;
+    private sealed record GpuDevice(
+        int Index,
+        string Name,
+        string Vendor,
+        string DriverVersion,
+        bool IsIntegrated,
+        string? LuidFilter,          // used only for GPU Engine (usage %) perf-counter matching
+        IHardware? LibreHardware);   // used only for VRAM total/used sensors
 
-    // Counters must stay alive between calls — rate-based counters like
-    // "Utilization Percentage" always return 0 on their first-ever read,
-    // so a counter that's recreated every call would ALWAYS report 0%
-    // regardless of real GPU load. Keying by instance name also lets us
-    // handle instances appearing/disappearing as apps start/stop using the GPU.
+    private readonly List<GpuDevice> _devices = new();
     private readonly Dictionary<string, PerformanceCounter> _engineCounters = new();
+    private readonly Computer _computer;
 
     public WindowsGpuMonitorService()
     {
-        // On hybrid systems (e.g. laptop with Intel iGPU + NVIDIA dGPU),
-        // WMI lists both. We look at every entry and prefer the dedicated
-        // one as "the" GPU this service reports on, instead of blindly
-        // taking whichever WMI happens to return first.
+        _computer = new Computer { IsGpuEnabled = true };
+        _computer.Open();
+
         using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController");
-        ManagementObject? chosen = null;
-        bool chosenIsIntegrated = true;
+
+        int index = 0;
         foreach (ManagementObject obj in searcher.Get())
         {
             var name = obj["Name"]?.ToString() ?? "Unknown";
-            var memoryMb = Convert.ToDouble(obj["AdapterRAM"] ?? 0) / (1024 * 1024);
-            var integrated = LooksIntegrated(name, memoryMb);
-            // First GPU found becomes the default; a later dedicated GPU
-            // always overrides an earlier integrated one.
-            if (chosen == null || (chosenIsIntegrated && !integrated))
-            {
-                chosen = obj;
-                chosenIsIntegrated = integrated;
-            }
+            var vendor = obj["AdapterCompatibility"]?.ToString() ?? "Unknown";
+            var driverVersion = obj["DriverVersion"]?.ToString() ?? "Unknown";
+            var wmiMemoryMb = Convert.ToDouble(obj["AdapterRAM"] ?? 0) / (1024 * 1024);
+            var integrated = LooksIntegrated(name, wmiMemoryMb);
+
+            var luidFilter = ResolveGpuLuidFromDxgi(name);
+            var libreHardware = ResolveGpuHardwareFromLibre(name);
+
+            _devices.Add(new GpuDevice(
+                Index: index,
+                Name: name,
+                Vendor: vendor,
+                DriverVersion: driverVersion,
+                IsIntegrated: integrated,
+                LuidFilter: luidFilter,
+                LibreHardware: libreHardware));
+
+            index++;
         }
-        if (chosen != null)
+
+        foreach (var device in _devices)
         {
-            _name = chosen["Name"]?.ToString() ?? "Unknown";
-            _vendor = chosen["AdapterCompatibility"]?.ToString() ?? "Unknown";
-            _driverVersion = chosen["DriverVersion"]?.ToString() ?? "Unknown";
-            _totalMemoryMb = Convert.ToDouble(chosen["AdapterRAM"] ?? 0) / (1024 * 1024);
-            _isIntegrated = chosenIsIntegrated;
+            GetGpuUsagePercent(device.LuidFilter);
         }
-        // Prime whatever GPU Engine counter instances exist right now, same
-        // idea as WindowsCpuMonitorService warming up its counter in the
-        // constructor. This fixes the "first read is always 0%" issue for
-        // the common case. Caveat: GPU Engine instances can appear later
-        // too (e.g. when a new app starts using the GPU) — those brand-new
-        // instances will still report 0% on their own first read, since
-        // there's no way to prime a counter that doesn't exist yet.
-        GetGpuUsagePercent();
     }
 
-    // Heuristic only — Windows doesn't expose an "integrated vs dedicated"
-    // flag directly without a vendor SDK. We combine two signals:
-    //  1. Name pattern: integrated GPUs have recognizable names.
-    //  2. Reported VRAM: integrated GPUs typically report little/no
-    //     dedicated memory since they borrow system RAM instead.
+    // Unchanged: still needed for GPU Engine (usage %) perf-counter matching, out of scope for this pass.
+    private static string? ResolveGpuLuidFromDxgi(string gpuName)
+    {
+        var seenDxgiNames = new List<string>();
+
+        try
+        {
+            using var factory = DXGI.CreateDXGIFactory1<IDXGIFactory1>();
+
+            for (uint i = 0; factory.EnumAdapters1(i, out var adapter).Success; i++)
+            {
+                var desc = adapter.Description1;
+                var dxgiName = (desc.Description ?? string.Empty).Trim();
+                seenDxgiNames.Add(dxgiName);
+
+                if (string.Equals(dxgiName, gpuName.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    var luid = desc.Luid;
+                    adapter.Dispose();
+                    return $"0x{(uint)luid.HighPart:x8}_0x{luid.LowPart:x8}";
+                }
+
+                adapter.Dispose();
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[GPU] DXGI adapter enumeration failed while resolving '{gpuName}': {ex}");
+            return null;
+        }
+
+        Debug.WriteLine(
+            $"[GPU] No DXGI adapter matched WMI name '{gpuName}'. " +
+            $"DXGI adapters seen: {string.Join(", ", seenDxgiNames.Select(n => $"'{n}'"))}");
+        return null;
+    }
+
+    // New: resolves the LibreHardwareMonitor GPU hardware handle used for VRAM total/used.
+    private IHardware? ResolveGpuHardwareFromLibre(string gpuName)
+    {
+        var candidates = _computer.Hardware
+            .Where(h => h.HardwareType is HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel)
+            .ToList();
+
+        var match = candidates.FirstOrDefault(h =>
+            string.Equals(h.Name?.Trim(), gpuName.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (match is null)
+        {
+            Debug.WriteLine(
+                $"[GPU] No LibreHardwareMonitor device matched WMI name '{gpuName}'. " +
+                $"Devices seen: {string.Join(", ", candidates.Select(h => $"'{h.Name}'"))}");
+        }
+
+        return match;
+    }
+
     private static bool LooksIntegrated(string name, double memoryMb)
     {
         var lowerName = name.ToLowerInvariant();
@@ -79,91 +126,88 @@ public class WindowsGpuMonitorService : IGpuMonitorService
             lowerName.Contains("intel") ||
             lowerName.Contains("uhd graphics") ||
             lowerName.Contains("iris") ||
-            lowerName.Contains("radeon(tm) graphics"); // common AMD APU naming
+            lowerName.Contains("radeon(tm) graphics");
+
         bool memoryLooksIntegrated = memoryMb <= 512;
         return nameLooksIntegrated || memoryLooksIntegrated;
     }
 
-    public GpuInfo GetCurrentUsage()
+    public IReadOnlyList<GpuInfo> GetCurrentUsage()
     {
-        return new GpuInfo
+        return _devices.Select(device =>
         {
-            Name = _name,
-            Vendor = _vendor,
-            DriverVersion = _driverVersion,
-            DedicatedMemoryTotalMb = _totalMemoryMb,
-            DedicatedMemoryUsedMb = GetGpuMemoryUsedMb(),
-            IsIntegrated = _isIntegrated,
-            UsagePercent = GetGpuUsagePercent(),
-            PowerUsage = ReadPackagePowerWatts(),
-            Timestamp = DateTime.UtcNow
-        };
-    }
+            var (totalMb, usedMb) = GetGpuMemoryMb(device);
 
-    // Watts come from the shared LibreHardwareMonitor host (NVAPI-backed on
-    // NVIDIA) — a different channel than the performance counters above.
-    // Ask NVIDIA first, then AMD, then Intel; first non-null answer wins.
-    private static double? ReadPackagePowerWatts()
-    {
-        var host = LibreHardwareMonitorHost.Instance;
-        return host.GetPackagePowerWatts(HardwareType.GpuNvidia)
-            ?? host.GetPackagePowerWatts(HardwareType.GpuAmd)
-            ?? host.GetPackagePowerWatts(HardwareType.GpuIntel);
-    }
-
-    // "GPU Process Memory" is a separate counter category from "GPU Engine",
-    // with one instance per process using the GPU. "Dedicated Usage" is a
-    // raw instantaneous counter (bytes currently in use) — unlike
-    // Utilization Percentage, it does NOT need priming/warm-up, since it's
-    // not rate-based. We sum across every process to get total VRAM in use.
-    // Caveat: on a hybrid system this sums usage from ALL GPUs' processes
-    // combined, since there's no vendor SDK to filter by which physical
-    // GPU a given process's memory belongs to.
-    private double GetGpuMemoryUsedMb()
-    {
-        var category = new PerformanceCounterCategory("GPU Process Memory");
-        double totalBytes = 0;
-        foreach (var instance in category.GetInstanceNames())
-        {
-            foreach (var counter in category.GetCounters(instance))
+            return new GpuInfo
             {
-                if (counter.CounterName == "Dedicated Usage")
-                {
-                    totalBytes += counter.RawValue;
-                }
+                IsAvailable = true,
+                Index = device.Index,
+                Name = device.Name,
+                Vendor = device.Vendor,
+                DriverVersion = device.DriverVersion,
+                DedicatedMemoryTotalMb = totalMb,
+                DedicatedMemoryUsedMb = usedMb,
+                IsIntegrated = device.IsIntegrated,
+                UsagePercent = GetGpuUsagePercent(device.LuidFilter),
+                Timestamp = DateTime.UtcNow
+            };
+        }).ToList();
+    }
+
+    // Replaces old DXGI static bytes + WMI AdapterRAM fallback. Single Update() call
+    // per read so Total/Used come from the same sensor snapshot.
+    private static (double totalMb, double usedMb) GetGpuMemoryMb(GpuDevice device)
+    {
+        if (device.LibreHardware is null)
+        {
+            // No matching LibreHardwareMonitor device — memory reporting unavailable
+            // for this GPU. 0 here means "unknown", same caveat as before.
+            return (0, 0);
+        }
+
+        device.LibreHardware.Update();
+
+        double totalMb = 0;
+        double usedMb = 0;
+
+        foreach (var sensor in device.LibreHardware.Sensors)
+        {
+            if (sensor.SensorType != SensorType.SmallData || sensor.Value is not float value)
+            {
+                continue;
+            }
+
+            if (sensor.Name == "GPU Memory Total")
+            {
+                totalMb = Math.Round(value, 2);
+            }
+            else if (sensor.Name == "GPU Memory Used")
+            {
+                usedMb = Math.Round(value, 2);
             }
         }
-        return totalBytes / (1024 * 1024);
+
+        return (totalMb, usedMb);
     }
 
-    // Unlike CPU's single "_Total" counter, GPU Engine exposes one counter
-    // instance per active engine (3D, copy, video decode, etc.), and those
-    // instances can appear/disappear as apps use the GPU. We cache one
-    // PerformanceCounter per instance so repeated calls read the SAME
-    // object over time (required for a rate-based counter to report
-    // anything other than 0) rather than creating a fresh one every call.
-    // We sum just the 3D engine instances to approximate Task Manager's GPU %.
-    private double GetGpuUsagePercent()
+    // Unchanged: GPU Engine usage % still comes from PerformanceCounter, out of scope for this pass.
+    private double GetGpuUsagePercent(string? luidFilter)
     {
         var category = new PerformanceCounterCategory("GPU Engine");
-        var currentInstances = category.GetInstanceNames()
+        var allInstances = category.GetInstanceNames()
             .Where(i => i.Contains("engtype_3D"))
             .ToHashSet();
-        // Drop counters for instances that no longer exist (e.g. the app
-        // using that engine slot was closed).
-        foreach (var staleKey in _engineCounters.Keys.Except(currentInstances).ToList())
+
+        foreach (var staleKey in _engineCounters.Keys.Except(allInstances).ToList())
         {
             _engineCounters[staleKey].Dispose();
             _engineCounters.Remove(staleKey);
         }
         double total = 0;
-        foreach (var instance in currentInstances)
+        foreach (var instance in allInstances.Where(i => MatchesGpu(i, luidFilter)))
         {
             if (!_engineCounters.TryGetValue(instance, out var counter))
             {
-                // Brand-new instance: create and prime it. Its first real
-                // value will come on the NEXT call to this method, once
-                // this cached counter has been read a second time.
                 counter = new PerformanceCounter("GPU Engine", "Utilization Percentage", instance);
                 counter.NextValue();
                 _engineCounters[instance] = counter;
@@ -172,5 +216,19 @@ public class WindowsGpuMonitorService : IGpuMonitorService
             total += counter.NextValue();
         }
         return Math.Round(total, 2);
+    }
+
+    private static bool MatchesGpu(string instanceName, string? luidFilter) =>
+        luidFilter == null || instanceName.Contains(luidFilter, StringComparison.OrdinalIgnoreCase);
+
+    // New: Computer is a disposable resource introduced by LibreHardwareMonitorLib.
+    public void Dispose()
+    {
+        foreach (var counter in _engineCounters.Values)
+        {
+            counter.Dispose();
+        }
+
+        _computer.Close();
     }
 }

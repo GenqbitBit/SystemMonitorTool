@@ -160,4 +160,38 @@ public class MetricGraphMathTests
 
         Assert.Equal(history.Length, points.Count);
     }
+
+    [Fact]
+    public void GetValueRange_UsesFixedRange_WhenBothProvided()
+    {
+        var now = DateTime.UtcNow;
+        var history = new[]
+        {
+            new MetricHistoryPoint(now, 0.1),
+            new MetricHistoryPoint(now.AddSeconds(1), 2.1),
+        };
+
+        var (min, max) = MetricGraphMath.GetValueRange(history, fixedMin: 0, fixedMax: 100);
+
+        Assert.Equal(0, min);
+        Assert.Equal(100, max);
+    }
+
+    [Fact]
+    public void ComputePoints_FixedRange_ProducesSmallVisualMovement_ForSmallValueChange()
+    {
+        // The exact scenario from the bug report: 0.1% -> 2.1% should barely
+        // move on a 0-100 scale, not look like a dramatic swing.
+        var now = DateTime.UtcNow;
+        var history = new[]
+        {
+            new MetricHistoryPoint(now, 0.1),
+            new MetricHistoryPoint(now.AddSeconds(1), 2.1),
+        };
+
+        var points = MetricGraphMath.ComputePoints(history, 300, 100, fixedMin: 0, fixedMax: 100);
+
+        var yMovement = Math.Abs(points[1].Y - points[0].Y);
+        Assert.True(yMovement < 5); // 2% of a 100px-tall graph is ~2px
+    }
 }

@@ -33,6 +33,24 @@ public class MetricGraphView : Control
             nameof(GraphBackground),
             Brushes.Black);
 
+    public static readonly StyledProperty<double?> FixedMinValueProperty =
+    AvaloniaProperty.Register<MetricGraphView, double?>(nameof(FixedMinValue));
+
+    public static readonly StyledProperty<double?> FixedMaxValueProperty =
+    AvaloniaProperty.Register<MetricGraphView, double?>(nameof(FixedMaxValue));
+
+    public double? FixedMinValue
+    {
+        get => GetValue(FixedMinValueProperty);
+        set => SetValue(FixedMinValueProperty, value);
+    }
+
+    public double? FixedMaxValue
+    {
+        get => GetValue(FixedMaxValueProperty);
+        set => SetValue(FixedMaxValueProperty, value);
+    }
+
     public ObservableCollection<MetricReading>? Metrics
     {
         get => GetValue(MetricsProperty);
@@ -77,7 +95,8 @@ public class MetricGraphView : Control
             MetricIdProperty,
             LineBrushProperty,
             LineThicknessProperty,
-            GraphBackgroundProperty);
+            GraphBackgroundProperty,
+            FixedMinValueProperty, FixedMaxValueProperty);     
     }
 
     protected override Size MeasureOverride(Size availableSize)
@@ -101,7 +120,7 @@ public class MetricGraphView : Control
             return;
 
         var history = HistoryStore.GetHistory(MetricId);
-        var points = MetricGraphMath.ComputePoints(history, bounds.Width, bounds.Height);
+        var points = MetricGraphMath.ComputePoints(history, bounds.Width, bounds.Height, FixedMinValue, FixedMaxValue);
 
         if (points.Count == 0)
             return;

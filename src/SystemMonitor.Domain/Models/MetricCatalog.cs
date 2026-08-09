@@ -105,7 +105,25 @@ public static class MetricCatalog
     public static readonly MetricCatalogEntry GpuPackagePower =
         new("gpu.power", "GPU", "Package", MetricKind.Text, "", 0, SampleText: "12.50 W");
 
-    // Temperature — illustrative only (runtime sensors come from LHM).
+    // GPU — illustrative only, IS included in `All`. Two devices (dedicated +
+    // integrated) so the previewer demonstrates multi-GPU rendering. Ids match
+    // the ".{index}" scheme BuildGpuReading produces at runtime, but these
+    // entries themselves are never read by runtime code.
+    public static readonly MetricCatalogEntry GpuUsage0 =
+        new("gpu.usage.0", "GPU", "Usage (GPU 0 - Dedicated: NVIDIA GeForce RTX 4060)", MetricKind.Percentage, "%", 37.00);
+    public static readonly MetricCatalogEntry GpuMemoryUsed0 =
+        new("gpu.memory.used.0", "GPU", "VRAM Used (GPU 0 - Dedicated: NVIDIA GeForce RTX 4060)", MetricKind.DataSize, "GB", 2.00);
+    public static readonly MetricCatalogEntry GpuMemoryTotal0 =
+        new("gpu.memory.total.0", "GPU", "VRAM Total (GPU 0 - Dedicated: NVIDIA GeForce RTX 4060)", MetricKind.DataSize, "GB", 8.00);
+
+    public static readonly MetricCatalogEntry GpuUsage1 =
+        new("gpu.usage.1", "GPU", "Usage (GPU 1 - Integrated: AMD Radeon Graphics)", MetricKind.Percentage, "%", 8.00);
+    public static readonly MetricCatalogEntry GpuMemoryUsed1 =
+        new("gpu.memory.used.1", "GPU", "VRAM Used (GPU 1 - Integrated: AMD Radeon Graphics)", MetricKind.DataSize, "GB", 0.30);
+    public static readonly MetricCatalogEntry GpuMemoryTotal1 =
+        new("gpu.memory.total.1", "GPU", "VRAM Total (GPU 1 - Integrated: AMD Radeon Graphics)", MetricKind.DataSize, "GB", 2.00);
+
+    // Temperature — illustrative only, see remarks below.
     public static readonly MetricCatalogEntry TempCpuCore =
         new("temp.cpu.core", "CPU", "Core Temp", MetricKind.Temperature, "°C", 55.00, 40.00, 70.00, 55.00);
     public static readonly MetricCatalogEntry TempGpuCore =
