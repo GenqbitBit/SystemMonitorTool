@@ -111,9 +111,9 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             var deviceTag = gpuInfo.IsIntegrated ? "Integrated" : "Dedicated";
             var gpuLabelSuffix = $" (GPU {gpuInfo.Index} - {deviceTag}: {gpuInfo.Name})";
 
-            readings.Add(BuildGpuReading(MetricCatalog.GpuUsage, gpuInfo.Index, gpuInfo.UsagePercent, smooth: true, gpuLabelSuffix));
-            readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryUsed, gpuInfo.Index, gpuUsedGB, smooth: false, gpuLabelSuffix));
-            readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryTotal, gpuInfo.Index, gpuTotalGB, smooth: false, gpuLabelSuffix));
+            readings.Add(BuildGpuReading(MetricCatalog.GpuUsage, gpuInfo.Index, gpuInfo.IsIntegrated, gpuInfo.UsagePercent, smooth: true, gpuLabelSuffix));
+            readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryUsed, gpuInfo.Index, gpuInfo.IsIntegrated, gpuUsedGB, smooth: false, gpuLabelSuffix));
+            readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryTotal, gpuInfo.Index, gpuInfo.IsIntegrated, gpuTotalGB, smooth: false, gpuLabelSuffix));
         }
 
         // Temperature — one MetricReading per sensor; runtime-discovered, so it
@@ -149,7 +149,9 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
                 Min = RoundNullable(reading.MinCelsius),
                 Max = RoundNullable(reading.MaxCelsius),
                 Average = RoundNullable(reading.AverageCelsius),
-                IsPrimary = reading.IsPrimary
+                IsPrimary = reading.IsPrimary,
+                GpuIndex = reading.GpuIndex,
+                GpuIsIntegrated = reading.GpuIsIntegrated
             });
         }
 
@@ -173,7 +175,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     }
 
     private MetricReading BuildGpuReading(
-        MetricCatalogEntry entry, int gpuIndex, double rawValue, bool smooth, string labelSuffix)
+    MetricCatalogEntry entry, int gpuIndex, bool gpuIsIntegrated, double rawValue, bool smooth, string labelSuffix)
     {
         var id = $"{entry.Id}.{gpuIndex}";
         var value = smooth ? Smooth(id, rawValue) : rawValue;
@@ -186,7 +188,9 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             Kind = entry.Kind,
             Unit = entry.Unit,
             IsAvailable = true,
-            Value = Round(value)
+            Value = Round(value),
+            GpuIndex = gpuIndex,
+            GpuIsIntegrated = gpuIsIntegrated
         };
     }
 

@@ -71,31 +71,24 @@
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
 
                 <!--GPU 0 stats (dedicated, if present)-->
-                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="GPU" MetricId="gpu.usage.0" ShowLabel="True"/>
-
-                <!--GPU 0 usage graph-->
-                <Border debug:DebugBorder.IsEnabled="False"
-                        Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Dedicated GPU" MetricId="{Binding DedicatedGpuMetricId}" ShowLabel="True"/>
+                <Border debug:DebugBorder.IsEnabled="False" Classes="feature" BorderBrush="Gray" BorderThickness="1">
                     <panels:MetricGraphView
                         Metrics="{Binding Metrics}"
                         HistoryStore="{Binding HistoryStore}"
-                        MetricId="gpu.usage.0"
+                        MetricId="{Binding DedicatedGpuMetricId}"
                         FixedMinValue="0"
                         FixedMaxValue="100"
                         LineBrush="#FF1900"
                         Width="110" Height="130" />
                 </Border>
 
-                <!--GPU 1 stats (integrated, if present)-->
-                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="GPU" MetricId="gpu.usage.1" ShowLabel="True"/>
-
-                <!--GPU 1 usage graph-->
-                <Border debug:DebugBorder.IsEnabled="False"
-                        Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Integrated GPU" MetricId="{Binding IntegratedGpuMetricId}" ShowLabel="True"/>
+                <Border debug:DebugBorder.IsEnabled="False" Classes="feature" BorderBrush="Gray" BorderThickness="1">
                     <panels:MetricGraphView
                         Metrics="{Binding Metrics}"
                         HistoryStore="{Binding HistoryStore}"
-                        MetricId="gpu.usage.1"
+                        MetricId="{Binding IntegratedGpuMetricId}"
                         FixedMinValue="0"
                         FixedMaxValue="100"
                         LineBrush="#FF1900"
