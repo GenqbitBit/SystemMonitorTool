@@ -7,49 +7,30 @@ using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
-public class WindowsTemperatureMonitorService : ITemperatureMonitorService, IDisposable
+/// <summary>
+/// Reads temperature sensors through the shared LibreHardwareMonitorHost.
+/// The host — not this class — owns the Computer instance and the kernel
+/// driver that comes with it.
+/// </summary>
+public class WindowsTemperatureMonitorService : ITemperatureMonitorService
 {
-    private readonly Computer _computer;
+    private readonly Computer _computer = LibreHardwareMonitorHost.Instance.Computer;
     private readonly Dictionary<ISensor, (double Sum, int Count)> _averageTracking = new();
-
-    public WindowsTemperatureMonitorService()
-    {
-        _computer = new Computer
-        {
-            IsCpuEnabled = true,
-            IsGpuEnabled = true,
-            IsStorageEnabled = true,
-            IsMotherboardEnabled = true
-        };
-
-        _computer.Open();
-
-        foreach (var hardware in _computer.Hardware)
-        {
-            hardware.Update();
-            foreach (var subHardware in hardware.SubHardware)
-                subHardware.Update();
-        }
-    }
 
     public List<TemperatureReading> GetCurrentUsage()
     {
         var readings = new List<TemperatureReading>();
-
         foreach (var hardware in _computer.Hardware)
         {
             hardware.Update();
             CollectTemperatureSensors(hardware, readings);
-
             foreach (var subHardware in hardware.SubHardware)
             {
                 subHardware.Update();
                 CollectTemperatureSensors(subHardware, readings);
             }
         }
-
         DisambiguateDuplicateLabels(readings);
-
         return readings;
     }
 
@@ -63,15 +44,14 @@ public class WindowsTemperatureMonitorService : ITemperatureMonitorService, IDis
             HardwareType.Motherboard => "Motherboard",
             _ => null
         };
-
         if (category is null) return;
 
         var temperatureSensors = hardware.Sensors
             .Where(s => s.SensorType == SensorType.Temperature)
             .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
-                     && !s.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)
-                     && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase)
-                     && !s.Name.Contains("Distance to TjMax", StringComparison.OrdinalIgnoreCase));
+                      && !s.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)
+                      && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase)
+                      && !s.Name.Contains("Distance to TjMax", StringComparison.OrdinalIgnoreCase));
 
         foreach (var sensor in temperatureSensors)
         {
@@ -79,15 +59,12 @@ public class WindowsTemperatureMonitorService : ITemperatureMonitorService, IDis
             // investigation notes: confirmed not permissions/version/AV related,
             // appears to be OEM firmware restricting SMU telemetry on some laptops.
             var isRealReading = sensor.Value.HasValue && sensor.Value.Value != 0;
-
             double average = 0;
             double min = 0;
             double max = 0;
-
             if (isRealReading)
             {
                 var currentValue = sensor.Value!.Value;
-
                 if (_averageTracking.TryGetValue(sensor, out var existing))
                 {
                     var newSum = existing.Sum + currentValue;
@@ -100,13 +77,11 @@ public class WindowsTemperatureMonitorService : ITemperatureMonitorService, IDis
                     _averageTracking[sensor] = (currentValue, 1);
                     average = currentValue;
                 }
-
                 // Min/Max are tracked natively by the library since Computer.Open() —
                 // no need to compute these ourselves
                 min = sensor.Min ?? currentValue;
                 max = sensor.Max ?? currentValue;
             }
-
             readings.Add(new TemperatureReading
             {
                 Category = category,
@@ -123,7 +98,6 @@ public class WindowsTemperatureMonitorService : ITemperatureMonitorService, IDis
     private static void DisambiguateDuplicateLabels(List<TemperatureReading> readings)
     {
         var groups = readings.GroupBy(r => (r.Category, r.SensorLabel));
-
         foreach (var group in groups.Where(g => g.Count() > 1))
         {
             var index = 1;
@@ -133,10 +107,5 @@ public class WindowsTemperatureMonitorService : ITemperatureMonitorService, IDis
                 index++;
             }
         }
-    }
-
-    public void Dispose()
-    {
-        _computer.Close();
     }
 }
