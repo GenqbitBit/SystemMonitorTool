@@ -1,253 +1,118 @@
-# Cross-Platform System Monitor
+<div align="center">
+  <img
+    src="src/SystemMonitor.Presentation/Assets/pixelmonitor.svg"
+    alt="Pixel Monitor"
+    width="180"
+  >
+  <h1>Cross-Platform System Monitor</h1>
+  <p>A cross-platform desktop application for monitoring system hardware and resource usage in real time.</p>
+</div>
 
-> A cross-platform desktop application for monitoring hardware and network statistics in real time, with a focus on clean architecture and maintainable code.
-
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Objectives](#objectives)
-3. [Planned Features](#planned-features)
-4. [Monitored Data Points](#monitored-data-points)
-5. [Technology Stack](#technology-stack)
-6. [Architecture](#architecture)
-7. [Monitoring Flow](#monitoring-flow)
-8. [Database](#database)
-9. [Cross-Platform Support](#cross-platform-support)
-10. [Git Workflow](#git-workflow)
-11. [Future Goals](#future-goals)
-12. [Project Status](#project-status)
+<p align="center">
+  <a href="#overview">Overview</a> •
+  <a href="#current-monitoring">Current Monitoring</a> •
+  <a href="#technology-stack">Technology Stack</a> •
+  <a href="#architecture">Architecture</a> •
+  <a href="#cross-platform-design">Cross-Platform Design</a> •
+  <a href="#data">Data</a> •
+  <a href="#project-status">Project Status</a>
+</p>
 
 ---
 
 ## Overview
 
-This project is a **cross-platform System Monitor** that tracks hardware and operating system metrics in real time, with historical logging, alerts, and an information-dense dashboard.
+**Cross-Platform System Monitor** is a desktop monitoring application built with a focus on clean architecture, maintainability, and extensibility.
 
----
+The application collects raw runtime metrics from the host system and presents them through a unified UI while keeping platform-specific monitoring code isolated.
 
-## Objectives
+## Current Monitoring
 
-- Cross-platform desktop application (Windows, Linux, macOS)
-- Real-time hardware and OS resource monitoring
-- Clean, scalable codebase
-- Fully offline operation
-- Local storage of historical monitoring data
-- Intuitive, terminal-inspired interface
-- A strong foundation for future expansion
+* CPU
+* Memory (RAM)
+* GPU
+* Storage
+* Motherboard / system information
+* Available sensor data
+* Runtime metric discovery
 
----
-
-## Planned Features
-
-```
-┌───────────────────┬───────────────────┬───────────────────┬───────────────────┐
-│  HARDWARE          │  NETWORK          │  OPERATING SYSTEM │  DASHBOARD         │
-├───────────────────┼───────────────────┼───────────────────┼───────────────────┤
-│ CPU                │ Upload/Download   │ Running Processes │ Live Statistics    │
-│ GPU                │ Speed             │ System Uptime     │ Historical Charts  │
-│ Memory (RAM)       │ Network           │ Resource          │ Data Tables        │
-│ Storage Devices    │ Interfaces        │ Utilization        │ Search & Filter    │
-│ Disk Usage         │ Connection Status │ Performance Stats  │ Dark Theme         │
-│ Disk Read/Write    │ Bandwidth Usage   │                    │ Monospace/         │
-│ Temperature*       │                   │                    │ Terminal UI        │
-└───────────────────┴───────────────────┴───────────────────┴───────────────────┘
-  *where supported
-```
-
-**Logging:** historical performance logs, alert history, user settings, application configuration.
-
----
-
-## Monitored Data Points
-
-```
- Hardware              Network               Operating System      Storage
- ───────────           ───────────           ───────────────       ───────────
- ✓ CPU                 ✓ Upload              ✓ Processes           ✓ Read Speed
- ✓ GPU                 ✓ Download            ✓ Services            ✓ Write Speed
- ✓ RAM                 ✓ Latency             ✓ Startup Programs    ✓ Health (SMART)
- ✓ Disk                ✓ Interfaces          ✓ Event Logs          ✓ Capacity
- ✓ Motherboard         ✓ Connections         ✓ Uptime
- ✓ Battery
- ✓ Temperature
- ✓ Fans
- ✓ Power Usage
-```
-
-### Example Domain Model — `GpuInfo`
-
-```
-GpuInfo
-──────────────────────────
-Name
-Vendor
-UsagePercent
-DedicatedMemoryUsed
-DedicatedMemoryTotal
-SharedMemoryUsed
-Temperature
-FanSpeed
-PowerUsage
-CoreClock
-MemoryClock
-DriverVersion
-```
-
-> ⚠️ **Scope note:** The architecture and feature list above: **technical examples only**, are **not final**, and will be **trimmed to a small core feature set** for the initial implementation.
-
-
----
+> Hardware and sensor availability depends on the operating system, hardware, drivers, and available monitoring APIs.
 
 ## Technology Stack
 
-| Category | Technology |
-|---|---|
-| Editor | VS Code |
-| Language | C# |
-| Platform | .NET |
-| UI Framework | Avalonia |
-| UI Markup | XAML |
-| UI Pattern | MVVM |
-| Architecture | Clean Architecture |
-| Database | SQLite |
-| Version Control | Git + GitHub |
-
----
+| Category        | Technology         |
+| --------------- | ------------------ |
+| Language        | C#                 |
+| Platform        | .NET               |
+| UI              | Avalonia UI + XAML |
+| Pattern         | MVVM               |
+| Architecture    | Clean Architecture |
+| Database        | SQLite             |
+| Version Control | Git + GitHub       |
+| Development     | VS Code            |
 
 ## Architecture
 
-The application follows **Clean Architecture** for modularity, maintainability, and long-term scalability. Each layer has one clearly defined job, and dependencies only point inward.
+The project uses **Clean Architecture** to separate monitoring, application logic, and presentation.
 
-```
-┌─────────────────────────────┐
-│  PRESENTATION                │  UI, windows, dashboards,
-│                               │  charts, tables, interaction
-└──────────────┬────────────────┘
-               ▼
-┌─────────────────────────────┐
-│  APPLICATION                 │  Use cases, monitoring services,
-│                               │  refresh logic, alert processing,
-│                               │  logging coordination
-└──────────────┬────────────────┘
-               ▼
-┌─────────────────────────────┐
-│  DOMAIN                      │  Core models & rules:
-│                               │  CpuInfo, GpuInfo, MemoryInfo,
-│                               │  DiskInfo, NetworkInfo, ProcessInfo,
-│                               │  TemperatureInfo, AlertRule,
-│                               │  MonitoringSnapshot, LogEntry
-└──────────────┬────────────────┘
-               ▼
-┌─────────────────────────────┐
-│  INFRASTRUCTURE              │  Windows/Linux/macOS APIs,
-│                               │  SQLite, logging, file system,
-│                               │  hardware monitoring libraries
-└─────────────────────────────┘
-```
-## Project Layers
-
-### Domain
-
-Defines what a CPU, memory reading, network statistic, or alert is.
-
-### Application
-
-Decides when and why those readings should be collected, processed, or refreshed.
-
-### Infrastructure
-
-Actually retrieves those readings from Windows, Linux, or macOS APIs.
-
-### Presentation
-
-Displays the readings as dashboards, charts, tables, and controls.
-
-The **Domain** layer stays independent of the UI, operating system, and database — it only knows about business rules and models.
-
----
-
-## Monitoring Flow
-
-```
-Operating System
-       │
-       ▼
-Native OS APIs
-       │
-       ▼
+```text
+Presentation
+     ↓
+Application
+     ↓
+Domain
+     ↓
 Infrastructure
-       │
-       ▼
-Domain Models
-       │
-       ▼
-Application Services
-       │
-       ▼
+```
+
+* **Presentation** — Avalonia views, XAML, ViewModels, and dashboard components.
+* **Application** — Monitoring coordination, services, and application logic.
+* **Domain** — Core models, metric definitions, and abstractions.
+* **Infrastructure** — OS/hardware APIs, monitoring libraries, persistence, and platform-specific implementations.
+
+### Monitoring Flow
+
+```text
+OS & Hardware
+      ↓
+Platform / Hardware APIs
+      ↓
+Infrastructure
+      ↓
+Raw Metrics
+      ↓
+Application
+      ↓
 ViewModels
-       │
-       ▼
-Avalonia Views (XAML)
-       │
-       ▼
-Dashboard
+      ↓
+Avalonia UI
 ```
 
----
+## Cross-Platform Design
 
-## Database
+Target platforms:
 
-**SQLite** handles persistent local storage:
+* Windows
+* Linux
+* macOS
 
-- Historical monitoring logs
-- Alert history
-- User preferences
-- Application settings & configuration
+Shared application logic remains platform-independent, while OS-specific monitoring implementations are kept inside **Infrastructure**.
 
-> Live hardware data always comes directly from the OS — the database is for history, not live reads.
+Monitoring capabilities may differ between platforms depending on available APIs, drivers, and hardware.
 
----
+## Data
 
-## Cross-Platform Support
+Live hardware readings are retrieved directly from the system and do not require a database.
 
-**Targets:** Windows · Linux · macOS
+**SQLite** may be used for persistent data such as:
 
-Shared code is maximized wherever possible; platform-specific logic stays isolated inside the **Infrastructure** layer.
-
----
-
-## Git Workflow
-
-```
-Feature Branch → Develop → Build & Test → Commit → Push → Pull Request → Review → Merge
-```
-
-| Step | Description |
-|---|---|
-| **Feature Branch** | A separate branch for a new feature or fix, isolated from the main project. |
-| **Develop** | Write or modify the application's source code. |
-| **Build** | Compile the project to confirm it produces a working executable. |
-| **Test** | Verify functionality and check that changes don't introduce errors. |
-| **Commit** | Save a snapshot of changes locally with a descriptive message. |
-| **Push** | Upload local commits to the remote GitHub repository. |
-| **Pull Request (PR)** | Propose merging your branch into another (e.g. `main`) for review. |
-| **Review** | Teammates examine the changes, give feedback, and approve if they meet standards. |
-| **Merge** | Combine approved changes into the target branch. |
-
----
-
-## Future Goals
-
-
-- Custom widgets
-- Advanced charts
-- Hardware benchmarks
-- Sensor expansion
-
----
+* Historical metrics
+* Alert history
+* User preferences
+* Application configuration
 
 ## Project Status
 
-> This README reflects the current project vision and is **not final**. The architecture, features, and implementation details may change as development progresses.
+> **Active Development**
+>
+> The project is currently focused on its core monitoring architecture, runtime metric pipeline, and presentation system.
