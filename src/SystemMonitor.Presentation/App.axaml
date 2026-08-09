@@ -5,6 +5,13 @@
              RequestedThemeVariant="Default">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
+     <Application.Resources>
+        <ResourceDictionary>
+            <SolidColorBrush x:Key="MetricValueBrush" Color="#19CB96" />
+        </ResourceDictionary>
+    </Application.Resources>
+
+    
     <Application.DataTemplates>
         <local:ViewLocator />
     </Application.DataTemplates>
