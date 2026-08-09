@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace SystemMonitor.Domain.Models;
 
 public class CpuInfo
@@ -19,4 +21,8 @@ public class CpuInfo
     // requires the LibreHardwareMonitor kernel driver on AMD; null when
     // that channel is unavailable, shown as an honest "—".
     public double? PackagePowerWatts { get; set; }
+
+    // Temperature sensors for this CPU (Package, per-core, per-CCD, etc.).
+    // Requires the same LibreHardwareMonitor kernel driver as PackagePowerWatts.
+    public List<TemperatureReading> Temperatures { get; set; } = new();
 }

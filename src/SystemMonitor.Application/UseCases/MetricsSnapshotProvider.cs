@@ -12,9 +12,8 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private readonly IMemoryMonitorService _memory;
     private readonly IDiskMonitorService _disk;
     private readonly INetworkMonitorService _network;
-    private readonly ITemperatureMonitorService _temperature;
     private readonly IMotherboardMonitorService _motherboard;
-    private readonly IGpuMonitorService _gpu; // Added to support teammate's GPU code
+    private readonly IGpuMonitorService _gpu;
 
     private readonly Dictionary<string, Queue<double>> _smoothingWindows = new();
     private const int SmoothingWindow = 4;
@@ -25,7 +24,6 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         IMemoryMonitorService memory,
         IDiskMonitorService disk,
         INetworkMonitorService network,
-        ITemperatureMonitorService temperature,
         IMotherboardMonitorService motherboard,
         IGpuMonitorService gpu)
     {
@@ -33,7 +31,6 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         _memory = memory;
         _disk = disk;
         _network = network;
-        _temperature = temperature;
         _motherboard = motherboard;
         _gpu = gpu;
     }
@@ -116,43 +113,35 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryTotal, gpuInfo.Index, gpuInfo.IsIntegrated, gpuTotalGB, smooth: false, gpuLabelSuffix));
         }
 
-        // Temperature — one MetricReading per sensor; runtime-discovered, so it
-        // can't go through BuildReading/MetricCatalog like the sections above.
-        // GPU rows get the same "(GPU {index} - Dedicated/Integrated: {name})"
-        // suffix used for gpu.usage/gpu.memory above, using gpuInfos already
-        // fetched in this method — so a temp panel's "GPU 0" always refers to
-        // the same physical device as the usage/VRAM panel's "GPU 0".
-        var rawTemperatureReadings = _temperature.GetCurrentUsage();
-        foreach (var reading in rawTemperatureReadings)
+        // Temperature — now bundled into each hardware's own Info model instead
+        // of a centralized ITemperatureMonitorService. Kept at the same position
+        // (end of the snapshot) to minimize output-order drift from before.
+        foreach (var reading in cpuInfo.Temperatures)
         {
-            var label = reading.SensorLabel;
-            var idSuffix = reading.SensorLabel;
+            readings.Add(BuildTemperatureMetric("CPU", reading, idSuffix: reading.SensorLabel));
+        }
 
-            if (reading.GpuIndex is int gpuIndex)
+        foreach (var reading in diskInfo.Temperatures)
+        {
+            readings.Add(BuildTemperatureMetric("Disk", reading, idSuffix: reading.SensorLabel, labelSuffix: diskLabelSuffix));
+        }
+
+        foreach (var gpuInfo in gpuInfos)
+        {
+            if (!gpuInfo.IsAvailable) continue;
+
+            var deviceTag = gpuInfo.IsIntegrated ? "Integrated" : "Dedicated";
+            var gpuLabelSuffix = $" (GPU {gpuInfo.Index} - {deviceTag}: {gpuInfo.Name})";
+
+            foreach (var reading in gpuInfo.Temperatures)
             {
-                var matchingGpu = gpuInfos.FirstOrDefault(g => g.Index == gpuIndex);
-                var deviceTag = reading.GpuIsIntegrated == true ? "Integrated" : "Dedicated";
-                var gpuName = matchingGpu?.Name ?? "Unknown";
-                label = $"{reading.SensorLabel} (GPU {gpuIndex} - {deviceTag}: {gpuName})";
-                idSuffix = $"{gpuIndex}.{reading.SensorLabel}";
+                readings.Add(BuildTemperatureMetric(
+                    "GPU", reading,
+                    idSuffix: $"{gpuInfo.Index}.{reading.SensorLabel}",
+                    labelSuffix: gpuLabelSuffix,
+                    gpuIndex: gpuInfo.Index,
+                    gpuIsIntegrated: gpuInfo.IsIntegrated));
             }
-
-            readings.Add(new MetricReading
-            {
-                Id = $"temp.{reading.Category}.{idSuffix}".ToLowerInvariant(),
-                Category = reading.Category,
-                Label = label,
-                Kind = MetricKind.Temperature,
-                Unit = "°C",
-                IsAvailable = reading.IsAvailable,
-                Value = Round(reading.TemperatureCelsius),
-                Min = RoundNullable(reading.MinCelsius),
-                Max = RoundNullable(reading.MaxCelsius),
-                Average = RoundNullable(reading.AverageCelsius),
-                IsPrimary = reading.IsPrimary,
-                GpuIndex = reading.GpuIndex,
-                GpuIsIntegrated = reading.GpuIsIntegrated
-            });
         }
 
         return readings;
@@ -193,6 +182,28 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             GpuIsIntegrated = gpuIsIntegrated
         };
     }
+
+    // Turns a per-device TemperatureReading into a MetricReading. Replaces the
+    // old inline loop over ITemperatureMonitorService.GetCurrentUsage() — same
+    // Id scheme ("temp.{category}.{idSuffix}"), same Min/Max/Average rounding.
+    private static MetricReading BuildTemperatureMetric(
+        string category, TemperatureReading reading, string idSuffix,
+        string? labelSuffix = null, int? gpuIndex = null, bool? gpuIsIntegrated = null) => new()
+    {
+        Id = $"temp.{category}.{idSuffix}".ToLowerInvariant(),
+        Category = category,
+        Label = labelSuffix is null ? reading.SensorLabel : reading.SensorLabel + labelSuffix,
+        Kind = MetricKind.Temperature,
+        Unit = "°C",
+        IsAvailable = reading.IsAvailable,
+        Value = Round(reading.TemperatureCelsius),
+        Min = RoundNullable(reading.MinCelsius),
+        Max = RoundNullable(reading.MaxCelsius),
+        Average = RoundNullable(reading.AverageCelsius),
+        IsPrimary = reading.IsPrimary,
+        GpuIndex = gpuIndex,
+        GpuIsIntegrated = gpuIsIntegrated
+    };
 
     private static MetricReading BuildGpuTextReading(
         MetricCatalogEntry entry, int gpuIndex, string? text, string labelSuffix) => new()

@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Management;
+using LibreHardwareMonitor.Hardware;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
@@ -18,6 +20,11 @@ public class WindowsDiskMonitorService : IDiskMonitorService
     private readonly string _diskType;
     private readonly string _busType;
     private readonly string _fileSystem;
+
+    // Resolved once at construction — the LibreHardwareMonitor handle for this
+    // physical disk, used only for its SMART temperature sensor(s).
+    private readonly IHardware? _libreHardware;
+    private readonly Dictionary<ISensor, (double Sum, int Count)> _temperatureAveraging = new();
 
     public WindowsDiskMonitorService(string driveName = "C:\\")
     {
@@ -39,6 +46,7 @@ public class WindowsDiskMonitorService : IDiskMonitorService
         }
 
         (_model, _diskType, _busType) = ReadDiskIdentity(_driveName);
+        _libreHardware = ResolveDiskHardwareFromLibre(_model);
     }
 
     // Traces C: -> partition -> physical disk, then asks the modern Windows
@@ -133,6 +141,34 @@ public class WindowsDiskMonitorService : IDiskMonitorService
         return (model, diskType, busType);
     }
 
+    // Matches this drive's WMI model string against LibreHardwareMonitor's
+    // Storage hardware list — same name-matching pattern WindowsGpuMonitorService
+    // uses for its own device resolution.
+    private static IHardware? ResolveDiskHardwareFromLibre(string diskModel)
+    {
+        if (string.IsNullOrWhiteSpace(diskModel) || diskModel == "Unknown")
+        {
+            return null;
+        }
+
+        var computer = LibreHardwareMonitorHost.Instance.Computer;
+        var candidates = computer.Hardware
+            .Where(h => h.HardwareType == HardwareType.Storage)
+            .ToList();
+
+        var match = candidates.FirstOrDefault(h =>
+            string.Equals(h.Name?.Trim(), diskModel.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (match is null)
+        {
+            Debug.WriteLine(
+                $"[Disk] No LibreHardwareMonitor storage device matched model '{diskModel}'. " +
+                $"Devices seen: {string.Join(", ", candidates.Select(h => $"'{h.Name}'"))}");
+        }
+
+        return match;
+    }
+
     // Pulls the text between the quotes of a WMI reference string,
     // e.g. 'Win32_DiskPartition.DeviceID="Disk #0, Partition #1"' -> 'Disk #0, Partition #1'
     private static string? ExtractQuoted(string? wmiReference)
@@ -166,7 +202,83 @@ public class WindowsDiskMonitorService : IDiskMonitorService
             Model = _model,
             DiskType = _diskType,
             BusType = _busType,
-            FileSystem = _fileSystem
+            FileSystem = _fileSystem,
+            Temperatures = GetTemperatures()
         };
+    }
+
+    // Moved from the old WindowsTemperatureMonitorService, scoped to this drive's
+    // own LibreHardware handle. Usually just one "Temperature" SMART sensor.
+    private List<TemperatureReading> GetTemperatures()
+    {
+        if (_libreHardware is null)
+        {
+            return new List<TemperatureReading>();
+        }
+
+        _libreHardware.Update();
+
+        var temperatureSensors = _libreHardware.Sensors
+            .Where(s => s.SensorType == SensorType.Temperature)
+            .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
+                     && !s.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)
+                     && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase));
+
+        var readings = temperatureSensors
+            .Select(sensor => BuildTemperatureReading(sensor, isPrimary: true))
+            .ToList();
+
+        DisambiguateDuplicateLabels(readings);
+        return readings;
+    }
+
+    private TemperatureReading BuildTemperatureReading(ISensor sensor, bool isPrimary)
+    {
+        var isRealReading = sensor.Value.HasValue && sensor.Value.Value != 0;
+        double average = 0, min = 0, max = 0;
+
+        if (isRealReading)
+        {
+            var currentValue = sensor.Value!.Value;
+            if (_temperatureAveraging.TryGetValue(sensor, out var existing))
+            {
+                var newSum = existing.Sum + currentValue;
+                var newCount = existing.Count + 1;
+                _temperatureAveraging[sensor] = (newSum, newCount);
+                average = newSum / newCount;
+            }
+            else
+            {
+                _temperatureAveraging[sensor] = (currentValue, 1);
+                average = currentValue;
+            }
+            min = sensor.Min ?? currentValue;
+            max = sensor.Max ?? currentValue;
+        }
+
+        return new TemperatureReading
+        {
+            SensorLabel = sensor.Name ?? "Unknown",
+            IsAvailable = isRealReading,
+            TemperatureCelsius = isRealReading ? sensor.Value!.Value : 0,
+            MinCelsius = min,
+            MaxCelsius = max,
+            AverageCelsius = average,
+            IsPrimary = isPrimary
+        };
+    }
+
+    private static void DisambiguateDuplicateLabels(List<TemperatureReading> readings)
+    {
+        var groups = readings.GroupBy(r => r.SensorLabel);
+        foreach (var group in groups.Where(g => g.Count() > 1))
+        {
+            var index = 1;
+            foreach (var reading in group)
+            {
+                reading.SensorLabel = $"{reading.SensorLabel} #{index}";
+                index++;
+            }
+        }
     }
 }

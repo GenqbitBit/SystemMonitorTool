@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace SystemMonitor.Domain.Models;
 
@@ -17,7 +18,7 @@ public class GpuInfo
     public bool IsAvailable { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Vendor { get; set; } = string.Empty;
-    
+
     // Position in WMI enumeration order at startup. Stable for the lifetime of
     // the app run, but not guaranteed stable across reboots/driver updates —
     // used purely to give each detected GPU a distinct metric Id (gpu.usage.0,
@@ -38,9 +39,14 @@ public class GpuInfo
     public double DedicatedMemoryTotalMb { get; set; }
     public double SharedMemoryUsedMb { get; set; }
 
+    // Temperature sensors for THIS specific device (Core, Hot Spot, Memory
+    // Junction, VR SoC, etc. — whatever the vendor/driver exposes). One entry
+    // per sensor is marked IsPrimary; the rest are sub-readings under it.
+    // Empty when no LibreHardwareMonitor handle was matched for this device.
+    public List<TemperatureReading> Temperatures { get; set; } = new();
+
     // Nullable because not every OS/driver combo can report these
     // without a vendor SDK we're deliberately not using yet.
-    public double? Temperature { get; set; }
     public double? FanSpeed { get; set; }
     public double? PowerUsage { get; set; }
     public double? CoreClockMhz { get; set; }
@@ -49,6 +55,4 @@ public class GpuInfo
     public string DriverVersion { get; set; } = string.Empty;
 
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
-
-    
 }

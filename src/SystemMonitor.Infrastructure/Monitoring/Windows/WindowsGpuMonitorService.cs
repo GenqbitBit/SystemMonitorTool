@@ -19,11 +19,15 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         string DriverVersion,
         bool IsIntegrated,
         string? LuidFilter,          // used only for GPU Engine (usage %) perf-counter matching
-        IHardware? LibreHardware);   // used only for VRAM total/used sensors
+        IHardware? LibreHardware);   // used for VRAM total/used sensors AND temperature sensors
 
     private readonly List<GpuDevice> _devices = new();
     private readonly Dictionary<string, PerformanceCounter> _engineCounters = new();
     private readonly Computer _computer;
+
+    // Per-sensor running average, keyed by the ISensor reference itself. Shared
+    // across all devices — ISensor identity already disambiguates by device.
+    private readonly Dictionary<ISensor, (double Sum, int Count)> _temperatureAveraging = new();
 
     public WindowsGpuMonitorService()
     {
@@ -98,7 +102,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         return null;
     }
 
-    // New: resolves the LibreHardwareMonitor GPU hardware handle used for VRAM total/used.
+    // Resolves the LibreHardwareMonitor GPU hardware handle used for VRAM AND temperature.
     private IHardware? ResolveGpuHardwareFromLibre(string gpuName)
     {
         var candidates = _computer.Hardware
@@ -148,6 +152,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
                 DedicatedMemoryUsedMb = usedMb,
                 IsIntegrated = device.IsIntegrated,
                 UsagePercent = GetGpuUsagePercent(device.LuidFilter),
+                Temperatures = GetGpuTemperatures(device),
                 Timestamp = DateTime.UtcNow
             };
         }).ToList();
@@ -159,8 +164,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
     {
         if (device.LibreHardware is null)
         {
-            // No matching LibreHardwareMonitor device — memory reporting unavailable
-            // for this GPU. 0 here means "unknown", same caveat as before.
             return (0, 0);
         }
 
@@ -187,6 +190,132 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         }
 
         return (totalMb, usedMb);
+    }
+
+    // Moved from the old WindowsTemperatureMonitorService, scoped to this device's
+    // own LibreHardware handle — the same one GetGpuMemoryMb already resolved.
+    private List<TemperatureReading> GetGpuTemperatures(GpuDevice device)
+    {
+        if (device.LibreHardware is null)
+        {
+            return new List<TemperatureReading>();
+        }
+
+        device.LibreHardware.Update();
+
+        var temperatureSensors = device.LibreHardware.Sensors
+            .Where(s => s.SensorType == SensorType.Temperature)
+            .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
+                     && !s.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)
+                     && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase)
+                     && !s.Name.Contains("Distance to TjMax", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (temperatureSensors.Count == 0)
+        {
+            return new List<TemperatureReading>();
+        }
+
+        var primarySensorName = DeterminePrimaryGpuSensorName(temperatureSensors, device.Name);
+
+        var readings = temperatureSensors
+            .Select(sensor => BuildTemperatureReading(
+                sensor,
+                isPrimary: string.Equals(sensor.Name?.Trim(), primarySensorName, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        DisambiguateDuplicateLabels(readings);
+        return readings;
+    }
+
+    private TemperatureReading BuildTemperatureReading(ISensor sensor, bool isPrimary)
+    {
+        // A reading of exactly 0°C is never real for these components — see
+        // investigation notes: confirmed not permissions/version/AV related,
+        // appears to be OEM firmware restricting SMU telemetry on some laptops.
+        var isRealReading = sensor.Value.HasValue && sensor.Value.Value != 0;
+        double average = 0, min = 0, max = 0;
+
+        if (isRealReading)
+        {
+            var currentValue = sensor.Value!.Value;
+            if (_temperatureAveraging.TryGetValue(sensor, out var existing))
+            {
+                var newSum = existing.Sum + currentValue;
+                var newCount = existing.Count + 1;
+                _temperatureAveraging[sensor] = (newSum, newCount);
+                average = newSum / newCount;
+            }
+            else
+            {
+                _temperatureAveraging[sensor] = (currentValue, 1);
+                average = currentValue;
+            }
+            min = sensor.Min ?? currentValue;
+            max = sensor.Max ?? currentValue;
+        }
+
+        return new TemperatureReading
+        {
+            SensorLabel = sensor.Name ?? "Unknown",
+            IsAvailable = isRealReading,
+            TemperatureCelsius = isRealReading ? sensor.Value!.Value : 0,
+            MinCelsius = min,
+            MaxCelsius = max,
+            AverageCelsius = average,
+            IsPrimary = isPrimary
+        };
+    }
+
+    // Picks which GPU sensor counts as the device's primary/"core" reading.
+    // Tier 1: exact "GPU Core" — LibreHardwareMonitorLib's usual name across
+    //         Nvidia/AMD/Intel.
+    // Tier 2: any sensor whose name contains "core" (case-insensitive) — covers
+    //         naming drift on less common Intel/driver combos.
+    // Tier 3: the first sensor in enumeration order — so a device NEVER ends up
+    //         with zero primary sensors; a fallback log line explains why.
+    private static string? DeterminePrimaryGpuSensorName(List<ISensor> temperatureSensors, string hardwareName)
+    {
+        var exactMatch = temperatureSensors.FirstOrDefault(s =>
+            string.Equals(s.Name?.Trim(), "GPU Core", StringComparison.OrdinalIgnoreCase));
+        if (exactMatch is not null)
+        {
+            return exactMatch.Name;
+        }
+
+        var containsMatch = temperatureSensors.FirstOrDefault(s =>
+            s.Name?.Contains("core", StringComparison.OrdinalIgnoreCase) == true);
+        if (containsMatch is not null)
+        {
+            Debug.WriteLine(
+                $"[Temp] GPU '{hardwareName}' has no sensor named exactly 'GPU Core' — " +
+                $"using '{containsMatch.Name}' as the primary reading instead. " +
+                $"Sensors seen: {string.Join(", ", temperatureSensors.Select(s => $"'{s.Name}'"))}");
+            return containsMatch.Name;
+        }
+
+        var fallback = temperatureSensors[0];
+        Debug.WriteLine(
+            $"[Temp] GPU '{hardwareName}' has no sensor with 'core' in its name — " +
+            $"falling back to '{fallback.Name}' (first sensor) as the primary reading. " +
+            $"Sensors seen: {string.Join(", ", temperatureSensors.Select(s => $"'{s.Name}'"))}");
+        return fallback.Name;
+    }
+
+    private static void DisambiguateDuplicateLabels(List<TemperatureReading> readings)
+    {
+        // Scoped to a single device's own sensor list now — no more grouping
+        // by GpuIndex needed, since each GPU's readings never mix with another's.
+        var groups = readings.GroupBy(r => r.SensorLabel);
+        foreach (var group in groups.Where(g => g.Count() > 1))
+        {
+            var index = 1;
+            foreach (var reading in group)
+            {
+                reading.SensorLabel = $"{reading.SensorLabel} #{index}";
+                index++;
+            }
+        }
     }
 
     // Unchanged: GPU Engine usage % still comes from PerformanceCounter, out of scope for this pass.
@@ -220,13 +349,9 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
     private static bool MatchesGpu(string instanceName, string? luidFilter) =>
     luidFilter != null && instanceName.Contains(luidFilter, StringComparison.OrdinalIgnoreCase);
 
-    // New: exposes the same WMI-ordered Index/Name/IsIntegrated used by GetCurrentUsage(),
-    // so WindowsTemperatureMonitorService (or anything else) can match its own GPU hardware
-    // handles to these same indices instead of enumerating GPUs independently.
     public IReadOnlyList<GpuDeviceIdentity> GetDeviceIdentities() =>
         _devices.Select(d => new GpuDeviceIdentity(d.Index, d.Name, d.IsIntegrated)).ToList();
 
-    // New: Computer is a disposable resource introduced by LibreHardwareMonitorLib.
     public void Dispose()
     {
         foreach (var counter in _engineCounters.Values)
