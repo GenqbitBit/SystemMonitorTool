@@ -11,6 +11,13 @@ namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 /// Selection (which data shows) — set ONE of:
 ///   - CategoryLabel="CPU"  -> every reading in that category
 ///   - MetricId="cpu.usage" -> exactly one specific reading (wins if both are set)
+/// PrimaryOnly="True" additionally restricts a CategoryLabel selection to just
+/// each device's primary/core reading (e.g. GPU core temp, not Hot Spot/Memory
+/// Junction/etc.) — ignored when MetricId is set, since that already picks one row.
+/// GpuDeviceId additionally restricts a CategoryLabel selection to readings from
+/// one physical GPU (matched on MetricReading.GpuDeviceId) — same "ignored when
+/// MetricId is set" rule as PrimaryTempOnly, and composes with it (e.g. GPU +
+/// GpuDeviceId + PrimaryTempOnly = that device's primary reading only).
 /// CategoryLabel also drives the header text even when MetricId is used for selection.
 /// Presentation (how each row looks) — independent of selection and each other:
 ///   - ShowLabel (default true)         -> show/hide each reading's Label text
@@ -36,6 +43,19 @@ public partial class CategoryMetricsView : UserControl
 
     public static readonly StyledProperty<bool> ShowCategoryHeaderProperty =
         AvaloniaProperty.Register<CategoryMetricsView, bool>(nameof(ShowCategoryHeader), defaultValue: true);
+
+    // When true, only readings with IsPrimary == true are shown (e.g. each
+    // GPU's core temp, not its Hot Spot/Memory Junction/etc. sub-readings).
+    // Has no effect when MetricId selects a single specific reading.
+    public static readonly StyledProperty<bool> PrimaryTempOnlyProperty =
+        AvaloniaProperty.Register<CategoryMetricsView, bool>(nameof(PrimaryTempOnly), defaultValue: false);
+
+    // When set, restricts a CategoryLabel selection to readings from one
+    // physical GPU (MetricReading.GpuDeviceId). This is the actual per-device
+    // association — never derive device identity from Index or by parsing
+    // Label text. Has no effect when MetricId selects a single specific reading.
+    public static readonly StyledProperty<string?> GpuDeviceIdProperty =
+        AvaloniaProperty.Register<CategoryMetricsView, string?>(nameof(GpuDeviceId));
 
     public static readonly DirectProperty<CategoryMetricsView, IEnumerable<MetricReading>?> FilteredMetricsProperty =
         AvaloniaProperty.RegisterDirect<CategoryMetricsView, IEnumerable<MetricReading>?>(
@@ -82,11 +102,40 @@ public partial class CategoryMetricsView : UserControl
         set => SetValue(ShowCategoryHeaderProperty, value);
     }
 
-    public IEnumerable<MetricReading>? FilteredMetrics =>
-        Metrics?.Where(m =>
-            MetricId != null
-                ? m.Id == MetricId
-                : string.Equals(m.Category, CategoryLabel, System.StringComparison.OrdinalIgnoreCase));
+    public bool PrimaryTempOnly
+    {
+        get => GetValue(PrimaryTempOnlyProperty);
+        set => SetValue(PrimaryTempOnlyProperty, value);
+    }
+
+    public string? GpuDeviceId
+    {
+        get => GetValue(GpuDeviceIdProperty);
+        set => SetValue(GpuDeviceIdProperty, value);
+    }
+
+    public IEnumerable<MetricReading>? FilteredMetrics
+    {
+        get
+        {
+            if (MetricId != null)
+            {
+                return Metrics?.Where(m => m.Id == MetricId);
+            }
+
+            var byCategory = Metrics?.Where(m =>
+                string.Equals(m.Category, CategoryLabel, System.StringComparison.OrdinalIgnoreCase));
+
+            if (GpuDeviceId != null)
+            {
+                byCategory = byCategory?.Where(m => m.GpuDeviceId == GpuDeviceId);
+            }
+
+            return PrimaryTempOnly
+                ? byCategory?.Where(m => m.IsPrimary)
+                : byCategory;
+        }
+    }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
@@ -94,7 +143,9 @@ public partial class CategoryMetricsView : UserControl
 
         if (change.Property == MetricsProperty
             || change.Property == CategoryLabelProperty
-            || change.Property == MetricIdProperty)
+            || change.Property == MetricIdProperty
+            || change.Property == PrimaryTempOnlyProperty
+            || change.Property == GpuDeviceIdProperty)
         {
             RaisePropertyChanged(FilteredMetricsProperty, default, default);
         }

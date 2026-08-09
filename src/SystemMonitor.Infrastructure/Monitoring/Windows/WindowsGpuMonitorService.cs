@@ -18,17 +18,18 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         string Vendor,
         string DriverVersion,
         bool IsIntegrated,
+        string DeviceId,             // stable identity — LUID string, or index-based fallback
         string? LuidFilter,          // used only for GPU Engine (usage %) perf-counter matching
-        IHardware? LibreHardware);   // used only for VRAM total/used sensors
+        IHardware? LibreHardware);   // used for VRAM total/used sensors AND temperature sensors
 
     private readonly List<GpuDevice> _devices = new();
     private readonly Dictionary<string, PerformanceCounter> _engineCounters = new();
     private readonly Computer _computer;
+    private readonly Dictionary<ISensor, (double Sum, int Count)> _temperatureAveraging = new();
 
     public WindowsGpuMonitorService()
     {
-        _computer = new Computer { IsGpuEnabled = true };
-        _computer.Open();
+        _computer = LibreHardwareMonitorHost.Instance.Computer;
 
         using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController");
 
@@ -44,12 +45,26 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
             var luidFilter = ResolveGpuLuidFromDxgi(name);
             var libreHardware = ResolveGpuHardwareFromLibre(name);
 
+            // DeviceId is the identity every downstream layer keys on. LUID when
+            // DXGI resolved it; otherwise a logged fallback so a real resolution
+            // gap stays visible instead of silently degrading to enumeration order.
+            var deviceId = luidFilter;
+            if (deviceId is null)
+            {
+                deviceId = $"gpu-fallback-{index}";
+                Debug.WriteLine(
+                    $"[GPU] No stable LUID identity for '{name}' — falling back to " +
+                    $"'{deviceId}'. This device's identity is not guaranteed stable " +
+                    $"across refreshes if enumeration order changes.");
+            }
+
             _devices.Add(new GpuDevice(
                 Index: index,
                 Name: name,
                 Vendor: vendor,
                 DriverVersion: driverVersion,
                 IsIntegrated: integrated,
+                DeviceId: deviceId,
                 LuidFilter: luidFilter,
                 LibreHardware: libreHardware));
 
@@ -62,7 +77,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         }
     }
 
-    // Unchanged: still needed for GPU Engine (usage %) perf-counter matching, out of scope for this pass.
     private static string? ResolveGpuLuidFromDxgi(string gpuName)
     {
         var seenDxgiNames = new List<string>();
@@ -99,7 +113,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         return null;
     }
 
-    // New: resolves the LibreHardwareMonitor GPU hardware handle used for VRAM total/used.
     private IHardware? ResolveGpuHardwareFromLibre(string gpuName)
     {
         var candidates = _computer.Hardware
@@ -141,6 +154,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
             return new GpuInfo
             {
                 IsAvailable = true,
+                DeviceId = device.DeviceId,
                 Index = device.Index,
                 Name = device.Name,
                 Vendor = device.Vendor,
@@ -149,19 +163,16 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
                 DedicatedMemoryUsedMb = usedMb,
                 IsIntegrated = device.IsIntegrated,
                 UsagePercent = GetGpuUsagePercent(device.LuidFilter),
+                Temperatures = GetGpuTemperatures(device),
                 Timestamp = DateTime.UtcNow
             };
         }).ToList();
     }
 
-    // Replaces old DXGI static bytes + WMI AdapterRAM fallback. Single Update() call
-    // per read so Total/Used come from the same sensor snapshot.
     private static (double totalMb, double usedMb) GetGpuMemoryMb(GpuDevice device)
     {
         if (device.LibreHardware is null)
         {
-            // No matching LibreHardwareMonitor device — memory reporting unavailable
-            // for this GPU. 0 here means "unknown", same caveat as before.
             return (0, 0);
         }
 
@@ -190,7 +201,118 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         return (totalMb, usedMb);
     }
 
-    // Unchanged: GPU Engine usage % still comes from PerformanceCounter, out of scope for this pass.
+    private List<TemperatureReading> GetGpuTemperatures(GpuDevice device)
+    {
+        if (device.LibreHardware is null)
+        {
+            return new List<TemperatureReading>();
+        }
+
+        device.LibreHardware.Update();
+
+        var temperatureSensors = device.LibreHardware.Sensors
+            .Where(s => s.SensorType == SensorType.Temperature)
+            .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
+                     && !s.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)
+                     && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase)
+                     && !s.Name.Contains("Distance to TjMax", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (temperatureSensors.Count == 0)
+        {
+            return new List<TemperatureReading>();
+        }
+
+        var primarySensorName = DeterminePrimaryGpuSensorName(temperatureSensors, device.Name);
+
+        var readings = temperatureSensors
+            .Select(sensor => BuildTemperatureReading(
+                sensor,
+                isPrimary: string.Equals(sensor.Name?.Trim(), primarySensorName, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        DisambiguateDuplicateLabels(readings);
+        return readings;
+    }
+
+    private TemperatureReading BuildTemperatureReading(ISensor sensor, bool isPrimary)
+    {
+        var isRealReading = sensor.Value.HasValue && sensor.Value.Value != 0;
+        double average = 0, min = 0, max = 0;
+
+        if (isRealReading)
+        {
+            var currentValue = sensor.Value!.Value;
+            if (_temperatureAveraging.TryGetValue(sensor, out var existing))
+            {
+                var newSum = existing.Sum + currentValue;
+                var newCount = existing.Count + 1;
+                _temperatureAveraging[sensor] = (newSum, newCount);
+                average = newSum / newCount;
+            }
+            else
+            {
+                _temperatureAveraging[sensor] = (currentValue, 1);
+                average = currentValue;
+            }
+            min = sensor.Min ?? currentValue;
+            max = sensor.Max ?? currentValue;
+        }
+
+        return new TemperatureReading
+        {
+            SensorLabel = sensor.Name ?? "Unknown",
+            IsAvailable = isRealReading,
+            TemperatureCelsius = isRealReading ? sensor.Value!.Value : 0,
+            MinCelsius = min,
+            MaxCelsius = max,
+            AverageCelsius = average,
+            IsPrimary = isPrimary
+        };
+    }
+
+    private static string? DeterminePrimaryGpuSensorName(List<ISensor> temperatureSensors, string hardwareName)
+    {
+        var exactMatch = temperatureSensors.FirstOrDefault(s =>
+            string.Equals(s.Name?.Trim(), "GPU Core", StringComparison.OrdinalIgnoreCase));
+        if (exactMatch is not null)
+        {
+            return exactMatch.Name;
+        }
+
+        var containsMatch = temperatureSensors.FirstOrDefault(s =>
+            s.Name?.Contains("core", StringComparison.OrdinalIgnoreCase) == true);
+        if (containsMatch is not null)
+        {
+            Debug.WriteLine(
+                $"[Temp] GPU '{hardwareName}' has no sensor named exactly 'GPU Core' — " +
+                $"using '{containsMatch.Name}' as the primary reading instead. " +
+                $"Sensors seen: {string.Join(", ", temperatureSensors.Select(s => $"'{s.Name}'"))}");
+            return containsMatch.Name;
+        }
+
+        var fallback = temperatureSensors[0];
+        Debug.WriteLine(
+            $"[Temp] GPU '{hardwareName}' has no sensor with 'core' in its name — " +
+            $"falling back to '{fallback.Name}' (first sensor) as the primary reading. " +
+            $"Sensors seen: {string.Join(", ", temperatureSensors.Select(s => $"'{s.Name}'"))}");
+        return fallback.Name;
+    }
+
+    private static void DisambiguateDuplicateLabels(List<TemperatureReading> readings)
+    {
+        var groups = readings.GroupBy(r => r.SensorLabel);
+        foreach (var group in groups.Where(g => g.Count() > 1))
+        {
+            var index = 1;
+            foreach (var reading in group)
+            {
+                reading.SensorLabel = $"{reading.SensorLabel} #{index}";
+                index++;
+            }
+        }
+    }
+
     private double GetGpuUsagePercent(string? luidFilter)
     {
         var category = new PerformanceCounterCategory("GPU Engine");
@@ -219,16 +341,13 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
     }
 
     private static bool MatchesGpu(string instanceName, string? luidFilter) =>
-        luidFilter == null || instanceName.Contains(luidFilter, StringComparison.OrdinalIgnoreCase);
+    luidFilter != null && instanceName.Contains(luidFilter, StringComparison.OrdinalIgnoreCase);
 
-    // New: Computer is a disposable resource introduced by LibreHardwareMonitorLib.
     public void Dispose()
     {
         foreach (var counter in _engineCounters.Values)
         {
             counter.Dispose();
         }
-
-        _computer.Close();
     }
 }

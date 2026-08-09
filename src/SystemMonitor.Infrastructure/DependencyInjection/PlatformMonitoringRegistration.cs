@@ -16,7 +16,6 @@ public static class PlatformMonitoringRegistration
             services.AddSingleton<IMemoryMonitorService, WindowsMemoryMonitorService>();
             services.AddSingleton<IDiskMonitorService, WindowsDiskMonitorService>();
             services.AddSingleton<INetworkMonitorService, WindowsNetworkMonitorService>();
-            services.AddSingleton<ITemperatureMonitorService, WindowsTemperatureMonitorService>();
             services.AddSingleton<IMotherboardMonitorService, WindowsMotherboardMonitorService>();
             services.AddSingleton<IGpuMonitorService, WindowsGpuMonitorService>();
             services.AddSingleton<IMetricsSnapshotProvider, MetricsSnapshotProvider>();

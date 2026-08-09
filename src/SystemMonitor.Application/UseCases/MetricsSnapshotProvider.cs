@@ -12,9 +12,8 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private readonly IMemoryMonitorService _memory;
     private readonly IDiskMonitorService _disk;
     private readonly INetworkMonitorService _network;
-    private readonly ITemperatureMonitorService _temperature;
     private readonly IMotherboardMonitorService _motherboard;
-    private readonly IGpuMonitorService _gpu; // Added to support teammate's GPU code
+    private readonly IGpuMonitorService _gpu;
 
     private readonly Dictionary<string, Queue<double>> _smoothingWindows = new();
     private const int SmoothingWindow = 4;
@@ -25,7 +24,6 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         IMemoryMonitorService memory,
         IDiskMonitorService disk,
         INetworkMonitorService network,
-        ITemperatureMonitorService temperature,
         IMotherboardMonitorService motherboard,
         IGpuMonitorService gpu)
     {
@@ -33,7 +31,6 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         _memory = memory;
         _disk = disk;
         _network = network;
-        _temperature = temperature;
         _motherboard = motherboard;
         _gpu = gpu;
     }
@@ -97,10 +94,9 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         readings.Add(BuildReading(MetricCatalog.NetworkDownload, networkInfo.DownloadKBPerSec));
         readings.Add(BuildReading(MetricCatalog.NetworkUpload, networkInfo.UploadKBPerSec));
 
-        // GPU — runtime-discovered, zero or more devices. Not catalog-driven for
-        // Id/Label (same reasoning as Temperature): count and identity vary per
-        // machine, so MetricCatalog.GpuUsage/etc. now only supply Category/Kind/
-        // Unit/Label-stem plus design-time sample values, not the runtime Id.
+        // GPU — runtime-discovered, zero or more devices, each keyed by its
+        // stable DeviceId (not enumeration Index) so identity survives even if
+        // WMI's device order ever shifts between runs.
         var gpuInfos = _gpu.GetCurrentUsage();
         foreach (var gpuInfo in gpuInfos)
         {
@@ -111,29 +107,41 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             var deviceTag = gpuInfo.IsIntegrated ? "Integrated" : "Dedicated";
             var gpuLabelSuffix = $" (GPU {gpuInfo.Index} - {deviceTag}: {gpuInfo.Name})";
 
-            readings.Add(BuildGpuReading(MetricCatalog.GpuUsage, gpuInfo.Index, gpuInfo.UsagePercent, smooth: true, gpuLabelSuffix));
-            readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryUsed, gpuInfo.Index, gpuUsedGB, smooth: false, gpuLabelSuffix));
-            readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryTotal, gpuInfo.Index, gpuTotalGB, smooth: false, gpuLabelSuffix));
+            readings.Add(BuildGpuReading(MetricCatalog.GpuUsage, gpuInfo, gpuInfo.UsagePercent, smooth: true, gpuLabelSuffix));
+            readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryUsed, gpuInfo, gpuUsedGB, smooth: false, gpuLabelSuffix));
+            readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryTotal, gpuInfo, gpuTotalGB, smooth: false, gpuLabelSuffix));
         }
 
-        // Temperature — one MetricReading per sensor; runtime-discovered, so it
-        // can't go through BuildReading/MetricCatalog like the sections above.
-        var rawTemperatureReadings = _temperature.GetCurrentUsage();
-        foreach (var reading in rawTemperatureReadings)
+        // Temperature — now bundled into each hardware's own Info model instead
+        // of a centralized ITemperatureMonitorService. Kept at the same position
+        // (end of the snapshot) to minimize output-order drift from before.
+        foreach (var reading in cpuInfo.Temperatures)
         {
-            readings.Add(new MetricReading
+            readings.Add(BuildTemperatureMetric("CPU", reading, idSuffix: reading.SensorLabel));
+        }
+
+        foreach (var reading in diskInfo.Temperatures)
+        {
+            readings.Add(BuildTemperatureMetric("Disk", reading, idSuffix: reading.SensorLabel, labelSuffix: diskLabelSuffix));
+        }
+
+        foreach (var gpuInfo in gpuInfos)
+        {
+            if (!gpuInfo.IsAvailable) continue;
+
+            var deviceTag = gpuInfo.IsIntegrated ? "Integrated" : "Dedicated";
+            var gpuLabelSuffix = $" (GPU {gpuInfo.Index} - {deviceTag}: {gpuInfo.Name})";
+
+            foreach (var reading in gpuInfo.Temperatures)
             {
-                Id = $"temp.{reading.Category}.{reading.SensorLabel}".ToLowerInvariant(),
-                Category = reading.Category,
-                Label = reading.SensorLabel,
-                Kind = MetricKind.Temperature,
-                Unit = "°C",
-                IsAvailable = reading.IsAvailable,
-                Value = Round(reading.TemperatureCelsius),
-                Min = RoundNullable(reading.MinCelsius),
-                Max = RoundNullable(reading.MaxCelsius),
-                Average = RoundNullable(reading.AverageCelsius)
-            });
+                readings.Add(BuildTemperatureMetric(
+                    "GPU", reading,
+                    idSuffix: $"{gpuInfo.DeviceId}.{reading.SensorLabel}",
+                    labelSuffix: gpuLabelSuffix,
+                    gpuIndex: gpuInfo.Index,
+                    gpuIsIntegrated: gpuInfo.IsIntegrated,
+                    gpuDeviceId: gpuInfo.DeviceId));
+            }
         }
 
         return readings;
@@ -156,9 +164,9 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     }
 
     private MetricReading BuildGpuReading(
-        MetricCatalogEntry entry, int gpuIndex, double rawValue, bool smooth, string labelSuffix)
+        MetricCatalogEntry entry, GpuInfo gpuInfo, double rawValue, bool smooth, string labelSuffix)
     {
-        var id = $"{entry.Id}.{gpuIndex}";
+        var id = $"{entry.Id}.{gpuInfo.DeviceId}";
         var value = smooth ? Smooth(id, rawValue) : rawValue;
 
         return new MetricReading
@@ -169,9 +177,36 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             Kind = entry.Kind,
             Unit = entry.Unit,
             IsAvailable = true,
-            Value = Round(value)
+            Value = Round(value),
+            GpuIndex = gpuInfo.Index,
+            GpuIsIntegrated = gpuInfo.IsIntegrated,
+            GpuDeviceId = gpuInfo.DeviceId
         };
     }
+
+    // Turns a per-device TemperatureReading into a MetricReading. Replaces the
+    // old inline loop over ITemperatureMonitorService.GetCurrentUsage() — same
+    // Id scheme ("temp.{category}.{idSuffix}"), same Min/Max/Average rounding.
+    private static MetricReading BuildTemperatureMetric(
+        string category, TemperatureReading reading, string idSuffix,
+        string? labelSuffix = null, int? gpuIndex = null, bool? gpuIsIntegrated = null,
+        string? gpuDeviceId = null) => new()
+    {
+        Id = $"temp.{category}.{idSuffix}".ToLowerInvariant(),
+        Category = category,
+        Label = labelSuffix is null ? reading.SensorLabel : reading.SensorLabel + labelSuffix,
+        Kind = MetricKind.Temperature,
+        Unit = "°C",
+        IsAvailable = reading.IsAvailable,
+        Value = Round(reading.TemperatureCelsius),
+        Min = RoundNullable(reading.MinCelsius),
+        Max = RoundNullable(reading.MaxCelsius),
+        Average = RoundNullable(reading.AverageCelsius),
+        IsPrimary = reading.IsPrimary,
+        GpuIndex = gpuIndex,
+        GpuIsIntegrated = gpuIsIntegrated,
+        GpuDeviceId = gpuDeviceId
+    };
 
     private static MetricReading BuildGpuTextReading(
         MetricCatalogEntry entry, int gpuIndex, string? text, string labelSuffix) => new()

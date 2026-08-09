@@ -6,35 +6,44 @@
              xmlns:debug="using:SystemMonitor.Presentation.Debugging"
              mc:Ignorable="d" d:DesignWidth="200" d:DesignHeight="150"
              x:Class="SystemMonitor.Presentation.Views.PanelsAndTemplates.CategoryMetricsView"
+             x:CompileBindings="True"
              x:Name="Root">
 
     <!-- debug border -->
-    <Border debug:DebugBorder.IsEnabled="True" >
-    <!-- General Layout Container -->
-        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-            <TextBlock
-                Text="{Binding #Root.CategoryLabel}"
-                FontSize="12"
-                Opacity="0.6"
-                HorizontalAlignment="Center"
-                TextAlignment="Center"
-                IsVisible="{Binding #Root.ShowCategoryHeader}" />
-            <ItemsControl
-                ItemsSource="{Binding #Root.FilteredMetrics}">
+    <Border debug:DebugBorder.IsEnabled="True">
+        <StackPanel HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    MaxWidth="300"
+                    Spacing="2">
+
+            <!-- Category -->
+            <TextBlock Text="{Binding #Root.CategoryLabel}"
+                       FontSize="11"
+                       Opacity="0.6"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       IsVisible="{Binding #Root.ShowCategoryHeader}" />
+
+            <ItemsControl ItemsSource="{Binding #Root.FilteredMetrics}"
+                          HorizontalAlignment="Stretch">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="models:MetricReading">
-                        <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
-                            <TextBlock Text="{Binding Label}" FontWeight="SemiBold"
-                                    IsVisible="{Binding #Root.ShowLabel}" />
-                            <TextBlock Text="{Binding DisplayValue}" Opacity="0.8"
-                                    IsVisible="{Binding #Root.ShowValue}" />
-                        </StackPanel>
+                        <!-- Metric row -->
+                        <TextBlock FontSize="11"
+                                   TextWrapping="Wrap"
+                                   HorizontalAlignment="Stretch"
+                                   VerticalAlignment="Center"
+                                   IsVisible="{Binding #Root.ShowLabel}">
+                            <Run Text="{Binding Label}" FontWeight="SemiBold" />
+                            <Run Text="  " />
+                            <Run Text="{Binding DisplayValue}" Foreground="{DynamicResource MetricValueBrush}" />
+                        </TextBlock>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
-            </ItemsControl>   
+            </ItemsControl>
+
         </StackPanel>
     </Border>
-    
-
 
 </UserControl>

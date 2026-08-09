@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace SystemMonitor.Domain.Models;
 
 public class DiskInfo
@@ -15,4 +17,9 @@ public class DiskInfo
     public string DiskType { get; set; } = string.Empty;   // "SSD" / "HDD"
     public string BusType { get; set; } = string.Empty;    // "NVMe" / "SATA" / ...
     public string FileSystem { get; set; } = string.Empty; // "NTFS"
+
+    // SMART temperature sensor(s) for this drive, via LibreHardwareMonitor.
+    // Empty when no matching hardware handle was found (e.g. USB enclosures
+    // that don't expose SMART temp, or a name-matching miss).
+    public List<TemperatureReading> Temperatures { get; set; } = new();
 }

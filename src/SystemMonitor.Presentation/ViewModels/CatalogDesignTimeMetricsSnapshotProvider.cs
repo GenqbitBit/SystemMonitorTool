@@ -26,7 +26,8 @@ internal class CatalogDesignTimeMetricsSnapshotProvider : IMetricsSnapshotProvid
             Value = entry.SampleValue,
             Min = entry.SampleMin,
             Max = entry.SampleMax,
-            Average = entry.SampleAverage
+            Average = entry.SampleAverage,
+            IsPrimary = entry.SampleIsPrimary
         }).ToList();
     }
 }
