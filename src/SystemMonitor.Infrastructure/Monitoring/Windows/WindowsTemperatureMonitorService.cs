@@ -27,16 +27,6 @@ public class WindowsTemperatureMonitorService : ITemperatureMonitorService
     {
         _gpuIdentities = gpuMonitor.GetDeviceIdentities();
 
-        _computer = new Computer
-        {
-            IsCpuEnabled = true,
-            IsGpuEnabled = true,
-            IsStorageEnabled = true,
-            IsMotherboardEnabled = true
-        };
-
-        _computer.Open();
-
         foreach (var hardware in _computer.Hardware)
         {
             hardware.Update();
@@ -44,7 +34,7 @@ public class WindowsTemperatureMonitorService : ITemperatureMonitorService
                 subHardware.Update();
         }
     }
-
+    
     public List<TemperatureReading> GetCurrentUsage()
     {
         var readings = new List<TemperatureReading>();

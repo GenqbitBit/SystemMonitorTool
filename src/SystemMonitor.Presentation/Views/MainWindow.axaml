@@ -33,7 +33,7 @@
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" />
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Disk" />
                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Network" />
-                <panels:CategoryMetricsView Metrics="{Binding Metrics}" PrimaryOnly="True" CategoryLabel="GPU"/>
+                <panels:CategoryMetricsView Metrics="{Binding Metrics}" PrimaryTempOnly="True" CategoryLabel="GPU"/>
             </StackPanel>
         </Border>
 

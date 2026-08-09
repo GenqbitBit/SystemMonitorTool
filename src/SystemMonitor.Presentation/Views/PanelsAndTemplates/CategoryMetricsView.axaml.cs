@@ -43,8 +43,8 @@ public partial class CategoryMetricsView : UserControl
     // When true, only readings with IsPrimary == true are shown (e.g. each
     // GPU's core temp, not its Hot Spot/Memory Junction/etc. sub-readings).
     // Has no effect when MetricId selects a single specific reading.
-    public static readonly StyledProperty<bool> PrimaryOnlyProperty =
-        AvaloniaProperty.Register<CategoryMetricsView, bool>(nameof(PrimaryOnly), defaultValue: false);
+    public static readonly StyledProperty<bool> PrimaryTempOnlyProperty =
+        AvaloniaProperty.Register<CategoryMetricsView, bool>(nameof(PrimaryTempOnly), defaultValue: false);
 
     public static readonly DirectProperty<CategoryMetricsView, IEnumerable<MetricReading>?> FilteredMetricsProperty =
         AvaloniaProperty.RegisterDirect<CategoryMetricsView, IEnumerable<MetricReading>?>(
@@ -91,10 +91,10 @@ public partial class CategoryMetricsView : UserControl
         set => SetValue(ShowCategoryHeaderProperty, value);
     }
 
-    public bool PrimaryOnly
+    public bool PrimaryTempOnly
     {
-        get => GetValue(PrimaryOnlyProperty);
-        set => SetValue(PrimaryOnlyProperty, value);
+        get => GetValue(PrimaryTempOnlyProperty);
+        set => SetValue(PrimaryTempOnlyProperty, value);
     }
 
     public IEnumerable<MetricReading>? FilteredMetrics
@@ -109,7 +109,7 @@ public partial class CategoryMetricsView : UserControl
             var byCategory = Metrics?.Where(m =>
                 string.Equals(m.Category, CategoryLabel, System.StringComparison.OrdinalIgnoreCase));
 
-            return PrimaryOnly
+            return PrimaryTempOnly
                 ? byCategory?.Where(m => m.IsPrimary)
                 : byCategory;
         }
@@ -122,7 +122,7 @@ public partial class CategoryMetricsView : UserControl
         if (change.Property == MetricsProperty
             || change.Property == CategoryLabelProperty
             || change.Property == MetricIdProperty
-            || change.Property == PrimaryOnlyProperty)
+            || change.Property == PrimaryTempOnlyProperty)
         {
             RaisePropertyChanged(FilteredMetricsProperty, default, default);
         }

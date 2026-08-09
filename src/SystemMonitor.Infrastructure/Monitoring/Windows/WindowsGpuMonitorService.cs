@@ -27,8 +27,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 
     public WindowsGpuMonitorService()
     {
-        _computer = new Computer { IsGpuEnabled = true };
-        _computer.Open();
+        _computer = LibreHardwareMonitorHost.Instance.Computer;
 
         using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController");
 
@@ -219,7 +218,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
     }
 
     private static bool MatchesGpu(string instanceName, string? luidFilter) =>
-        luidFilter == null || instanceName.Contains(luidFilter, StringComparison.OrdinalIgnoreCase);
+    luidFilter != null && instanceName.Contains(luidFilter, StringComparison.OrdinalIgnoreCase);
 
     // New: exposes the same WMI-ordered Index/Name/IsIntegrated used by GetCurrentUsage(),
     // so WindowsTemperatureMonitorService (or anything else) can match its own GPU hardware
@@ -234,7 +233,5 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         {
             counter.Dispose();
         }
-
-        _computer.Close();
     }
 }
