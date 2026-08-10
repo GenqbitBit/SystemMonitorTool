@@ -8,6 +8,7 @@ using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 using SystemMonitor.Application.UseCases;
 using SystemMonitor.Infrastructure.Monitoring.CrossPlatform;
+using SystemMonitor.Infrastructure.Persistence;
 
 namespace SystemMonitor.Presentation.ViewModels;
 
@@ -15,6 +16,7 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IMetricsSnapshotProvider _metricsProvider;
     private readonly IMetricHistoryStore _historyStore;
+    private readonly IMetricHistoryPersistenceService _historyPersistence;
     private readonly IOsMonitorService _os;
     private readonly DispatcherTimer _timer;
 
@@ -40,31 +42,48 @@ public partial class MainWindowViewModel : ViewModelBase
     public IMetricHistoryStore HistoryStore => _historyStore;
 
     public MainWindowViewModel()
-        : this(new CatalogDesignTimeMetricsSnapshotProvider(), new MetricHistoryStore(), new DotNetOsMonitorService())
+    : this(new CatalogDesignTimeMetricsSnapshotProvider(), new MetricHistoryStore(),
+           new DotNetOsMonitorService(), new SqliteMetricHistoryPersistenceService(),
+           new DashboardViewModel(new CatalogDesignTimeMetricsSnapshotProvider()))
     {
     }
 
-   public MainWindowViewModel(IMetricsSnapshotProvider metricsProvider, IMetricHistoryStore historyStore, IOsMonitorService os)
+    public MainWindowViewModel(
+        IMetricsSnapshotProvider metricsProvider,
+        IMetricHistoryStore historyStore,
+        IOsMonitorService os,
+        IMetricHistoryPersistenceService historyPersistence,
+        DashboardViewModel dashboard)
     {
         _metricsProvider = metricsProvider;
         _historyStore = historyStore;
         _os = os;
+        _historyPersistence = historyPersistence;
+        Dashboard = dashboard;
         RefreshMetrics();
         _timer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(700)
+        Interval = TimeSpan.FromMilliseconds(700)
         };
         _timer.Tick += (_, _) => RefreshMetrics();
-
         if (!Avalonia.Controls.Design.IsDesignMode)
             _timer.Start();
-    }
+}
+
+// The dashboard shell's view-model — the data table today,
+// more dashboard features tomorrow.
+public DashboardViewModel Dashboard { get; }
 
     private void RefreshMetrics()
     {
         var snapshot = _metricsProvider.GetSnapshot();
         Metrics = new ObservableCollection<MetricReading>(snapshot);
         _historyStore.Record(snapshot);
+
+        // Non-blocking — queues onto a background writer, safe to call
+        // every 700ms from this UI-thread timer tick.
+        _historyPersistence.Record(snapshot);
+
         DedicatedGpuMetricId = snapshot.FirstOrDefault(m =>
             m.Id.StartsWith("gpu.usage.") && m.GpuIsIntegrated == false)?.Id;
         IntegratedGpuMetricId = snapshot.FirstOrDefault(m =>

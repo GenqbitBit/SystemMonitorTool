@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
         xmlns:panels="using:SystemMonitor.Presentation.Views.PanelsAndTemplates"
+        xmlns:views="using:SystemMonitor.Presentation.Views"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:debug="using:SystemMonitor.Presentation.Debugging"
@@ -17,130 +18,127 @@
         <vm:MainWindowViewModel />
     </Design.DataContext>
 
-    <!--border for debug-->
-    <!--ScrollViewer ensures nothing clips if the window is resized smaller than content needs-->
-    <!--beta not just for demo of ui and back end-->
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-        <StackPanel Orientation="Vertical" Margin="16" Spacing="16" HorizontalAlignment="Stretch">
+    <!-- One viewport, one scrollbar: the whole dashboard scrolls as a
+         single page. At full window height nothing scrolls at all. -->
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+        <Grid ColumnDefinitions="*,Auto">
 
-            <!--row 0: info panels-->
-            <Border HorizontalAlignment="Stretch">
-                <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" /></Border>
-                    <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Motherboard" /></Border>
-                    <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" /></Border>
-                    <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Disk" /></Border>
-                    <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Network" /></Border>
-                     <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="OS" /></Border>
+            <!-- Left column: the monitor surface, row by row -->
+            <StackPanel Grid.Column="0" Orientation="Vertical" Margin="16" Spacing="16" HorizontalAlignment="Stretch">
 
-                    <!--Process Pannel-->
-                    <Border Margin="12"
-                        debug:DebugBorder.IsEnabled="False"
-                        Classes="feature" BorderBrush="Gray" BorderThickness="1">
-                    <panels:ProcessesView Processes="{Binding TopProcesses}" />
-                    </Border>
+                <!-- row 0: hardware info panels -->
+                <Border HorizontalAlignment="Stretch">
+                    <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" /></Border>
+                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Motherboard" /></Border>
+                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" /></Border>
+                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Disk" /></Border>
+                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Network" /></Border>
+                    </WrapPanel>
+                </Border>
 
+                <!-- row 1: os + top processes + detected GPUs -->
+                <Border HorizontalAlignment="Stretch">
+                    <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="OS" /></Border>
+                        <Border Margin="12"
+                                debug:DebugBorder.IsEnabled="False"
+                                Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                            <panels:ProcessesView Processes="{Binding TopProcesses}" />
+                        </Border>
 
-                    
-                    <!-- GPUs area presented by BlueViolet border-->
-                    <!--inflexible/initially empty | adapts on how many gpus are detected
-                        until runtime -->
-                    <Border Margin="12"
-                            debug:DebugBorder.IsEnabled="True"
-                            Classes="feature" BorderBrush="BlueViolet" BorderThickness="1">
-                        <ItemsControl ItemsSource="{Binding DetectedGpus}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:GpuDeviceDisplayInfo">
-                                    <Border Margin="12">
-                                        <panels:CategoryMetricsView
-                                            Metrics="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Metrics}"
-                                            CategoryLabel="GPU"
-                                            GpuDeviceId="{Binding DeviceId}"
-                                            PrimaryTempOnly="True" />
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </Border>
-                    <!-- GPUs area presented by BlueViolet border-->
-                    <!--inflexible/initially empty | adapts on how many gpus are detected
-                        until runtime -->
-                </WrapPanel>
-            </Border>
+                        <Border Margin="12"
+                                debug:DebugBorder.IsEnabled="True"
+                                Classes="feature" BorderBrush="BlueViolet" BorderThickness="1">
+                            <ItemsControl ItemsSource="{Binding DetectedGpus}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:GpuDeviceDisplayInfo">
+                                        <Border Margin="12">
+                                            <panels:CategoryMetricsView
+                                                Metrics="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Metrics}"
+                                                CategoryLabel="GPU"
+                                                GpuDeviceId="{Binding DeviceId}"
+                                                PrimaryTempOnly="True" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </WrapPanel>
+                </Border>
 
-            <!--row 1: cpu + memory graphs-->
-            <Border HorizontalAlignment="Stretch">
-                <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" MetricId="cpu.usage" ShowLabel="True"/></Border>
-                    <Border Margin="12" debug:DebugBorder.IsEnabled="True">
-                        <panels:MetricGraphView
-                            Metrics="{Binding Metrics}"
-                            HistoryStore="{Binding HistoryStore}"
-                            MetricId="cpu.usage"
-                            FixedMinValue="0"
-                            FixedMaxValue="100"
-                            Width="300" Height="130" />
-                    </Border>
-                    <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" MetricId="memory.usage" ShowLabel="True"/></Border>
-                    <Border Margin="12" debug:DebugBorder.IsEnabled="True">
-                        <panels:MetricGraphView
-                            Metrics="{Binding Metrics}"
-                            HistoryStore="{Binding HistoryStore}"
-                            MetricId="memory.usage"
-                            FixedMinValue="0"
-                            FixedMaxValue="100"
-                            LineBrush="DeepSkyBlue"
-                            Width="300" Height="130" />
-                    </Border>
-                    <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Network" 
-                    MetricId="network.download"/></Border>
-                    <Border Margin="12" debug:DebugBorder.IsEnabled="True">
-                        <panels:MetricGraphView
-                            Metrics="{Binding Metrics}"
-                            HistoryStore="{Binding HistoryStore}"
-                            MetricId="network.download"
-                            LineBrush="#FF00EE"
-                            Width="300" Height="130" />
-                    </Border>
-                </WrapPanel>
-            </Border>
+                <!-- row 2: cpu + memory graphs -->
+                <Border HorizontalAlignment="Stretch">
+                    <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" MetricId="cpu.usage" ShowLabel="True"/></Border>
+                        <Border Margin="12"
+                                debug:DebugBorder.IsEnabled="False"
+                                Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                            <panels:MetricGraphView
+                                Metrics="{Binding Metrics}"
+                                HistoryStore="{Binding HistoryStore}"
+                                MetricId="cpu.usage"
+                                FixedMinValue="0"
+                                FixedMaxValue="100"
+                                Width="150" Height="130" />
+                        </Border>
+                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" MetricId="memory.usage" ShowLabel="True"/></Border>
+                        <Border Margin="12"
+                                debug:DebugBorder.IsEnabled="False"
+                                Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                            <panels:MetricGraphView
+                                Metrics="{Binding Metrics}"
+                                HistoryStore="{Binding HistoryStore}"
+                                MetricId="memory.usage"
+                                FixedMinValue="0"
+                                FixedMaxValue="100"
+                                LineBrush="DeepSkyBlue"
+                                Width="150" Height="130" />
+                        </Border>
+                    </WrapPanel>
+                </Border>
 
-            <!--row 2: gpu graph-->
-            <Border HorizontalAlignment="Stretch">
-                <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <!-- row 3: gpu graphs -->
+                <Border HorizontalAlignment="Stretch">
+                    <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Dedicated GPU" MetricId="{Binding DedicatedGpuMetricId}" ShowLabel="True"/></Border>
+                        <Border Margin="12" debug:DebugBorder.IsEnabled="False" Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                            <panels:MetricGraphView
+                                Metrics="{Binding Metrics}"
+                                HistoryStore="{Binding HistoryStore}"
+                                MetricId="{Binding DedicatedGpuMetricId}"
+                                FixedMinValue="0"
+                                FixedMaxValue="100"
+                                LineBrush="#FF1900"
+                                Width="110" Height="130" />
+                        </Border>
+                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Integrated GPU" MetricId="{Binding IntegratedGpuMetricId}" ShowLabel="True"/></Border>
+                        <Border Margin="12" debug:DebugBorder.IsEnabled="False" Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                            <panels:MetricGraphView
+                                Metrics="{Binding Metrics}"
+                                HistoryStore="{Binding HistoryStore}"
+                                MetricId="{Binding IntegratedGpuMetricId}"
+                                FixedMinValue="0"
+                                FixedMaxValue="100"
+                                LineBrush="#FF1900"
+                                Width="110" Height="130" />
+                        </Border>
+                    </WrapPanel>
+                </Border>
+            </StackPanel>
 
-                    <!--GPU 0 stats (dedicated, if present)-->
-                    <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Dedicated GPU" MetricId="{Binding DedicatedGpuMetricId}" ShowLabel="True"/></Border>
-                    <Border Margin="12" debug:DebugBorder.IsEnabled="True">
-                        <panels:MetricGraphView
-                            Metrics="{Binding Metrics}"
-                            HistoryStore="{Binding HistoryStore}"
-                            MetricId="{Binding DedicatedGpuMetricId}"
-                            FixedMinValue="0"
-                            FixedMaxValue="100"
-                            LineBrush="Red"
-                            Width="200" Height="130" />
-                    </Border>
-
-                    <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Integrated GPU" MetricId="{Binding IntegratedGpuMetricId}" ShowLabel="True"/></Border>
-                     <Border Margin="12" debug:DebugBorder.IsEnabled="True">
-                        <panels:MetricGraphView
-                            Metrics="{Binding Metrics}"
-                            HistoryStore="{Binding HistoryStore}"
-                            MetricId="{Binding IntegratedGpuMetricId}"
-                            FixedMinValue="0"
-                            FixedMaxValue="100"
-                            LineBrush="BlueViolet"
-                            Width="200" Height="130" />
-                    </Border>
-                </WrapPanel>
-            </Border>
-        </StackPanel>
+            <!-- Right column: the dashboard data table, hugging its content -->
+            <views:DashboardView Grid.Column="1"
+                                 DataContext="{Binding Dashboard}"
+                                 Width="680"
+                                 Margin="0,16,16,16"
+                                 VerticalAlignment="Top" />
+        </Grid>
     </ScrollViewer>
-
 </Window>
