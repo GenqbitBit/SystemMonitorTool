@@ -28,7 +28,7 @@ public sealed class DebugSettings : INotifyPropertyChanged
     }
 
     // Centralized look-and-feel for debug borders — change once, affects everywhere.
-    public IBrush ActiveBrush { get; set; } = Brushes.Gray;
+    public IBrush ActiveBrush { get; set; } = Brushes.LimeGreen;
     public double ActiveThickness { get; set; } = 1.0;
 
     public event PropertyChangedEventHandler? PropertyChanged;
