@@ -42,31 +42,37 @@ public partial class MainWindowViewModel : ViewModelBase
     public IMetricHistoryStore HistoryStore => _historyStore;
 
     public MainWindowViewModel()
-        : this(new CatalogDesignTimeMetricsSnapshotProvider(), new MetricHistoryStore(),
-               new DotNetOsMonitorService(), new SqliteMetricHistoryPersistenceService())
+    : this(new CatalogDesignTimeMetricsSnapshotProvider(), new MetricHistoryStore(),
+           new DotNetOsMonitorService(), new SqliteMetricHistoryPersistenceService(),
+           new DashboardViewModel(new CatalogDesignTimeMetricsSnapshotProvider()))
     {
     }
 
-public MainWindowViewModel(
+    public MainWindowViewModel(
         IMetricsSnapshotProvider metricsProvider,
         IMetricHistoryStore historyStore,
         IOsMonitorService os,
-        IMetricHistoryPersistenceService historyPersistence)
+        IMetricHistoryPersistenceService historyPersistence,
+        DashboardViewModel dashboard)
     {
         _metricsProvider = metricsProvider;
         _historyStore = historyStore;
         _os = os;
         _historyPersistence = historyPersistence;
+        Dashboard = dashboard;
         RefreshMetrics();
         _timer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(700)
+        Interval = TimeSpan.FromMilliseconds(700)
         };
         _timer.Tick += (_, _) => RefreshMetrics();
-
         if (!Avalonia.Controls.Design.IsDesignMode)
             _timer.Start();
-    }
+}
+
+// The dashboard shell's view-model — the data table today,
+// more dashboard features tomorrow.
+public DashboardViewModel Dashboard { get; }
 
     private void RefreshMetrics()
     {
