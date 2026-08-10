@@ -2,7 +2,6 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
         xmlns:panels="using:SystemMonitor.Presentation.Views.PanelsAndTemplates"
-        xmlns:models="using:SystemMonitor.Domain.Models"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:debug="using:SystemMonitor.Presentation.Debugging"
@@ -31,35 +30,17 @@
                     <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" /></Border>
                     <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Disk" /></Border>
                     <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Network" /></Border>
+                     <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="OS" /></Border>
 
-                    <!--OS section: scalar panel fed by the Metrics river, plus the
-                        live top-processes table bound to TopProcesses-->
-                    <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="OS" /></Border>
+                    <!--Process Pannel-->
                     <Border Margin="12"
-                            debug:DebugBorder.IsEnabled="False"
-                            Classes="feature" BorderBrush="Gray" BorderThickness="1">
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="340" Spacing="2">
-                            <TextBlock Text="Top Processes"
-                                       FontSize="11"
-                                       Opacity="0.6"
-                                       HorizontalAlignment="Center" />
-                            <ItemsControl ItemsSource="{Binding TopProcesses}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="models:ProcessInfo">
-                                        <TextBlock FontSize="11" TextWrapping="NoWrap" Margin="0,1">
-                                            <Run Text="{Binding Name}" FontWeight="SemiBold" />
-                                            <Run Text=" (" /><Run Text="{Binding ProcessId}" /><Run Text=")  " />
-                                            <Run Text="{Binding CpuPercent}" Foreground="{DynamicResource MetricValueBrush}" />
-                                            <Run Text="%  " />
-                                            <Run Text="{Binding WorkingSetMB}" Foreground="{DynamicResource MetricValueBrush}" />
-                                            <Run Text=" MB" />
-                                        </TextBlock>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
+                        debug:DebugBorder.IsEnabled="False"
+                        Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                    <panels:ProcessesView Processes="{Binding TopProcesses}" />
                     </Border>
 
+
+                    
                     <!-- GPUs area presented by BlueViolet border-->
                     <!--inflexible/initially empty | adapts on how many gpus are detected
                         until runtime -->

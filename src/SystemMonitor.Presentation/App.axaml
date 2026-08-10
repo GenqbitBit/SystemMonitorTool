@@ -7,7 +7,7 @@
 
      <Application.Resources>
         <ResourceDictionary>
-            <SolidColorBrush x:Key="MetricValueBrush" Color="#19CB96" />
+            <SolidColorBrush x:Key="MetricValueBrush" Color="#CB1919" />
         </ResourceDictionary>
     </Application.Resources>
 

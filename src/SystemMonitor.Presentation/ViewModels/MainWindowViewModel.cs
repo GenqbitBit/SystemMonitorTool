@@ -47,7 +47,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
     }
 
-    public MainWindowViewModel(
+public MainWindowViewModel(
         IMetricsSnapshotProvider metricsProvider,
         IMetricHistoryStore historyStore,
         IOsMonitorService os,
@@ -63,7 +63,9 @@ public partial class MainWindowViewModel : ViewModelBase
             Interval = TimeSpan.FromMilliseconds(700)
         };
         _timer.Tick += (_, _) => RefreshMetrics();
-        _timer.Start();
+
+        if (!Avalonia.Controls.Design.IsDesignMode)
+            _timer.Start();
     }
 
     private void RefreshMetrics()
