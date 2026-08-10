@@ -3,13 +3,15 @@ using Microsoft.Extensions.DependencyInjection;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Infrastructure.Monitoring.Windows;
 using SystemMonitor.Application.UseCases;
-
+using SystemMonitor.Infrastructure.Monitoring.CrossPlatform;
 namespace SystemMonitor.Infrastructure;
 
 public static class PlatformMonitoringRegistration
 {
     public static IServiceCollection AddPlatformMonitoringServices(this IServiceCollection services)
     {
+        services.AddSingleton<IOsMonitorService, DotNetOsMonitorService>();
+        
         if (OperatingSystem.IsWindows())
         {
             services.AddSingleton<ICpuMonitorService, WindowsCpuMonitorService>();
@@ -20,6 +22,7 @@ public static class PlatformMonitoringRegistration
             services.AddSingleton<IGpuMonitorService, WindowsGpuMonitorService>();
             services.AddSingleton<IMetricsSnapshotProvider, MetricsSnapshotProvider>();
             services.AddSingleton<IMetricHistoryStore>(_ => new MetricHistoryStore(TimeSpan.FromSeconds(60)));
+            
         }
         else if (OperatingSystem.IsLinux())
         {

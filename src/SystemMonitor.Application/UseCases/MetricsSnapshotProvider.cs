@@ -14,7 +14,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private readonly INetworkMonitorService _network;
     private readonly IMotherboardMonitorService _motherboard;
     private readonly IGpuMonitorService _gpu;
-
+    private readonly IOsMonitorService _os;
     private readonly Dictionary<string, Queue<double>> _smoothingWindows = new();
     private const int SmoothingWindow = 4;
     private const int DecimalPlaces = 2;
@@ -25,7 +25,8 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         IDiskMonitorService disk,
         INetworkMonitorService network,
         IMotherboardMonitorService motherboard,
-        IGpuMonitorService gpu)
+        IGpuMonitorService gpu,
+        IOsMonitorService os)
     {
         _cpu = cpu;
         _memory = memory;
@@ -33,6 +34,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         _network = network;
         _motherboard = motherboard;
         _gpu = gpu;
+        _os = os;
     }
 
     public IReadOnlyList<MetricReading> GetSnapshot()
@@ -94,6 +96,16 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         readings.Add(BuildReading(MetricCatalog.NetworkDownload, networkInfo.DownloadKBPerSec));
         readings.Add(BuildReading(MetricCatalog.NetworkUpload, networkInfo.UploadKBPerSec));
 
+        // Operating System — platform-neutral, driver-free.
+        // Identity first, then live counts (mirrors the CPU section's order).
+        var osInfo = _os.GetCurrentInfo();
+        readings.Add(BuildTextReading(MetricCatalog.OsName, osInfo.OsName));
+        readings.Add(BuildTextReading(MetricCatalog.OsVersion, osInfo.OsVersion));
+        readings.Add(BuildTextReading(MetricCatalog.OsUptime, FormatUptime(osInfo.Uptime)));
+        readings.Add(BuildTextReading(MetricCatalog.OsProcesses, osInfo.ProcessCount.ToString()));
+        readings.Add(BuildTextReading(MetricCatalog.OsThreads, osInfo.ThreadCount.ToString()));
+        readings.Add(BuildTextReading(MetricCatalog.OsHandles, FormatHandles(osInfo.HandleCount)));
+
         // GPU — runtime-discovered, zero or more devices, each keyed by its
         // stable DeviceId (not enumeration Index) so identity survives even if
         // WMI's device order ever shifts between runs.
@@ -101,12 +113,10 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         foreach (var gpuInfo in gpuInfos)
         {
             if (!gpuInfo.IsAvailable) continue;
-
             var gpuUsedGB = gpuInfo.DedicatedMemoryUsedMb / 1024.0;
             var gpuTotalGB = gpuInfo.DedicatedMemoryTotalMb / 1024.0;
             var deviceTag = gpuInfo.IsIntegrated ? "Integrated" : "Dedicated";
             var gpuLabelSuffix = $" (GPU {gpuInfo.Index} - {deviceTag}: {gpuInfo.Name})";
-
             readings.Add(BuildGpuReading(MetricCatalog.GpuUsage, gpuInfo, gpuInfo.UsagePercent, smooth: true, gpuLabelSuffix));
             readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryUsed, gpuInfo, gpuUsedGB, smooth: false, gpuLabelSuffix));
             readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryTotal, gpuInfo, gpuTotalGB, smooth: false, gpuLabelSuffix));
@@ -119,19 +129,15 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         {
             readings.Add(BuildTemperatureMetric("CPU", reading, idSuffix: reading.SensorLabel));
         }
-
         foreach (var reading in diskInfo.Temperatures)
         {
             readings.Add(BuildTemperatureMetric("Disk", reading, idSuffix: reading.SensorLabel, labelSuffix: diskLabelSuffix));
         }
-
         foreach (var gpuInfo in gpuInfos)
         {
             if (!gpuInfo.IsAvailable) continue;
-
             var deviceTag = gpuInfo.IsIntegrated ? "Integrated" : "Dedicated";
             var gpuLabelSuffix = $" (GPU {gpuInfo.Index} - {deviceTag}: {gpuInfo.Name})";
-
             foreach (var reading in gpuInfo.Temperatures)
             {
                 readings.Add(BuildTemperatureMetric(
@@ -168,7 +174,6 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     {
         var id = $"{entry.Id}.{gpuInfo.DeviceId}";
         var value = smooth ? Smooth(id, rawValue) : rawValue;
-
         return new MetricReading
         {
             Id = id,
@@ -238,6 +243,14 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         mhz.HasValue
             ? mhz.Value >= 1000 ? $"{mhz.Value / 1000:0.00} GHz" : $"{mhz.Value:0} MHz"
             : "—";
+
+    private static string FormatUptime(TimeSpan uptime) =>
+        uptime.TotalDays >= 1 ? $"{(int)uptime.TotalDays}d {uptime.Hours}h {uptime.Minutes}m"
+        : uptime.TotalHours >= 1 ? $"{uptime.Hours}h {uptime.Minutes}m"
+        : $"{uptime.Minutes}m {uptime.Seconds}s";
+
+    private static string FormatHandles(long? handles) =>
+        handles.HasValue ? handles.Value.ToString("N0") : "—";
 
     private double Smooth(string id, double newValue)
     {

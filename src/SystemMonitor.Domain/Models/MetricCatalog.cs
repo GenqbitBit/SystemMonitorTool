@@ -95,6 +95,21 @@ public static class MetricCatalog
     public static readonly MetricCatalogEntry MotherboardChipset =
         new("motherboard.chipset", "Motherboard", "Chipset", MetricKind.Text, "", 0, SampleText: "AMD B550");
 
+    // Operating System — platform-neutral, driver-free. Identity first,
+    // then live counts, mirroring the CPU section's order.
+    public static readonly MetricCatalogEntry OsName =
+        new("os.name", "OS", "OS", MetricKind.Text, "", 0, SampleText: "Windows 11");
+    public static readonly MetricCatalogEntry OsVersion =
+        new("os.version", "OS", "Version", MetricKind.Text, "", 0, SampleText: "Microsoft Windows NT 10.0.26100.0");
+    public static readonly MetricCatalogEntry OsUptime =
+        new("os.uptime", "OS", "Uptime", MetricKind.Text, "", 0, SampleText: "1d 4h 12m");
+    public static readonly MetricCatalogEntry OsProcesses =
+        new("os.processes", "OS", "Processes", MetricKind.Text, "", 0, SampleText: "182");
+    public static readonly MetricCatalogEntry OsThreads =
+        new("os.threads", "OS", "Threads", MetricKind.Text, "", 0, SampleText: "2450");
+    public static readonly MetricCatalogEntry OsHandles =
+        new("os.handles", "OS", "Handles", MetricKind.Text, "", 0, SampleText: "5,412,338");    
+
     // GPU
     public static readonly MetricCatalogEntry GpuUsage =
         new("gpu.usage", "GPU", "Usage", MetricKind.Percentage, "%", 37.00);
@@ -150,6 +165,7 @@ public static class MetricCatalog
         DiskModel, DiskType, DiskBus, DiskFileSystem, DiskUsage, DiskUsed, DiskTotal, DiskRead, DiskWrite,
         NetworkDownload, NetworkUpload,
         MotherboardModel, MotherboardChipset,
+        OsName, OsVersion, OsUptime, OsProcesses, OsThreads, OsHandles,
         GpuUsage0, GpuMemoryUsed0, GpuMemoryTotal0,
         GpuUsage1, GpuMemoryUsed1, GpuMemoryTotal1,
         TempCpuCore, TempGpuCoreDedicated, TempGpuSubDedicated, TempGpuPrimaryIntegrated
