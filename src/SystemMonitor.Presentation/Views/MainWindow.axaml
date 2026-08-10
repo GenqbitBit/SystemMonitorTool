@@ -76,21 +76,17 @@
             <Border HorizontalAlignment="Stretch">
                 <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" MetricId="cpu.usage" ShowLabel="True"/></Border>
-                    <Border Margin="12"
-                            debug:DebugBorder.IsEnabled="False"
-                            Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                    <Border Margin="12" debug:DebugBorder.IsEnabled="True">
                         <panels:MetricGraphView
                             Metrics="{Binding Metrics}"
                             HistoryStore="{Binding HistoryStore}"
                             MetricId="cpu.usage"
                             FixedMinValue="0"
                             FixedMaxValue="100"
-                            Width="150" Height="130" />
+                            Width="300" Height="130" />
                     </Border>
                     <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" MetricId="memory.usage" ShowLabel="True"/></Border>
-                    <Border Margin="12"
-                            debug:DebugBorder.IsEnabled="False"
-                            Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                    <Border Margin="12" debug:DebugBorder.IsEnabled="True">
                         <panels:MetricGraphView
                             Metrics="{Binding Metrics}"
                             HistoryStore="{Binding HistoryStore}"
@@ -98,7 +94,7 @@
                             FixedMinValue="0"
                             FixedMaxValue="100"
                             LineBrush="DeepSkyBlue"
-                            Width="150" Height="130" />
+                            Width="300" Height="130" />
                     </Border>
                 </WrapPanel>
             </Border>
@@ -109,29 +105,28 @@
 
                     <!--GPU 0 stats (dedicated, if present)-->
                     <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Dedicated GPU" MetricId="{Binding DedicatedGpuMetricId}" ShowLabel="True"/></Border>
-                    <Border Margin="12" debug:DebugBorder.IsEnabled="False" Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                    <Border Margin="12" debug:DebugBorder.IsEnabled="True">
                         <panels:MetricGraphView
                             Metrics="{Binding Metrics}"
                             HistoryStore="{Binding HistoryStore}"
                             MetricId="{Binding DedicatedGpuMetricId}"
                             FixedMinValue="0"
                             FixedMaxValue="100"
-                            LineBrush="#FF1900"
-                            Width="110" Height="130" />
+                            LineBrush="Red"
+                            Width="200" Height="130" />
                     </Border>
 
                     <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Integrated GPU" MetricId="{Binding IntegratedGpuMetricId}" ShowLabel="True"/></Border>
-                    <Border Margin="12" debug:DebugBorder.IsEnabled="False" Classes="feature" BorderBrush="Gray" BorderThickness="1">
+                     <Border Margin="12" debug:DebugBorder.IsEnabled="True">
                         <panels:MetricGraphView
                             Metrics="{Binding Metrics}"
                             HistoryStore="{Binding HistoryStore}"
                             MetricId="{Binding IntegratedGpuMetricId}"
                             FixedMinValue="0"
                             FixedMaxValue="100"
-                            LineBrush="#FF1900"
-                            Width="110" Height="130" />
+                            LineBrush="BlueViolet"
+                            Width="200" Height="130" />
                     </Border>
-
                 </WrapPanel>
             </Border>
         </StackPanel>

@@ -13,6 +13,50 @@ namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 /// </summary>
 public static class MetricGraphMath
 {
+
+     public static IReadOnlyList<(double Value, double NormalizedValue)> ComputeValueAxisTicks(double min, double max, int tickCount = 5)
+    {
+        if (tickCount < 2) tickCount = 2;
+
+        var range = max - min;
+        if (Math.Abs(range) < 0.0001) range = 1;
+
+        var ticks = new List<(double, double)>(tickCount);
+        for (int i = 0; i < tickCount; i++)
+        {
+            var normalized = (double)i / (tickCount - 1);
+            var value = min + normalized * range;
+            ticks.Add((value, normalized));
+        }
+        return ticks;
+    }
+
+    public static IReadOnlyList<(double NormalizedX, string Label)> ComputeTimeAxisTicks(DateTime minTime, DateTime maxTime, int tickCount = 4)
+    {
+        if (tickCount < 2 || maxTime <= minTime)
+            return Array.Empty<(double, string)>();
+
+        var totalSeconds = (maxTime - minTime).TotalSeconds;
+        var ticks = new List<(double, string)>(tickCount);
+
+        for (int i = 0; i < tickCount; i++)
+        {
+            var normalized = (double)i / (tickCount - 1);
+            var secondsAgo = totalSeconds * (1 - normalized);
+            var label = secondsAgo < 1 ? "now" : $"-{secondsAgo:0}s";
+            ticks.Add((normalized, label));
+        }
+        return ticks;
+    }
+
+    public static string FormatAxisValue(double value)
+    {
+        return Math.Abs(value - Math.Round(value)) < 0.05
+            ? Math.Round(value).ToString("0")
+            : value.ToString("0.0");
+    }
+
+
     public static (double Min, double Max) GetValueRange(
         IReadOnlyList<MetricHistoryPoint> history, double? fixedMin = null, double? fixedMax = null)
     {
