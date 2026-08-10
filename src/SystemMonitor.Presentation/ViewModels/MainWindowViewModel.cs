@@ -8,6 +8,7 @@ using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 using SystemMonitor.Application.UseCases;
 using SystemMonitor.Infrastructure.Monitoring.CrossPlatform;
+using SystemMonitor.Infrastructure.Persistence;
 
 namespace SystemMonitor.Presentation.ViewModels;
 
@@ -15,6 +16,7 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IMetricsSnapshotProvider _metricsProvider;
     private readonly IMetricHistoryStore _historyStore;
+    private readonly IMetricHistoryPersistenceService _historyPersistence;
     private readonly IOsMonitorService _os;
     private readonly DispatcherTimer _timer;
 
@@ -40,15 +42,21 @@ public partial class MainWindowViewModel : ViewModelBase
     public IMetricHistoryStore HistoryStore => _historyStore;
 
     public MainWindowViewModel()
-        : this(new CatalogDesignTimeMetricsSnapshotProvider(), new MetricHistoryStore(), new DotNetOsMonitorService())
+        : this(new CatalogDesignTimeMetricsSnapshotProvider(), new MetricHistoryStore(),
+               new DotNetOsMonitorService(), new SqliteMetricHistoryPersistenceService())
     {
     }
 
-    public MainWindowViewModel(IMetricsSnapshotProvider metricsProvider, IMetricHistoryStore historyStore, IOsMonitorService os)
+    public MainWindowViewModel(
+        IMetricsSnapshotProvider metricsProvider,
+        IMetricHistoryStore historyStore,
+        IOsMonitorService os,
+        IMetricHistoryPersistenceService historyPersistence)
     {
         _metricsProvider = metricsProvider;
         _historyStore = historyStore;
         _os = os;
+        _historyPersistence = historyPersistence;
         RefreshMetrics();
         _timer = new DispatcherTimer
         {
@@ -63,6 +71,11 @@ public partial class MainWindowViewModel : ViewModelBase
         var snapshot = _metricsProvider.GetSnapshot();
         Metrics = new ObservableCollection<MetricReading>(snapshot);
         _historyStore.Record(snapshot);
+
+        // Non-blocking — queues onto a background writer, safe to call
+        // every 700ms from this UI-thread timer tick.
+        _historyPersistence.Record(snapshot);
+
         DedicatedGpuMetricId = snapshot.FirstOrDefault(m =>
             m.Id.StartsWith("gpu.usage.") && m.GpuIsIntegrated == false)?.Id;
         IntegratedGpuMetricId = snapshot.FirstOrDefault(m =>
