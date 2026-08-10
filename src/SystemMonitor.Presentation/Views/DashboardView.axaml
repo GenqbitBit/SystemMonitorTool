@@ -1,0 +1,53 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             x:Class="SystemMonitor.Presentation.Views.DashboardView"
+             x:DataType="vm:DashboardViewModel">
+
+    <Design.DataContext>
+        <vm:DashboardViewModel />
+    </Design.DataContext>
+
+    <!-- The dashboard's data table: one Grid per row; identical star
+         columns keep header and rows aligned without a DataGrid.
+         Long labels wrap instead of clipping. -->
+    <Border BorderBrush="Gray" BorderThickness="1" Padding="8" MinWidth="420"
+            VerticalAlignment="Top">
+        <StackPanel Spacing="4">
+
+            <TextBlock Text="Data Table" HorizontalAlignment="Center" Margin="0,0,0,4" />
+
+            <!-- header row -->
+            <Grid ColumnDefinitions="0.6*,1.8*,1.8*,0.5*" Opacity="0.6">
+                <TextBlock Grid.Column="0" Text="CATEGORY" />
+                <TextBlock Grid.Column="1" Text="METRIC" />
+                <TextBlock Grid.Column="2" Text="VALUE" HorizontalAlignment="Right" />
+                <TextBlock Grid.Column="3" Text="UNIT"  HorizontalAlignment="Right" />
+            </Grid>
+
+            <!-- body rows -->
+            <ItemsControl ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MetricTableRow">
+                        <Grid ColumnDefinitions="0.6*,1.8*,1.8*,0.5*">
+                            <TextBlock Grid.Column="0" Text="{Binding Category}" />
+                            <TextBlock Grid.Column="1" Text="{Binding Metric}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Grid.Column="2" Text="{Binding Value}"
+                                       HorizontalAlignment="Right"
+                                       TextWrapping="Wrap"
+                                       Foreground="{StaticResource MetricValueBrush}" />
+                            <TextBlock Grid.Column="3" Text="{Binding Unit}"
+                                       HorizontalAlignment="Right"
+                                       Foreground="{StaticResource MetricValueBrush}" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+        </StackPanel>
+    </Border>
+</UserControl>

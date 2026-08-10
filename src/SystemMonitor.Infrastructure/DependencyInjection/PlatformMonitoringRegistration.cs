@@ -4,6 +4,7 @@ using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Infrastructure.Monitoring.Windows;
 using SystemMonitor.Application.UseCases;
 using SystemMonitor.Infrastructure.Monitoring.CrossPlatform;
+using SystemMonitor.Infrastructure.Persistence;
 namespace SystemMonitor.Infrastructure;
 
 public static class PlatformMonitoringRegistration
@@ -11,7 +12,11 @@ public static class PlatformMonitoringRegistration
     public static IServiceCollection AddPlatformMonitoringServices(this IServiceCollection services)
     {
         services.AddSingleton<IOsMonitorService, DotNetOsMonitorService>();
-        
+
+        // Cross-platform — Microsoft.Data.Sqlite works identically on every
+        // OS, so this doesn't belong inside the Windows-only branch below.
+        services.AddSingleton<IMetricHistoryPersistenceService, SqliteMetricHistoryPersistenceService>();
+
         if (OperatingSystem.IsWindows())
         {
             services.AddSingleton<ICpuMonitorService, WindowsCpuMonitorService>();
