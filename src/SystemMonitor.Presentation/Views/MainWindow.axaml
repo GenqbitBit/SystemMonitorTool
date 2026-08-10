@@ -5,12 +5,13 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:debug="using:SystemMonitor.Presentation.Debugging"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d"
+        d:DesignWidth="1080"
+        d:DesignHeight="1000"
         x:Class="SystemMonitor.Presentation.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
-        Title="SystemMonitor.Presentation"
-        MinWidth="640" MinHeight="480">
+        Title="SystemMonitor.Presentation">
 
     <Design.DataContext>
         <vm:MainWindowViewModel />
@@ -94,6 +95,16 @@
                             FixedMinValue="0"
                             FixedMaxValue="100"
                             LineBrush="DeepSkyBlue"
+                            Width="300" Height="130" />
+                    </Border>
+                    <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Network" 
+                    MetricId="network.download"/></Border>
+                    <Border Margin="12" debug:DebugBorder.IsEnabled="True">
+                        <panels:MetricGraphView
+                            Metrics="{Binding Metrics}"
+                            HistoryStore="{Binding HistoryStore}"
+                            MetricId="network.download"
+                            LineBrush="#FF00EE"
                             Width="300" Height="130" />
                     </Border>
                 </WrapPanel>
