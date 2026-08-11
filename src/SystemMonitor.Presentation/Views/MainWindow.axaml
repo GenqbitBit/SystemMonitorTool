@@ -58,8 +58,11 @@
                                     MetricId="cpu.usage"
                                     FixedMinValue="0"
                                     FixedMaxValue="100"
-                                    LineBrush="#11FF78"
-                                    Width="300" Height="100" />
+                                    Width="350" Height="200">
+                                    <panels:MetricGraphView.ContentRenderer>
+                                        <panels:BrailleAreaGraphRenderer CurveBrush="DarkOrange" AreaBrush="#DD6C43" CellWidth="5" CellHeight="10"/>
+                                    </panels:MetricGraphView.ContentRenderer>
+                                </panels:MetricGraphView>
                             </StackPanel>
                         </Border>
 
@@ -72,8 +75,11 @@
                                     MetricId="memory.usage"
                                     FixedMinValue="0"
                                     FixedMaxValue="100"
-                                    LineBrush="DeepSkyBlue"
-                                    Width="300" Height="100" />
+                                    Width="350" Height="200">
+                                    <panels:MetricGraphView.ContentRenderer>
+                                        <panels:LineGraphRenderer LineBrush="DeepSkyBlue"/>
+                                    </panels:MetricGraphView.ContentRenderer>
+                                </panels:MetricGraphView>
                             </StackPanel>
                         </Border>
 

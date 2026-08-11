@@ -18,6 +18,9 @@ namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 public class MetricGraphView : Control
 {
 
+    public static readonly StyledProperty<IGraphContentRenderer?> ContentRendererProperty =
+        AvaloniaProperty.Register<MetricGraphView, IGraphContentRenderer?>(nameof(ContentRenderer));
+
     public static readonly StyledProperty<IBrush> GridBrushProperty =
     AvaloniaProperty.Register<MetricGraphView, IBrush>(
         nameof(GridBrush),
@@ -134,6 +137,12 @@ public class MetricGraphView : Control
         set => SetValue(AxisFontFamilyProperty, value);
     }
 
+        public IGraphContentRenderer? ContentRenderer
+    {
+        get => GetValue(ContentRendererProperty);
+        set => SetValue(ContentRendererProperty, value);
+    }
+
     static MetricGraphView()
     {
         AffectsRender<MetricGraphView>(
@@ -175,8 +184,6 @@ public class MetricGraphView : Control
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-        // Covers reuse where Metrics was set while this control was detached and
-        // OnPropertyChanged's subscribe step was skipped.
         SubscribeToMetricsCollection();
     }
 
@@ -285,21 +292,16 @@ public class MetricGraphView : Control
         // --- plot area border (visually separates line/grid from the rest of the panel) ---
         context.DrawRectangle(new Pen(AxisBrush, 1), new Rect(plotOrigin, new Size(plotWidth, plotHeight)));
 
-        // --- the line itself, inset into the plot rect ---
+        // --- the plotted content, delegated to the active renderer ---
+        var activeRenderer = ContentRenderer ?? new LineGraphRenderer { LineBrush = LineBrush, LineThickness = LineThickness };
+        var plotRect = new Rect(plotOrigin, new Size(plotWidth, plotHeight));
+        activeRenderer.Draw(context, plotRect, history, minValue, maxValue);
+
+        // --- current value: dot on the line + label (always the view's own LineBrush, regardless of content style) ---
         var points = MetricGraphMath.ComputePoints(history, plotWidth, plotHeight, FixedMinValue, FixedMaxValue);
         if (points.Count == 0)
             return;
 
-        var geometry = new StreamGeometry();
-        using (var ctx = geometry.Open())
-        {
-            ctx.BeginFigure(new Point(plotOrigin.X + points[0].X, plotOrigin.Y + points[0].Y), isFilled: false);
-            for (int i = 1; i < points.Count; i++)
-                ctx.LineTo(new Point(plotOrigin.X + points[i].X, plotOrigin.Y + points[i].Y));
-        }
-        context.DrawGeometry(null, new Pen(LineBrush, LineThickness), geometry);
-
-        // --- current value: dot on the line + label ---
         var last = points[^1];
         var lastPoint = new Point(plotOrigin.X + last.X, plotOrigin.Y + last.Y);
         context.DrawEllipse(LineBrush, null, lastPoint, 2.5, 2.5);
