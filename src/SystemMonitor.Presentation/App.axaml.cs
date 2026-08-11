@@ -23,7 +23,7 @@ public partial class App : Avalonia.Application
         var services = new ServiceCollection();
         services.AddPlatformMonitoringServices();
         services.AddTransient<MainWindowViewModel>();
-        services.AddTransient<DashboardViewModel>();
+        services.AddTransient<MetricsTableViewModel>();
         var provider = services.BuildServiceProvider();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)

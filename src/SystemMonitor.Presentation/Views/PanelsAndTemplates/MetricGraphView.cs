@@ -1,10 +1,13 @@
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Globalization;
 using System.Linq;
 using System;
-using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
@@ -59,6 +62,11 @@ public class MetricGraphView : Control
 
     public static readonly StyledProperty<double?> FixedMaxValueProperty =
     AvaloniaProperty.Register<MetricGraphView, double?>(nameof(FixedMaxValue));
+
+    // Tracks whichever collection instance we're currently subscribed to, so we can
+    // cleanly move the subscription when Metrics is reassigned and remove it when
+    // the control is detached — avoids duplicate handlers and leaked references.
+    private INotifyCollectionChanged? _subscribedCollection;
 
     public double? FixedMinValue
     {
@@ -147,6 +155,63 @@ public class MetricGraphView : Control
         var width = double.IsNaN(Width) ? availableSize.Width : Width;
         var height = double.IsNaN(Height) ? availableSize.Height : Height;
         return new Size(width, height);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+
+        if (change.Property == MetricsProperty)
+        {
+            // Metrics reassigned to a different collection instance (or null) — move
+            // the CollectionChanged subscription onto whatever it points to now.
+            // AffectsRender already handles this case (reference change -> redraw);
+            // this just keeps the subscription in sync for the in-place-mutation case.
+            UnsubscribeFromMetricsCollection();
+            SubscribeToMetricsCollection();
+        }
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        // Covers reuse where Metrics was set while this control was detached and
+        // OnPropertyChanged's subscribe step was skipped.
+        SubscribeToMetricsCollection();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        UnsubscribeFromMetricsCollection();
+    }
+
+    private void SubscribeToMetricsCollection()
+    {
+        if (_subscribedCollection != null || Metrics is not INotifyCollectionChanged incc)
+            return;
+
+        incc.CollectionChanged += OnMetricsCollectionChanged;
+        _subscribedCollection = incc;
+    }
+
+    private void UnsubscribeFromMetricsCollection()
+    {
+        if (_subscribedCollection is null)
+            return;
+
+        _subscribedCollection.CollectionChanged -= OnMetricsCollectionChanged;
+        _subscribedCollection = null;
+    }
+
+    private void OnMetricsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        // In-place mutation (Move/Insert/Replace/RemoveAt from SyncFrom) on the same
+        // collection instance — AffectsRender's reference-equality check on
+        // MetricsProperty never fires for this, so force the redraw explicitly.
+        // Render() re-reads HistoryStore.GetHistory(MetricId) fresh each call, so
+        // this alone is enough to pick up the new data point.
+        InvalidateVisual();
     }
 
     public override void Render(DrawingContext context)

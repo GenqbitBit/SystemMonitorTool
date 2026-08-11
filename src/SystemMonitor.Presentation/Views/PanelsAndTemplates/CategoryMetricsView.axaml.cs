@@ -1,7 +1,9 @@
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
@@ -23,6 +25,13 @@ namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 ///   - ShowLabel (default true)         -> show/hide each reading's Label text
 ///   - ShowValue (default true)         -> show/hide each reading's DisplayValue text
 ///   - ShowCategoryHeader (default true) -> show/hide the header TextBlock entirely
+///
+/// Metrics refresh: the bound ObservableCollection is now mutated in place every
+/// tick (see ObservableCollectionSyncExtensions.SyncFrom) rather than replaced, so
+/// this view can't rely on the Metrics property itself changing. It subscribes to
+/// INotifyCollectionChanged on whichever collection Metrics currently points to,
+/// re-subscribing whenever that property is reassigned to a different instance,
+/// and forces FilteredMetrics to re-evaluate on every collection mutation.
 /// </summary>
 public partial class CategoryMetricsView : UserControl
 {
@@ -60,6 +69,12 @@ public partial class CategoryMetricsView : UserControl
     public static readonly DirectProperty<CategoryMetricsView, IEnumerable<MetricReading>?> FilteredMetricsProperty =
         AvaloniaProperty.RegisterDirect<CategoryMetricsView, IEnumerable<MetricReading>?>(
             nameof(FilteredMetrics), o => o.FilteredMetrics);
+
+    // Tracks whichever collection instance we're currently subscribed to, so we can
+    // unsubscribe cleanly when Metrics is replaced or the view is detached — this
+    // prevents duplicate handlers piling up and keeps a detached view from being
+    // pinned alive by an old collection's event reference.
+    private INotifyCollectionChanged? _subscribedCollection;
 
     public CategoryMetricsView()
     {
@@ -141,6 +156,14 @@ public partial class CategoryMetricsView : UserControl
     {
         base.OnPropertyChanged(change);
 
+        if (change.Property == MetricsProperty)
+        {
+            // Metrics was reassigned to a different collection instance (or null) —
+            // move our CollectionChanged subscription onto whatever it points to now.
+            UnsubscribeFromMetricsCollection();
+            SubscribeToMetricsCollection();
+        }
+
         if (change.Property == MetricsProperty
             || change.Property == CategoryLabelProperty
             || change.Property == MetricIdProperty
@@ -149,5 +172,45 @@ public partial class CategoryMetricsView : UserControl
         {
             RaisePropertyChanged(FilteredMetricsProperty, default, default);
         }
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        // Covers reuse (e.g. a recycled/re-attached control) where Metrics was set
+        // while the view was detached and OnPropertyChanged's subscribe was skipped.
+        SubscribeToMetricsCollection();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        UnsubscribeFromMetricsCollection();
+    }
+
+    private void SubscribeToMetricsCollection()
+    {
+        if (_subscribedCollection != null || Metrics is not INotifyCollectionChanged incc)
+            return;
+
+        incc.CollectionChanged += OnMetricsCollectionChanged;
+        _subscribedCollection = incc;
+    }
+
+    private void UnsubscribeFromMetricsCollection()
+    {
+        if (_subscribedCollection is null)
+            return;
+
+        _subscribedCollection.CollectionChanged -= OnMetricsCollectionChanged;
+        _subscribedCollection = null;
+    }
+
+    private void OnMetricsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        // An in-place mutation (Move/Insert/Replace/RemoveAt from SyncFrom) on the
+        // same collection instance — the Metrics property itself hasn't changed, so
+        // bindings won't know FilteredMetrics is stale unless we say so explicitly.
+        RaisePropertyChanged(FilteredMetricsProperty, default, default);
     }
 }

@@ -1,48 +1,50 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d"
-             x:Class="SystemMonitor.Presentation.Views.DashboardView"
-             x:DataType="vm:DashboardViewModel">
+             x:Class="SystemMonitor.Presentation.Views.MetricsTableView"
+             x:DataType="vm:MetricsTableViewModel">
 
     <Design.DataContext>
-        <vm:DashboardViewModel />
+        <vm:MetricsTableViewModel />
     </Design.DataContext>
 
-    <!-- The dashboard's data table: one Grid per row; identical star
+    <!-- This table: one Grid per row; identical star
          columns keep header and rows aligned without a DataGrid.
          Long labels wrap instead of clipping. -->
     <Border BorderBrush="Gray" BorderThickness="1" Padding="8" MinWidth="420"
             VerticalAlignment="Top">
         <StackPanel Spacing="4">
 
-            <TextBlock Text="Data Table" HorizontalAlignment="Center" Margin="0,0,0,4" />
+            <TextBlock Text="Data Table" FontSize="11" HorizontalAlignment="Center" Margin="0,0,0,4" />
 
             <!-- header row -->
             <Grid ColumnDefinitions="0.6*,1.8*,1.8*,0.5*" Opacity="0.6">
-                <TextBlock Grid.Column="0" Text="CATEGORY" />
-                <TextBlock Grid.Column="1" Text="METRIC" />
-                <TextBlock Grid.Column="2" Text="VALUE" HorizontalAlignment="Right" />
-                <TextBlock Grid.Column="3" Text="UNIT"  HorizontalAlignment="Right" />
+                <TextBlock Grid.Column="0" Text="CATEGORY" FontSize="9" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="1" Text="METRIC" FontSize="9" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="2" Text="VALUE" FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                <TextBlock Grid.Column="3" Text="UNIT"  FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Right" />
             </Grid>
+
+            <Rectangle Height="1" Fill="Gray" Opacity="0.25" Margin="0,0,0,2" />
 
             <!-- body rows -->
             <ItemsControl ItemsSource="{Binding Rows}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:MetricTableRow">
-                        <Grid ColumnDefinitions="0.6*,1.8*,1.8*,0.5*">
-                            <TextBlock Grid.Column="0" Text="{Binding Category}" />
+                        <Grid ColumnDefinitions="0.6*,1.8*,1.8*,0.5*" Margin="0,1">
+                            <TextBlock Grid.Column="0" Text="{Binding Category}" FontSize="10" />
                             <TextBlock Grid.Column="1" Text="{Binding Metric}"
+                                       FontSize="10"
                                        TextWrapping="Wrap" />
                             <TextBlock Grid.Column="2" Text="{Binding Value}"
+                                       FontSize="10"
                                        HorizontalAlignment="Right"
                                        TextWrapping="Wrap"
-                                       Foreground="{StaticResource MetricValueBrush}" />
+                                       Foreground="{DynamicResource MetricValueBrush}" />
                             <TextBlock Grid.Column="3" Text="{Binding Unit}"
+                                       FontSize="10"
                                        HorizontalAlignment="Right"
-                                       Foreground="{StaticResource MetricValueBrush}" />
+                                       Foreground="{DynamicResource MetricValueBrush}" />
                         </Grid>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>

@@ -1,7 +1,7 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Collections.ObjectModel;
+using System.Threading;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SystemMonitor.Application.Interfaces;
@@ -9,16 +9,28 @@ using SystemMonitor.Domain.Models;
 using SystemMonitor.Application.UseCases;
 using SystemMonitor.Infrastructure.Monitoring.CrossPlatform;
 using SystemMonitor.Infrastructure.Persistence;
+using SystemMonitor.Presentation.Common;
 
 namespace SystemMonitor.Presentation.ViewModels;
 
-public partial class MainWindowViewModel : ViewModelBase
+public partial class MainWindowViewModel : ViewModelBase, IDisposable
 {
     private readonly IMetricsSnapshotProvider _metricsProvider;
     private readonly IMetricHistoryStore _historyStore;
     private readonly IMetricHistoryPersistenceService _historyPersistence;
     private readonly IOsMonitorService _os;
-    private readonly DispatcherTimer _timer;
+
+    // A single dedicated background thread drives polling instead of
+    // DispatcherTimer.Tick (which ran the expensive work on the UI thread)
+    // or Task.Run per tick (which hands the work to a *different* ThreadPool
+    // thread every cycle). Hardware-access libraries such as
+    // LibreHardwareMonitorLib can behave inconsistently when called from a
+    // different thread each time; a dedicated thread gives GetSnapshot() the
+    // same consistent calling thread every cycle, matching how the original
+    // DispatcherTimer.Tick always ran on the same (UI) thread — just moved
+    // off it.
+    private readonly Thread? _pollingThread;
+    private readonly CancellationTokenSource _pollingCts = new();
 
     [ObservableProperty]
     private ObservableCollection<MetricReading> metrics = new();
@@ -44,7 +56,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public MainWindowViewModel()
     : this(new CatalogDesignTimeMetricsSnapshotProvider(), new MetricHistoryStore(),
            new DotNetOsMonitorService(), new SqliteMetricHistoryPersistenceService(),
-           new DashboardViewModel(new CatalogDesignTimeMetricsSnapshotProvider()))
+           new MetricsTableViewModel(new CatalogDesignTimeMetricsSnapshotProvider()))
     {
     }
 
@@ -53,62 +65,125 @@ public partial class MainWindowViewModel : ViewModelBase
         IMetricHistoryStore historyStore,
         IOsMonitorService os,
         IMetricHistoryPersistenceService historyPersistence,
-        DashboardViewModel dashboard)
+        MetricsTableViewModel metricsTable)
     {
         _metricsProvider = metricsProvider;
         _historyStore = historyStore;
         _os = os;
         _historyPersistence = historyPersistence;
-        Dashboard = dashboard;
-        RefreshMetrics();
-        _timer = new DispatcherTimer
-        {
-        Interval = TimeSpan.FromMilliseconds(700)
-        };
-        _timer.Tick += (_, _) => RefreshMetrics();
+        MetricsTable = metricsTable;
+
+        // One synchronous acquisition up front so the designer and the first
+        // frame have data immediately, matching the original constructor's
+        // behavior of calling RefreshMetrics() before the timer starts.
+        AcquireAndApply();
+
         if (!Avalonia.Controls.Design.IsDesignMode)
-            _timer.Start();
-}
+        {
+            _pollingThread = new Thread(PollLoop)
+            {
+                IsBackground = true,
+                Name = "MetricsPolling"
+            };
+            // WMI/COM-based hardware access can require an STA thread. The UI
+            // thread that ran the first AcquireAndApply() call above is STA
+            // by convention on Windows; this dedicated thread defaults to MTA
+            // unless told otherwise, which can make every call after the
+            // first one silently fail for COM-based providers.
+            if (OperatingSystem.IsWindows())
+                _pollingThread.SetApartmentState(ApartmentState.STA);
+            _pollingThread.Start();
+        }
+    }
 
-// The dashboard shell's view-model — the data table today,
-// more dashboard features tomorrow.
-public DashboardViewModel Dashboard { get; }
+    // This table's view-model.
+    public MetricsTableViewModel MetricsTable { get; }
 
-    private void RefreshMetrics()
+    private void PollLoop()
     {
+        var stopwatch = new System.Diagnostics.Stopwatch();
+        var interval = TimeSpan.FromMilliseconds(700);
+
+        while (!_pollingCts.IsCancellationRequested)
+        {
+            stopwatch.Restart();
+
+            try
+            {
+                AcquireAndApply();
+            }
+            catch
+            {
+                // A single failed acquisition shouldn't kill the polling loop —
+                // just skip this tick and try again next cycle.
+            }
+
+            var remaining = interval - stopwatch.Elapsed;
+            if (remaining > TimeSpan.Zero)
+                Thread.Sleep(remaining);
+        }
+    }
+
+    private void AcquireAndApply()
+    {
+        // Acquisition happens synchronously here, on whichever thread called
+        // this method (the dedicated polling thread after startup, or the
+        // constructor's thread for the very first call) — never the UI
+        // thread once polling is running.
         var snapshot = _metricsProvider.GetSnapshot();
-        Metrics = new ObservableCollection<MetricReading>(snapshot);
+
         _historyStore.Record(snapshot);
+        _historyPersistence.Record(snapshot); // already non-blocking internally
 
-        // Non-blocking — queues onto a background writer, safe to call
-        // every 700ms from this UI-thread timer tick.
-        _historyPersistence.Record(snapshot);
-
-        DedicatedGpuMetricId = snapshot.FirstOrDefault(m =>
+        var dedicatedId = snapshot.FirstOrDefault(m =>
             m.Id.StartsWith("gpu.usage.") && m.GpuIsIntegrated == false)?.Id;
-        IntegratedGpuMetricId = snapshot.FirstOrDefault(m =>
+        var integratedId = snapshot.FirstOrDefault(m =>
             m.Id.StartsWith("gpu.usage.") && m.GpuIsIntegrated == true)?.Id;
-        DetectedGpus = new ObservableCollection<GpuDeviceDisplayInfo>(
-            snapshot
-                .Where(m => m.Id.StartsWith("gpu.usage.") && m.GpuDeviceId != null)
-                .Select(m => new GpuDeviceDisplayInfo(
-                    m.GpuDeviceId!,
-                    m.GpuIndex ?? 0,
-                    m.GpuIsIntegrated ?? false,
-                    $"GPU {m.GpuIndex} ({(m.GpuIsIntegrated == true ? "Integrated" : "Dedicated")})"))
-                .DistinctBy(g => g.DeviceId)
-                .OrderBy(g => g.Index));
+
+        var gpus = snapshot
+            .Where(m => m.Id.StartsWith("gpu.usage.") && m.GpuDeviceId != null)
+            .Select(m => new GpuDeviceDisplayInfo(
+                m.GpuDeviceId!,
+                m.GpuIndex ?? 0,
+                m.GpuIsIntegrated ?? false,
+                $"GPU {m.GpuIndex} ({(m.GpuIsIntegrated == true ? "Integrated" : "Dedicated")})"))
+            .DistinctBy(g => g.DeviceId)
+            .OrderBy(g => g.Index)
+            .ToList();
 
         // Second consumer of the singleton OS service. Safe by design:
         // CpuPercent is computed against real elapsed time between calls,
         // not against tick counts, so two callers can't corrupt the rates.
-        TopProcesses = new ObservableCollection<ProcessInfo>(_os.GetCurrentInfo().TopProcesses);
+        var processes = _os.GetCurrentInfo().TopProcesses;
+
+        void Apply()
+        {
+            Metrics.SyncFrom(snapshot, m => m.Id);
+            DedicatedGpuMetricId = dedicatedId;
+            IntegratedGpuMetricId = integratedId;
+            DetectedGpus.SyncFrom(gpus, g => g.DeviceId);
+            TopProcesses.SyncFrom(processes, p => p.ProcessId);
+        }
+
+        // The very first call (from the constructor) runs before polling has
+        // started and typically already has UI-thread access; every call
+        // after that comes from the dedicated polling thread and must
+        // marshal back to the UI thread.
+        if (Dispatcher.UIThread.CheckAccess())
+            Apply();
+        else
+            Dispatcher.UIThread.Post(Apply);
     }
 
-    private static string? FindGpuMetricId(IReadOnlyList<MetricReading> snapshot, bool isIntegrated)
+    /// <summary>
+    /// Signals the polling thread to stop and waits briefly for it to exit.
+    /// Call this on window close/app shutdown so the background thread doesn't
+    /// keep running (and keep polling hardware) past the window's lifetime.
+    /// </summary>
+    public void Dispose()
     {
-        var tag = isIntegrated ? "Integrated" : "Dedicated";
-        return snapshot.FirstOrDefault(m =>
-            m.Id.StartsWith("gpu.usage.") && m.Label.Contains($"- {tag}:"))?.Id;
+        _pollingCts.Cancel();
+        _pollingThread?.Join(TimeSpan.FromSeconds(2));
+        _pollingCts.Dispose();
     }
 }

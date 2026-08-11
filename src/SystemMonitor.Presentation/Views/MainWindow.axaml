@@ -113,7 +113,7 @@
                                     HistoryStore="{Binding HistoryStore}"
                                     MetricId="network.upload"
                                     LineBrush="#FF9100"
-                                    Width="150" Height="100" />
+                                    Width="170" Height="110" />
                             </StackPanel>
                         </Border>
 
@@ -125,7 +125,7 @@
                                     HistoryStore="{Binding HistoryStore}"
                                     MetricId="network.download"
                                     LineBrush="#E90DD3"
-                                    Width="150" Height="90" />
+                                    Width="170" Height="110" />
                             </StackPanel>
                         </Border>
 
@@ -135,12 +135,12 @@
 
             </StackPanel>
 
-            <!-- Right column: the dashboard data table, hugging its content -->
-            <views:DashboardView Grid.Column="1"
-                                 DataContext="{Binding Dashboard}"
-                                 Width="500"
-                                 Margin="0,16,16,16"
-                                 VerticalAlignment="Top" />
-        </Grid>
+            <!-- Right column: this table, hugging its content -->
+            <views:MetricsTableView Grid.Column="1"
+                                DataContext="{Binding MetricsTable}"
+                                Width="500"
+                                Margin="0,16,16,16"
+                                VerticalAlignment="Top" />
+                    </Grid>
     </ScrollViewer>
 </Window>
