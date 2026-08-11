@@ -21,9 +21,9 @@ public class BrailleGraphRenderer : IGraphContentRenderer
     public FontFamily FontFamily { get; set; } = new FontFamily("Consolas");
 
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
-        double minValue, double maxValue, bool baselineAtTop = false)
+        double minValue, double maxValue, DateTime windowStart, DateTime windowEnd, bool baselineAtTop = false)
     {
-        var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, minValue, maxValue);
+        var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, windowStart, windowEnd, minValue, maxValue);   
         if (points.Count == 0)
             return;
 

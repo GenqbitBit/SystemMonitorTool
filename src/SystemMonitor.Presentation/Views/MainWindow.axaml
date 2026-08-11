@@ -62,7 +62,7 @@
                                     <panels:MetricGraphView.ContentRenderer>
                                         <panels:BrailleAreaGraphRenderer
                                             CurveTopColor="Black" CurveBottomColor="Black"
-                                            AreaTopColor="#73FC09" AreaBottomColor="DeepPink"
+                                            AreaTopColor="#67E506" AreaBottomColor="#0DCBD5"
                                             BandCount="8" CellWidth="5" CellHeight="10"/>
                                     </panels:MetricGraphView.ContentRenderer>
                                 </panels:MetricGraphView>

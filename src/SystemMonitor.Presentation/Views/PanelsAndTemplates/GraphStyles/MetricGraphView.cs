@@ -52,11 +52,6 @@ public class MetricGraphView : Control
     public static readonly StyledProperty<double?> FixedMaxValueProperty =
         AvaloniaProperty.Register<MetricGraphView, double?>(nameof(FixedMaxValue));
 
-    // --- Mirror mode: when SecondaryMetricId is set, the plot splits into a
-    // top half (primary series, growing up from a center baseline) and a
-    // bottom half (secondary series, growing down from that same baseline)
-    // — e.g. download/upload sharing one graph. Single-series rendering
-    // (SecondaryMetricId unset) is completely unaffected by this branch.
     public static readonly StyledProperty<string?> SecondaryMetricIdProperty =
         AvaloniaProperty.Register<MetricGraphView, string?>(nameof(SecondaryMetricId));
 
@@ -69,15 +64,9 @@ public class MetricGraphView : Control
     public static readonly StyledProperty<IBrush> BaselineBrushProperty =
         AvaloniaProperty.Register<MetricGraphView, IBrush>(nameof(BaselineBrush), Brushes.Gray);
 
-    // --- Grid toggle: OFF by default for a clean minimal look (border +
-    // plotted content only). Border rendering is unconditional and stays
-    // independent of this flag.
     public static readonly StyledProperty<bool> ShowGridProperty =
         AvaloniaProperty.Register<MetricGraphView, bool>(nameof(ShowGrid), defaultValue: false);
 
-    // Tracks whichever collection instance we're currently subscribed to, so we can
-    // cleanly move the subscription when Metrics is reassigned and remove it when
-    // the control is detached — avoids duplicate handlers and leaked references.
     private INotifyCollectionChanged? _subscribedCollection;
 
     public double? FixedMinValue
@@ -270,8 +259,8 @@ public class MetricGraphView : Control
             return;
 
         // Margins only exist to reserve space for grid/axis labels. When the
-        // grid is off, the plot area should fill the full control bounds so
-        // the border IS the graph area — no leftover reserved space.
+        // grid is off, the plot area fills the full control bounds so the
+        // border IS the graph area — no leftover reserved space.
         double leftMargin, bottomMargin, topMargin, rightMargin;
         if (ShowGrid)
         {
@@ -308,6 +297,14 @@ public class MetricGraphView : Control
     {
         var history = HistoryStore!.GetHistory(MetricId!);
 
+        // Fixed, wall-clock-anchored window — NOT derived from the data's own
+        // span. This is what makes the graph scroll like an ECG monitor:
+        // a point's X position depends only on its own timestamp vs. this
+        // window, never on how much data currently exists or how "full" the
+        // history is.
+        var windowEnd = DateTime.UtcNow;
+        var windowStart = windowEnd - HistoryStore!.Window;
+
         const double fontSize = 10;
         var typeface = new Typeface(AxisFontFamily);
         var (minValue, maxValue) = MetricGraphMath.GetValueRange(history, FixedMinValue, FixedMaxValue);
@@ -328,17 +325,15 @@ public class MetricGraphView : Control
                 context.DrawText(text, new Point(2, Math.Clamp(y - text.Height / 2, 0, bounds.Height - text.Height)));
             }
 
-            if (history.Count >= 2)
+            // CHANGED: ticks are keyed off the fixed window, not history[0]/history[^1].
+            foreach (var (normalizedX, label) in MetricGraphMath.ComputeTimeAxisTicks(windowStart, windowEnd, timeTickCount))
             {
-                foreach (var (normalizedX, label) in MetricGraphMath.ComputeTimeAxisTicks(history[0].Timestamp, history[^1].Timestamp, timeTickCount))
-                {
-                    var x = plotOrigin.X + normalizedX * plotWidth;
-                    context.DrawLine(new Pen(GridBrush, 1), new Point(x, plotOrigin.Y), new Point(x, plotOrigin.Y + plotHeight));
+                var x = plotOrigin.X + normalizedX * plotWidth;
+                context.DrawLine(new Pen(GridBrush, 1), new Point(x, plotOrigin.Y), new Point(x, plotOrigin.Y + plotHeight));
 
-                    var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
-                    var textX = Math.Clamp(x - text.Width / 2, plotOrigin.X, bounds.Width - text.Width);
-                    context.DrawText(text, new Point(textX, plotOrigin.Y + plotHeight + 2));
-                }
+                var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
+                var textX = Math.Clamp(x - text.Width / 2, plotOrigin.X, bounds.Width - text.Width);
+                context.DrawText(text, new Point(textX, plotOrigin.Y + plotHeight + 2));
             }
         }
 
@@ -351,10 +346,10 @@ public class MetricGraphView : Control
 
         using (context.PushClip(plotRect))
         {
-            activeRenderer.Draw(context, plotRect, history, minValue, maxValue);
+            activeRenderer.Draw(context, plotRect, history, minValue, maxValue, windowStart, windowEnd);
         }
 
-        var points = MetricGraphMath.ComputePoints(history, plotWidth, plotHeight, minValue, maxValue);
+        var points = MetricGraphMath.ComputePoints(history, plotWidth, plotHeight, windowStart, windowEnd, minValue, maxValue);
         if (points.Count == 0)
             return;
 
@@ -365,6 +360,10 @@ public class MetricGraphView : Control
     {
         var primaryHistory = HistoryStore!.GetHistory(MetricId!);
         var secondaryHistory = HistoryStore!.GetHistory(SecondaryMetricId!);
+
+        // Same fixed window applied to both halves so they scroll in lockstep.
+        var windowEnd = DateTime.UtcNow;
+        var windowStart = windowEnd - HistoryStore!.Window;
 
         const double fontSize = 10;
         const double halfGap = 1; // thin visual seam either side of the baseline
@@ -393,19 +392,15 @@ public class MetricGraphView : Control
                 context.DrawLine(new Pen(GridBrush, 1), new Point(bottomRect.X, yBottom), new Point(bottomRect.X + bottomRect.Width, yBottom));
             }
 
-            if (combined.Count >= 2)
+            // CHANGED: ticks are keyed off the fixed window, not combined.Min/Max(p => p.Timestamp).
+            foreach (var (normalizedX, label) in MetricGraphMath.ComputeTimeAxisTicks(windowStart, windowEnd, timeTickCount))
             {
-                var minTime = combined.Min(p => p.Timestamp);
-                var maxTime = combined.Max(p => p.Timestamp);
-                foreach (var (normalizedX, label) in MetricGraphMath.ComputeTimeAxisTicks(minTime, maxTime, timeTickCount))
-                {
-                    var x = plotOrigin.X + normalizedX * plotWidth;
-                    context.DrawLine(new Pen(GridBrush, 1), new Point(x, plotOrigin.Y), new Point(x, plotOrigin.Y + plotHeight));
+                var x = plotOrigin.X + normalizedX * plotWidth;
+                context.DrawLine(new Pen(GridBrush, 1), new Point(x, plotOrigin.Y), new Point(x, plotOrigin.Y + plotHeight));
 
-                    var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
-                    var textX = Math.Clamp(x - text.Width / 2, plotOrigin.X, bounds.Width - text.Width);
-                    context.DrawText(text, new Point(textX, plotOrigin.Y + plotHeight + 2));
-                }
+                var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
+                var textX = Math.Clamp(x - text.Width / 2, plotOrigin.X, bounds.Width - text.Width);
+                context.DrawText(text, new Point(textX, plotOrigin.Y + plotHeight + 2));
             }
         }
 
@@ -418,12 +413,12 @@ public class MetricGraphView : Control
 
         using (context.PushClip(topRect))
         {
-            primaryRenderer.Draw(context, topRect, primaryHistory, minValue, maxValue);
+            primaryRenderer.Draw(context, topRect, primaryHistory, minValue, maxValue, windowStart, windowEnd);
         }
 
         using (context.PushClip(bottomRect))
         {
-            secondaryRenderer.Draw(context, bottomRect, secondaryHistory, maxValue, minValue, baselineAtTop: true);
+            secondaryRenderer.Draw(context, bottomRect, secondaryHistory, maxValue, minValue, windowStart, windowEnd, baselineAtTop: true);
         }
 
         // Baseline drawn last so it sits cleanly over both halves' edges.
@@ -432,11 +427,11 @@ public class MetricGraphView : Control
         var primaryUnit = GetUnitSuffix(MetricId);
         var secondaryUnit = GetUnitSuffix(SecondaryMetricId);
 
-        var primaryPoints = MetricGraphMath.ComputePoints(primaryHistory, topRect.Width, topRect.Height, minValue, maxValue);
+        var primaryPoints = MetricGraphMath.ComputePoints(primaryHistory, topRect.Width, topRect.Height, windowStart, windowEnd, minValue, maxValue);
         if (primaryPoints.Count > 0)
             DrawCurrentValueLabel(context, topRect.Position, primaryPoints, primaryHistory, LineBrush, primaryUnit, typeface, fontSize, bounds, labelYOffset: -4);
 
-        var secondaryPoints = MetricGraphMath.ComputePoints(secondaryHistory, bottomRect.Width, bottomRect.Height, maxValue, minValue);
+        var secondaryPoints = MetricGraphMath.ComputePoints(secondaryHistory, bottomRect.Width, bottomRect.Height, windowStart, windowEnd, maxValue, minValue);
         if (secondaryPoints.Count > 0)
             DrawCurrentValueLabel(context, bottomRect.Position, secondaryPoints, secondaryHistory, SecondaryLineBrush, secondaryUnit, typeface, fontSize, bounds, labelYOffset: 12);
     }

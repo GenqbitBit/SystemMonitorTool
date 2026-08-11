@@ -13,8 +13,7 @@ namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 /// </summary>
 public static class MetricGraphMath
 {
-
-     public static IReadOnlyList<(double Value, double NormalizedValue)> ComputeValueAxisTicks(double min, double max, int tickCount = 5)
+    public static IReadOnlyList<(double Value, double NormalizedValue)> ComputeValueAxisTicks(double min, double max, int tickCount = 5)
     {
         if (tickCount < 2) tickCount = 2;
 
@@ -56,7 +55,6 @@ public static class MetricGraphMath
             : value.ToString("0.0");
     }
 
-
     public static (double Min, double Max) GetValueRange(
         IReadOnlyList<MetricHistoryPoint> history, double? fixedMin = null, double? fixedMax = null)
     {
@@ -81,28 +79,34 @@ public static class MetricGraphMath
         return (min, max);
     }
 
+    // CHANGED: domain is now the caller-supplied [windowStart, windowEnd]
+    // (a fixed, wall-clock-anchored span) instead of [history[0].Timestamp,
+    // history[^1].Timestamp] (the data's own span). This is what makes the
+    // graph scroll like an ECG monitor instead of rescaling every tick —
+    // a point's X position only depends on its own timestamp vs. the fixed
+    // window, never on how much data currently exists.
     public static IReadOnlyList<(double X, double Y)> ComputePoints(
         IReadOnlyList<MetricHistoryPoint> history, double width, double height,
+        DateTime windowStart, DateTime windowEnd,
         double? fixedMin = null, double? fixedMax = null)
     {
-        if (history.Count < 2 || width <= 0 || height <= 0)
+        if (width <= 0 || height <= 0 || history.Count == 0)
             return Array.Empty<(double, double)>();
 
         var (minValue, maxValue) = GetValueRange(history, fixedMin, fixedMax);
         var valueRange = maxValue - minValue;
 
-        var minTime = history[0].Timestamp;
-        var maxTime = history[^1].Timestamp;
-        var timeSpanSeconds = (maxTime - minTime).TotalSeconds;
-        if (timeSpanSeconds <= 0) timeSpanSeconds = 1;
+        var windowSeconds = (windowEnd - windowStart).TotalSeconds;
+        if (windowSeconds <= 0) windowSeconds = 1;
 
         var points = new (double X, double Y)[history.Count];
         for (int i = 0; i < history.Count; i++)
         {
             var point = history[i];
-            var x = (point.Timestamp - minTime).TotalSeconds / timeSpanSeconds * width;
-            var normalized = (point.Value - minValue) / valueRange;
-            var y = height - (normalized * height);
+            var normalizedX = (point.Timestamp - windowStart).TotalSeconds / windowSeconds;
+            var x = Math.Clamp(normalizedX, 0, 1) * width; // guards a sample landing a beat after windowEnd was captured
+            var normalizedY = (point.Value - minValue) / valueRange;
+            var y = height - (normalizedY * height);
             points[i] = (x, y);
         }
 
