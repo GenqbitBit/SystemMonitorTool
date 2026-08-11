@@ -13,6 +13,8 @@ public sealed class MetricHistoryStore : IMetricHistoryStore
         _window = window ?? TimeSpan.FromSeconds(60);
     }
 
+    public TimeSpan Window => _window;
+
     public void Record(IReadOnlyList<MetricReading> snapshot)
     {
         var now = DateTime.UtcNow;

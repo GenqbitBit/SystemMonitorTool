@@ -15,11 +15,16 @@ public class BlockAreaGraphRenderer : IGraphContentRenderer
     public int BandCount { get; set; } = 5;
 
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
-        double minValue, double maxValue, bool baselineAtTop = false)
+        double minValue, double maxValue, DateTime windowStart, DateTime windowEnd, bool baselineAtTop = false)
     {
-        var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, minValue, maxValue);
+        var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, windowStart, windowEnd, minValue, maxValue);
         if (points.Count == 0)
             return;
+
+        // Nothing real to draw before the first sample's X — skip those
+        // columns instead of letting InterpolateYAt flat-extrapolate the
+        // first value backward into the empty part of the window.
+        var firstDataX = points[0].X;
 
         var step = BlockWidth + BlockGap;
         var columnCount = (int)(plotRect.Width / step);
@@ -29,6 +34,7 @@ public class BlockAreaGraphRenderer : IGraphContentRenderer
         {
             var x = col * step;
             if (x > plotRect.Width) break;
+            if (x + BlockWidth < firstDataX) continue;
 
             var y = BlockGraphMath.InterpolateYAt(points, x);
             var curveY = plotRect.Y + y;

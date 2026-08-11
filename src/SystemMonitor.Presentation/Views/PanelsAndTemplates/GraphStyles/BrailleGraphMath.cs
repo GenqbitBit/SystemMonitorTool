@@ -41,10 +41,17 @@ public static class BrailleGraphMath
         var subDotWidth = cellWidth / SubCols;
         var subDotHeight = cellHeight / SubRows;
 
+        // Nothing real to draw before the first sample's X — skip those
+        // columns entirely instead of letting InterpolateY flat-extrapolate
+        // the first value backward, which would paint a solid block over
+        // the empty portion of a scrolling/partially-filled window.
+        var firstDataX = curvePoints[0].X;
+
         for (int col = 0; col < columnCount; col++)
         {
             var cellLeft = col * cellWidth;
             if (cellLeft > width) break;
+            if (cellLeft + cellWidth < firstDataX) continue;
 
             var y0 = InterpolateY(curvePoints, Math.Min(cellLeft + subDotWidth * 0.5, width));
             var y1 = InterpolateY(curvePoints, Math.Min(cellLeft + subDotWidth * 1.5, width));
@@ -83,10 +90,15 @@ public static class BrailleGraphMath
         var subDotWidth = cellWidth / SubCols;
         var subDotHeight = cellHeight / SubRows;
 
+        // Same reasoning as ComputeBrailleCells — don't fill columns that
+        // sit before any real data exists yet.
+        var firstDataX = curvePoints[0].X;
+
         for (int col = 0; col < columnCount; col++)
         {
             var cellLeft = col * cellWidth;
             if (cellLeft > width) break;
+            if (cellLeft + cellWidth < firstDataX) continue;
 
             var y0 = InterpolateY(curvePoints, Math.Min(cellLeft + subDotWidth * 0.5, width));
             var y1 = InterpolateY(curvePoints, Math.Min(cellLeft + subDotWidth * 1.5, width));
@@ -113,7 +125,7 @@ public static class BrailleGraphMath
 
         return cells;
     }
-    
+
     public static char ToBrailleChar(int mask) => (char)(0x2800 + (mask & 0xFF));
 
     private static double InterpolateY(IReadOnlyList<(double X, double Y)> points, double x)
