@@ -16,7 +16,7 @@ public class LineGraphRenderer : IGraphContentRenderer
     public double LineThickness { get; set; } = 1.5;
 
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
-        double minValue, double maxValue)
+        double minValue, double maxValue, bool baselineAtTop = false)
     {
         var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, minValue, maxValue);
         if (points.Count == 0)

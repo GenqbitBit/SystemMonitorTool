@@ -72,7 +72,7 @@ public static class BrailleGraphMath
 
     public static IReadOnlyList<(double CellX, double CellY, int Mask)> ComputeBrailleAreaCells(
         IReadOnlyList<(double X, double Y)> curvePoints, double width, double height,
-        double cellWidth, double cellHeight)
+        double cellWidth, double cellHeight, bool fillTowardTop = false)
     {
         if (curvePoints.Count < 2 || width <= 0 || height <= 0 || cellWidth <= 0 || cellHeight <= 0)
             return Array.Empty<(double, double, int)>();
@@ -96,16 +96,14 @@ public static class BrailleGraphMath
                 var cellTop = row * cellHeight;
                 if (cellTop > height) break;
 
-                // Unlike ComputeBrailleCells (which only lights a sub-dot when
-                // it sits ON the curve), this lights every sub-dot BELOW the
-                // curve too — i.e. between the curve and the plot floor —
-                // which is what actually produces a filled area.
                 var mask = 0;
                 for (int subRow = 0; subRow < SubRows; subRow++)
                 {
                     var subY = cellTop + subDotHeight * (subRow + 0.5);
-                    if (subY >= y0) mask |= DotBits[subRow, 0];
-                    if (subY >= y1) mask |= DotBits[subRow, 1];
+                    var lit0 = fillTowardTop ? subY <= y0 : subY >= y0;
+                    var lit1 = fillTowardTop ? subY <= y1 : subY >= y1;
+                    if (lit0) mask |= DotBits[subRow, 0];
+                    if (lit1) mask |= DotBits[subRow, 1];
                 }
 
                 if (mask != 0)
@@ -115,7 +113,7 @@ public static class BrailleGraphMath
 
         return cells;
     }
-
+    
     public static char ToBrailleChar(int mask) => (char)(0x2800 + (mask & 0xFF));
 
     private static double InterpolateY(IReadOnlyList<(double X, double Y)> points, double x)

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Avalonia;
@@ -5,7 +6,6 @@ using Avalonia.Media;
 using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
-
 /// <summary>
 /// btop-style smooth dot curve using Unicode braille packing (see
 /// BrailleGraphMath) instead of one glyph per sample point — much higher
@@ -21,7 +21,7 @@ public class BrailleGraphRenderer : IGraphContentRenderer
     public FontFamily FontFamily { get; set; } = new FontFamily("Consolas");
 
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
-        double minValue, double maxValue)
+        double minValue, double maxValue, bool baselineAtTop = false)
     {
         var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, minValue, maxValue);
         if (points.Count == 0)
@@ -30,7 +30,7 @@ public class BrailleGraphRenderer : IGraphContentRenderer
         var typeface = new Typeface(FontFamily);
 
         foreach (var (cellX, cellY, mask) in BrailleGraphMath.ComputeBrailleCells(
-                     points, plotRect.Width, plotRect.Height, CellWidth, CellHeight))
+                    points, plotRect.Width, plotRect.Height, CellWidth, CellHeight))
         {
             var ch = BrailleGraphMath.ToBrailleChar(mask);
             var text = new FormattedText(ch.ToString(), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
