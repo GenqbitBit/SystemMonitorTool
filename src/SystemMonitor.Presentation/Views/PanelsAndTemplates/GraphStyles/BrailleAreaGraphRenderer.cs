@@ -17,8 +17,8 @@ public class BrailleAreaGraphRenderer : IGraphContentRenderer
 {
     public IBrush CurveBrush { get; set; } = Brushes.LimeGreen;
     public IBrush AreaBrush { get; set; } = new SolidColorBrush(Color.FromArgb(90, 50, 205, 130));
-    public double CellWidth { get; set; } = 6;
-    public double CellHeight { get; set; } = 12;
+    public double CellWidth { get; set; } = 3;
+    public double CellHeight { get; set; } = 10;
     public double FontSize { get; set; } = 10;
     public FontFamily FontFamily { get; set; } = new FontFamily("Consolas");
 

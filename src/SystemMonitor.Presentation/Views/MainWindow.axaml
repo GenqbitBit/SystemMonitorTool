@@ -60,7 +60,7 @@
                                     FixedMaxValue="100"
                                     Width="350" Height="200">
                                     <panels:MetricGraphView.ContentRenderer>
-                                        <panels:BrailleAreaGraphRenderer CurveBrush="DarkOrange" AreaBrush="#DD6C43" CellWidth="5" CellHeight="10"/>
+                                        <panels:BlockAreaGraphRenderer BlockBrush="#FC8B00" BlockWidth="10" BlockGap="1"/>
                                     </panels:MetricGraphView.ContentRenderer>
                                 </panels:MetricGraphView>
                             </StackPanel>
@@ -77,7 +77,7 @@
                                     FixedMaxValue="100"
                                     Width="350" Height="200">
                                     <panels:MetricGraphView.ContentRenderer>
-                                        <panels:LineGraphRenderer LineBrush="DeepSkyBlue"/>
+                                        <panels:BrailleAreaGraphRenderer CurveBrush="#4C04F2" AreaBrush="#12A7DE" />
                                     </panels:MetricGraphView.ContentRenderer>
                                 </panels:MetricGraphView>
                             </StackPanel>

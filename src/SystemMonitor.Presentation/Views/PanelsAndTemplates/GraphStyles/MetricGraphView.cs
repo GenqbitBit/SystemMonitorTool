@@ -295,7 +295,10 @@ public class MetricGraphView : Control
         // --- the plotted content, delegated to the active renderer ---
         var activeRenderer = ContentRenderer ?? new LineGraphRenderer { LineBrush = LineBrush, LineThickness = LineThickness };
         var plotRect = new Rect(plotOrigin, new Size(plotWidth, plotHeight));
-        activeRenderer.Draw(context, plotRect, history, minValue, maxValue);
+        using (context.PushClip(plotRect))
+        {
+            activeRenderer.Draw(context, plotRect, history, minValue, maxValue);
+        }
 
         // --- current value: dot on the line + label (always the view's own LineBrush, regardless of content style) ---
         var points = MetricGraphMath.ComputePoints(history, plotWidth, plotHeight, FixedMinValue, FixedMaxValue);
