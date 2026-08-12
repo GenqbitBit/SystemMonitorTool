@@ -10,6 +10,7 @@ using Avalonia.Media;
 using Avalonia.VisualTree;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
+using SystemMonitor.Presentation.Common;
 
 namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 
@@ -26,7 +27,9 @@ public class MetricGraphView : Control
         AvaloniaProperty.Register<MetricGraphView, IBrush>(nameof(AxisBrush), Brushes.Gray);
 
     public static readonly StyledProperty<FontFamily> AxisFontFamilyProperty =
-        AvaloniaProperty.Register<MetricGraphView, FontFamily>(nameof(AxisFontFamily), new FontFamily("Consolas"));
+    AvaloniaProperty.Register<MetricGraphView, FontFamily>(
+        nameof(AxisFontFamily),
+        AppFonts.Monospace);
 
     public static readonly StyledProperty<ObservableCollection<MetricReading>?> MetricsProperty =
         AvaloniaProperty.Register<MetricGraphView, ObservableCollection<MetricReading>?>(nameof(Metrics));
@@ -194,8 +197,14 @@ public class MetricGraphView : Control
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        var width = double.IsNaN(Width) ? availableSize.Width : Width;
-        var height = double.IsNaN(Height) ? availableSize.Height : Height;
+        var width = double.IsNaN(Width)
+            ? (double.IsInfinity(availableSize.Width) ? 0 : availableSize.Width)
+            : Width;
+
+        var height = double.IsNaN(Height)
+            ? (double.IsInfinity(availableSize.Height) ? 0 : availableSize.Height)
+            : Height;
+
         return new Size(width, height);
     }
 

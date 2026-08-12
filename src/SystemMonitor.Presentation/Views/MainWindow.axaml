@@ -7,78 +7,91 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:debug="using:SystemMonitor.Presentation.Debugging"
         mc:Ignorable="d"
-        d:DesignWidth="1080"
-        d:DesignHeight="1500"
         x:Class="SystemMonitor.Presentation.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="SystemMonitor.Presentation">
+        Icon="/Assets/pixelmonitor.png"
+        Title="MainUI"
+        d:DesignWidth="850"
+        d:DesignHeight="550"
+        Width="850"
+        Height="550"
+        MinWidth="850"
+        MinHeight="550">
 
     <Design.DataContext>
         <vm:MainWindowViewModel />
     </Design.DataContext>
 
-    <!-- One viewport, one scrollbar: the whole dashboard scrolls as a
-         single page. At full window height nothing scrolls at all. -->
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
-                  VerticalScrollBarVisibility="Auto">
-        <Grid ColumnDefinitions="*,Auto">
 
-            <!-- Left column: the monitor surface, row by row -->
-            <StackPanel Grid.Column="0" Orientation="Vertical" Margin="16" Spacing="16" HorizontalAlignment="Stretch">
+    <!-- Root -->
+    <Grid RowDefinitions="96*,4*"
+        RowSpacing="2"
+        Margin="5,10,5,5">
 
-                <!-- row 0: hardware info panels -->
-                <Border HorizontalAlignment="Stretch">
-                    <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" /></Border>
-                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Motherboard" /></Border>
-                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" /></Border>
-                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Disk" /></Border>
-                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Network" /></Border>
-                        <Border Margin="12"><panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="OS" /></Border>
-                        <Border Margin="12"
-                            HorizontalAlignment="Center"
-                            debug:DebugBorder.IsEnabled="False"
-                            Classes="feature" BorderBrush="Gray" BorderThickness="1">
-                            <panels:ProcessesView Processes="{Binding TopProcesses}" />
-                        </Border>
-                    </WrapPanel>
-                </Border>
+        <!-- Grid0 (contents) -->
+        <Border Grid.Row="0"
+                BorderBrush="White"
+                BorderThickness="1"
+                CornerRadius="1">
+            
+            <Grid Margin="0">
+                
+                <!-- Actual Content -->
+                <Grid ColumnDefinitions="30*,Auto,70*">
 
-                <!-- row 1: all graphs merged into a single row (cpu, memory, gpu, network) -->
-                <Border HorizontalAlignment="Stretch">
-                    <WrapPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border Grid.Column="0"
+                    Margin="8,8,5,8"
+                    BorderBrush="White"
+                    BorderThickness="1"
+                    CornerRadius="1">
+                    <Grid ></Grid>
+                    </Border>
+                    
+                    <Border Grid.Column="1"
+                        Width="1" Background="#F6F6F6" 
+                        VerticalAlignment="Stretch">
+                    </Border>
 
-                        <Border Margin="12" debug:DebugBorder.IsEnabled="True">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" MetricId="cpu.usage" ShowLabel="True"/>
+                    <Border Grid.Column="2"
+                    Margin="0"
+                    BorderBrush="Transparent"
+                    BorderThickness="1"
+                    CornerRadius="1">
+                    <Grid RowDefinitions="65*,Auto,35*">
+
+                        <Grid Grid.Row="0" RowDefinitions="*,Auto,*">
+
+                            <Grid Grid.Row="0">
                                 <panels:MetricGraphView
                                     Metrics="{Binding Metrics}"
                                     HistoryStore="{Binding HistoryStore}"
                                     MetricId="cpu.usage"
                                     FixedMinValue="0"
                                     FixedMaxValue="100"
-                                    Width="350" Height="200">
+                                    MinWidth="20" MinHeight="20"
+                                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                     <panels:MetricGraphView.ContentRenderer>
                                         <panels:BrailleAreaGraphRenderer
-                                            AreaTopColor="#F80303" AreaBottomColor="#0DCBD5"
-                                            CurveTopColor="#F80303" CurveBottomColor="#0DCBD5"
-                                            BandCount="8"/>
+                                            AreaTopColor="#F80303" AreaBottomColor="#0DD56E"
+                                            CurveTopColor="#030FF8" CurveBottomColor="#0DCBD5"
+                                            BandCount="15"/>
                                     </panels:MetricGraphView.ContentRenderer>
                                 </panels:MetricGraphView>
-                            </StackPanel>
-                        </Border>
+                            </Grid>
 
-                        <Border Margin="12" debug:DebugBorder.IsEnabled="True">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Memory" MetricId="memory.usage" ShowLabel="True"/>
+                            <Border Grid.Row="1"
+                            Height="1" Background="#F6F6F6" 
+                            HorizontalAlignment="Stretch"></Border>
+
+                            <Grid Grid.Row="2">
                                 <panels:MetricGraphView
                                     Metrics="{Binding Metrics}"
                                     HistoryStore="{Binding HistoryStore}"
                                     MetricId="memory.usage"
                                     FixedMinValue="0"
                                     FixedMaxValue="100"
-                                    Width="350" Height="200">
+                                    MinWidth="180" MinHeight="140"
+                                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                     <panels:MetricGraphView.ContentRenderer>
                                         <panels:BrailleAreaGraphRenderer
                                             AreaTopColor="#D14DEE" AreaBottomColor="#1234CE"
@@ -86,81 +99,188 @@
                                             BandCount="5"/>
                                     </panels:MetricGraphView.ContentRenderer>
                                 </panels:MetricGraphView>
-                            </StackPanel>
-                        </Border>
+                            </Grid>
 
-                        <!--GPU (mirrored: dedicated + integrated)-->
-                        <Border Margin="12" debug:DebugBorder.IsEnabled="True">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <StackPanel Orientation="Vertical" Spacing="4">
-                                    <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Dedicated GPU" MetricId="{Binding DedicatedGpuMetricId}" ShowLabel="True"/>
-                                    <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Integrated GPU" MetricId="{Binding IntegratedGpuMetricId}" ShowLabel="True"/>
-                                </StackPanel>
-                                <panels:MetricGraphView
-                                    Metrics="{Binding Metrics}"
-                                    HistoryStore="{Binding HistoryStore}"
-                                    MetricId="{Binding DedicatedGpuMetricId}"
-                                    SecondaryMetricId="{Binding IntegratedGpuMetricId}"
-                                    FixedMinValue="0"
-                                    FixedMaxValue="100"
-                                    LineBrush="#7C3AED"
-                                    SecondaryLineBrush="#F59E0B"
-                                    Width="350" Height="220">
-                                    <panels:MetricGraphView.ContentRenderer>
-                                        <panels:BrailleAreaGraphRenderer
-                                            AreaTopColor="#7C3AED" AreaBottomColor="#4C1D95"
-                                            CurveTopColor="#7C3AED" CurveBottomColor="#4C1D95"
-                                            BandCount="8"/>
-                                    </panels:MetricGraphView.ContentRenderer>
-                                    <panels:MetricGraphView.SecondaryContentRenderer>
-                                        <panels:BrailleAreaGraphRenderer
-                                            AreaTopColor="#F59E0B" AreaBottomColor="#B45309"
-                                            CurveTopColor="#F59E0B" CurveBottomColor="#B45309"
-                                            BandCount="8"/>
-                                    </panels:MetricGraphView.SecondaryContentRenderer>
-                                </panels:MetricGraphView>
-                            </StackPanel>
-                        </Border>
-
-                        <!--Network-->
-                        <Border Margin="12" debug:DebugBorder.IsEnabled="True">
-                            <StackPanel Orientation="Horizontal" Spacing="0">
-                                <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Network"/>
-                                <panels:MetricGraphView
-                                    Metrics="{Binding Metrics}"
-                                    HistoryStore="{Binding HistoryStore}"
-                                    MetricId="network.download"
-                                    SecondaryMetricId="network.upload"
-                                    LineBrush="MediumPurple"
-                                    SecondaryLineBrush="Magenta"
-                                    Width="300" Height="220">
-                                    <panels:MetricGraphView.ContentRenderer>
-                                        <panels:BrailleAreaGraphRenderer
-                                            AreaTopColor="MediumPurple" AreaBottomColor="Indigo"
-                                            CurveTopColor="MediumPurple" CurveBottomColor="Indigo"
-                                            BandCount="8"/>
-                                    </panels:MetricGraphView.ContentRenderer>
-                                    <panels:MetricGraphView.SecondaryContentRenderer>
-                                        <panels:BrailleAreaGraphRenderer
-                                            AreaTopColor="Magenta" AreaBottomColor="DeepPink"
-                                            CurveTopColor="Magenta" CurveBottomColor="DeepPink"
-                                            BandCount="8"/>
-                                    </panels:MetricGraphView.SecondaryContentRenderer>
-                                </panels:MetricGraphView>
-                            </StackPanel>
-                        </Border>
-                    </WrapPanel>
-                </Border>
+                        </Grid>
 
 
-            </StackPanel>
+                        <Border Grid.Row="1"
+                        Height="1" Background="#F6F6F6" 
+                        HorizontalAlignment="Stretch"></Border>
 
-            <!-- Right column: this table, hugging its content -->
-            <views:MetricsTableView Grid.Column="1"
-                                DataContext="{Binding MetricsTable}"
-                                Width="500"
-                                Margin="0,16,16,16"
-                                VerticalAlignment="Top" />
+                        <Grid Grid.Row="2" ColumnDefinitions="70*,Auto, 30*">
+
+                                <Grid Grid.Column="0" RowDefinitions="*,Auto,*">
+
+                                    <Grid Grid.Row="0">
+                                        <panels:MetricGraphView
+                                            Metrics="{Binding Metrics}"
+                                            HistoryStore="{Binding HistoryStore}"
+                                            MetricId="{Binding DedicatedGpuMetricId}"
+                                            SecondaryMetricId="{Binding IntegratedGpuMetricId}"
+                                            FixedMinValue="0"
+                                            FixedMaxValue="100"
+                                            LineBrush="#7C3AED"
+                                            SecondaryLineBrush="#F59E0B"
+                                            MinWidth="20" MinHeight="20"
+                                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                            <panels:MetricGraphView.ContentRenderer>
+                                                <panels:BrailleAreaGraphRenderer
+                                                    AreaTopColor="#7C3AED" AreaBottomColor="#4C1D95"
+                                                    CurveTopColor="#7C3AED" CurveBottomColor="#4C1D95"
+                                                    BandCount="8"/>
+                                                </panels:MetricGraphView.ContentRenderer>
+                                            <panels:MetricGraphView.SecondaryContentRenderer>
+                                                <panels:BrailleAreaGraphRenderer
+                                                    AreaTopColor="#F59E0B" AreaBottomColor="#B45309"
+                                                    CurveTopColor="#F59E0B" CurveBottomColor="#B45309"
+                                                    BandCount="8"/>
+                                                </panels:MetricGraphView.SecondaryContentRenderer>
+                                        </panels:MetricGraphView>  
+                                    </Grid>
+
+                                     <Border Grid.Row="1"
+                                        Height="1" Background="#F6F6F6" 
+                                        HorizontalAlignment="Stretch"></Border>
+
+                                    <Grid Grid.Row="2" ColumnDefinitions="30*,Auto,70*">
+
+                                        <Grid Grid.Column="0">
+                                            <panels:MetricGraphView
+                                                Metrics="{Binding Metrics}"
+                                                HistoryStore="{Binding HistoryStore}"
+                                                MetricId="disk.read"
+                                                SecondaryMetricId="disk.write"
+                                                MinWidth="20"
+                                                MinHeight="20"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Stretch">
+                                                <!-- Disk Read -->
+                                                <panels:MetricGraphView.ContentRenderer>
+                                                    <panels:BrailleAreaGraphRenderer
+                                                        AreaTopColor="#3B82F6"
+                                                        AreaBottomColor="#1E3A8A"
+                                                        CurveTopColor="#3B82F6"
+                                                        CurveBottomColor="#1E3A8A"
+                                                        BandCount="8"/>
+                                                </panels:MetricGraphView.ContentRenderer>
+                                                <!-- Disk Write -->
+                                                <panels:MetricGraphView.SecondaryContentRenderer>
+                                                    <panels:BrailleAreaGraphRenderer
+                                                        AreaTopColor="#FFA201"
+                                                        AreaBottomColor="#D3E50B"
+                                                        CurveTopColor="#F59E0B"
+                                                        CurveBottomColor="#92400E"
+                                                        BandCount="8"/>
+                                                    </panels:MetricGraphView.SecondaryContentRenderer>
+                                            </panels:MetricGraphView>
+                                        </Grid>
+                                        
+                                        <Border Grid.Column="1"
+                                        Width="1" Background="#F6F6F6" 
+                                        VerticalAlignment="Stretch">
+                                        </Border>
+
+                                        <Grid Grid.Column="3">
+                                            <panels:MetricGraphView
+                                                Metrics="{Binding Metrics}"
+                                                HistoryStore="{Binding HistoryStore}"
+                                                MetricId="disk.usage"
+                                                FixedMinValue="0"
+                                                FixedMaxValue="100"
+                                                MinWidth="20"
+                                                MinHeight="20"
+                                                HorizontalAlignment="Stretch"
+                                                VerticalAlignment="Stretch">
+                                                <panels:MetricGraphView.ContentRenderer>
+                                                    <panels:BrailleAreaGraphRenderer
+                                                        AreaTopColor="#22C55E"
+                                                        AreaBottomColor="#3E0AEB"
+                                                        CurveTopColor="#22C55E"
+                                                        CurveBottomColor="#166534"
+                                                        BandCount="10"/>
+                                                    </panels:MetricGraphView.ContentRenderer>
+                                            </panels:MetricGraphView>
+                                        </Grid>
+                                        
+                                    </Grid>
+
+                                </Grid>
+
+                                <Border Grid.Column="1"
+                                Width="1" Background="#F6F6F6" 
+                                VerticalAlignment="Stretch">
+                                </Border>
+                                
+                                <Grid Grid.Column="2">
+                                    <panels:MetricGraphView
+                                        Metrics="{Binding Metrics}"
+                                        HistoryStore="{Binding HistoryStore}"
+                                        MetricId="network.download"
+                                        SecondaryMetricId="network.upload"
+                                        LineBrush="MediumPurple"
+                                        SecondaryLineBrush="Magenta"
+                                        MinWidth="20" MinHeight="20"
+                                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                        <panels:MetricGraphView.ContentRenderer>
+                                            <panels:BrailleAreaGraphRenderer
+                                                AreaTopColor="MediumPurple" AreaBottomColor="Indigo"
+                                                CurveTopColor="MediumPurple" CurveBottomColor="Indigo"
+                                                BandCount="8"/>
+                                        </panels:MetricGraphView.ContentRenderer>
+                                        <panels:MetricGraphView.SecondaryContentRenderer>
+                                            <panels:BrailleAreaGraphRenderer
+                                                AreaTopColor="Magenta" AreaBottomColor="DeepPink"
+                                                CurveTopColor="Magenta" CurveBottomColor="DeepPink"
+                                                BandCount="8"/>
+                                            </panels:MetricGraphView.SecondaryContentRenderer>
+                                    </panels:MetricGraphView>
+                                </Grid>
+
+                        </Grid>
+                        
                     </Grid>
-    </ScrollViewer>
+                    </Border>
+
+
+
+                </Grid>
+
+                <TextBlock Text="Title"
+                    Grid.Column="1"
+                    Background="Black"
+                    Padding="7,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Margin="10,-5,0,0"
+                    FontSize="11"/>
+            </Grid>
+
+            
+        </Border>
+
+        <!-- Grid1 Panel (few txt) -->
+        <Panel Grid.Row="1">
+            <!--Container-->
+            <Grid ColumnDefinitions="70*,30*"
+                Margin="10,0,25,0">
+
+            <TextBlock Grid.Column="0" 
+            FontSize="12"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Center"
+            Text="Currenty on Development | https://github.com/GenqbitBit/SystemMonitorTool"/>
+
+            <TextBlock Grid.Column="1" 
+            FontSize="12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Center"
+            Text="Test UI"/>
+
+            </Grid>
+        </Panel>
+
+    </Grid>
+    <!-- Root -->
+
 </Window>
