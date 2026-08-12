@@ -60,9 +60,10 @@
                                     FixedMaxValue="100"
                                     Width="350" Height="200">
                                     <panels:MetricGraphView.ContentRenderer>
-                                        <panels:BlockAreaGraphRenderer
-                                            TopColor="#F80303" BottomColor="#0DCBD5"
-                                            BandCount="8" BlockWidth="15" BlockGap="1"/>
+                                        <panels:BrailleAreaGraphRenderer
+                                            AreaTopColor="#F80303" AreaBottomColor="#0DCBD5"
+                                            CurveTopColor="#F80303" CurveBottomColor="#0DCBD5"
+                                            BandCount="8"/>
                                     </panels:MetricGraphView.ContentRenderer>
                                 </panels:MetricGraphView>
                             </StackPanel>
@@ -79,9 +80,10 @@
                                     FixedMaxValue="100"
                                     Width="350" Height="200">
                                     <panels:MetricGraphView.ContentRenderer>
-                                        <panels:BlockAreaGraphRenderer
-                                            TopColor="#D14DEE" BottomColor="#1234CE"
-                                            BandCount="5" BlockWidth="15" BlockGap="1"/>
+                                        <panels:BrailleAreaGraphRenderer
+                                            AreaTopColor="#D14DEE" AreaBottomColor="#1234CE"
+                                            CurveTopColor="#D14DEE" CurveBottomColor="#1234CE"
+                                            BandCount="5"/>
                                     </panels:MetricGraphView.ContentRenderer>
                                 </panels:MetricGraphView>
                             </StackPanel>
@@ -103,16 +105,18 @@
                                     FixedMaxValue="100"
                                     LineBrush="#7C3AED"
                                     SecondaryLineBrush="#F59E0B"
-                                    Width="500" Height="220">
+                                    Width="350" Height="220">
                                     <panels:MetricGraphView.ContentRenderer>
-                                        <panels:BlockAreaGraphRenderer
-                                            TopColor="#7C3AED" BottomColor="#4C1D95"
-                                            BandCount="8" BlockWidth="15" BlockGap="1"/>
+                                        <panels:BrailleAreaGraphRenderer
+                                            AreaTopColor="#7C3AED" AreaBottomColor="#4C1D95"
+                                            CurveTopColor="#7C3AED" CurveBottomColor="#4C1D95"
+                                            BandCount="8"/>
                                     </panels:MetricGraphView.ContentRenderer>
                                     <panels:MetricGraphView.SecondaryContentRenderer>
-                                        <panels:BlockAreaGraphRenderer
-                                            TopColor="#F59E0B" BottomColor="#B45309"
-                                            BandCount="8" BlockWidth="15" BlockGap="1"/>
+                                        <panels:BrailleAreaGraphRenderer
+                                            AreaTopColor="#F59E0B" AreaBottomColor="#B45309"
+                                            CurveTopColor="#F59E0B" CurveBottomColor="#B45309"
+                                            BandCount="8"/>
                                     </panels:MetricGraphView.SecondaryContentRenderer>
                                 </panels:MetricGraphView>
                             </StackPanel>
@@ -120,7 +124,7 @@
 
                         <!--Network-->
                         <Border Margin="12" debug:DebugBorder.IsEnabled="True">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
+                            <StackPanel Orientation="Horizontal" Spacing="0">
                                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="Network"/>
                                 <panels:MetricGraphView
                                     Metrics="{Binding Metrics}"
@@ -129,16 +133,18 @@
                                     SecondaryMetricId="network.upload"
                                     LineBrush="MediumPurple"
                                     SecondaryLineBrush="Magenta"
-                                    Width="500" Height="220">
+                                    Width="300" Height="220">
                                     <panels:MetricGraphView.ContentRenderer>
-                                        <panels:BlockAreaGraphRenderer
-                                            TopColor="MediumPurple" BottomColor="Indigo"
-                                            BandCount="8" BlockWidth="15" BlockGap="1"/>
+                                        <panels:BrailleAreaGraphRenderer
+                                            AreaTopColor="MediumPurple" AreaBottomColor="Indigo"
+                                            CurveTopColor="MediumPurple" CurveBottomColor="Indigo"
+                                            BandCount="8"/>
                                     </panels:MetricGraphView.ContentRenderer>
                                     <panels:MetricGraphView.SecondaryContentRenderer>
-                                        <panels:BlockAreaGraphRenderer
-                                            TopColor="Magenta" BottomColor="DeepPink"
-                                            BandCount="8" BlockWidth="15" BlockGap="1"/>
+                                        <panels:BrailleAreaGraphRenderer
+                                            AreaTopColor="Magenta" AreaBottomColor="DeepPink"
+                                            CurveTopColor="Magenta" CurveBottomColor="DeepPink"
+                                            BandCount="8"/>
                                     </panels:MetricGraphView.SecondaryContentRenderer>
                                 </panels:MetricGraphView>
                             </StackPanel>
