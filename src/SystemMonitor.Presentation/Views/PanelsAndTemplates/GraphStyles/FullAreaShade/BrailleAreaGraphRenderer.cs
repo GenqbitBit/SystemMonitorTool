@@ -4,6 +4,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Media;
 using SystemMonitor.Domain.Models;
+using SystemMonitor.Presentation.Common;
 
 namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 
@@ -12,8 +13,7 @@ public class BrailleAreaGraphRenderer : IGraphContentRenderer
     public double CellWidth { get; set; } = 6;
     public double CellHeight { get; set; } = 12;
     public double FontSize { get; set; } = 10;
-    public FontFamily FontFamily { get; set; } =
-        new FontFamily("avares://SystemMonitor.Presentation/Assets/Fonts#DejaVu Sans Mono");
+    public FontFamily FontFamily { get; set; } = AppFonts.Monospace;
 
     public Color CurveTopColor { get; set; } = Colors.LimeGreen;
     public Color CurveBottomColor { get; set; } = Colors.DarkGreen;
