@@ -11,8 +11,8 @@
         d:DesignHeight="1500"
         x:Class="SystemMonitor.Presentation.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="SystemMonitor.Presentation">
+        Icon="/Assets/pixelmonitor.png"
+        Title="MainUI">
 
     <Design.DataContext>
         <vm:MainWindowViewModel />
@@ -53,6 +53,7 @@
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <panels:CategoryMetricsView Metrics="{Binding Metrics}" CategoryLabel="CPU" MetricId="cpu.usage" ShowLabel="True"/>
                                 <panels:MetricGraphView
+                                    ShowGrid="True"
                                     Metrics="{Binding Metrics}"
                                     HistoryStore="{Binding HistoryStore}"
                                     MetricId="cpu.usage"
@@ -63,7 +64,7 @@
                                         <panels:BrailleAreaGraphRenderer
                                             AreaTopColor="#F80303" AreaBottomColor="#0DCBD5"
                                             CurveTopColor="#F80303" CurveBottomColor="#0DCBD5"
-                                            BandCount="8"/>
+                                            BandCount="15"/>
                                     </panels:MetricGraphView.ContentRenderer>
                                 </panels:MetricGraphView>
                             </StackPanel>
@@ -152,7 +153,95 @@
                     </WrapPanel>
                 </Border>
 
+                <!-- Disk -->
+                <Border Margin="12" debug:DebugBorder.IsEnabled="True">
+                    <StackPanel Orientation="Vertical" Spacing="8">
 
+                        <!-- Disk Usage -->
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <panels:CategoryMetricsView
+                                Metrics="{Binding Metrics}"
+                                CategoryLabel="Disk"
+                                MetricId="disk.usage"
+                                ShowLabel="True"/>
+
+                            <panels:MetricGraphView
+                                Metrics="{Binding Metrics}"
+                                HistoryStore="{Binding HistoryStore}"
+                                MetricId="disk.usage"
+                                FixedMinValue="0"
+                                FixedMaxValue="100"
+                                Width="350"
+                                Height="200">
+
+                                <panels:MetricGraphView.ContentRenderer>
+                                    <panels:BrailleAreaGraphRenderer
+                                        AreaTopColor="#22C55E"
+                                        AreaBottomColor="#166534"
+                                        CurveTopColor="#22C55E"
+                                        CurveBottomColor="#166534"
+                                        BandCount="8"/>
+                                </panels:MetricGraphView.ContentRenderer>
+
+                            </panels:MetricGraphView>
+                        </StackPanel>
+
+                        <!-- Disk Read -->
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <panels:CategoryMetricsView
+                                Metrics="{Binding Metrics}"
+                                CategoryLabel="Disk"
+                                MetricId="disk.read"
+                                ShowLabel="True"/>
+
+                            <panels:MetricGraphView
+                                Metrics="{Binding Metrics}"
+                                HistoryStore="{Binding HistoryStore}"
+                                MetricId="disk.read"
+                                Width="350"
+                                Height="200">
+
+                                <panels:MetricGraphView.ContentRenderer>
+                                    <panels:BrailleAreaGraphRenderer
+                                        AreaTopColor="#3B82F6"
+                                        AreaBottomColor="#1E3A8A"
+                                        CurveTopColor="#3B82F6"
+                                        CurveBottomColor="#1E3A8A"
+                                        BandCount="8"/>
+                                </panels:MetricGraphView.ContentRenderer>
+
+                            </panels:MetricGraphView>
+                        </StackPanel>
+
+                        <!-- Disk Write -->
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <panels:CategoryMetricsView
+                                Metrics="{Binding Metrics}"
+                                CategoryLabel="Disk"
+                                MetricId="disk.write"
+                                ShowLabel="True"/>
+
+                            <panels:MetricGraphView
+                                Metrics="{Binding Metrics}"
+                                HistoryStore="{Binding HistoryStore}"
+                                MetricId="disk.write"
+                                Width="350"
+                                Height="200">
+
+                                <panels:MetricGraphView.ContentRenderer>
+                                    <panels:BrailleAreaGraphRenderer
+                                        AreaTopColor="#F59E0B"
+                                        AreaBottomColor="#92400E"
+                                        CurveTopColor="#F59E0B"
+                                        CurveBottomColor="#92400E"
+                                        BandCount="8"/>
+                                </panels:MetricGraphView.ContentRenderer>
+
+                            </panels:MetricGraphView>
+                        </StackPanel>
+
+                    </StackPanel>
+                </Border>
             </StackPanel>
 
             <!-- Right column: this table, hugging its content -->

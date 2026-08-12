@@ -12,7 +12,8 @@ public class BrailleAreaGraphRenderer : IGraphContentRenderer
     public double CellWidth { get; set; } = 6;
     public double CellHeight { get; set; } = 12;
     public double FontSize { get; set; } = 10;
-    public FontFamily FontFamily { get; set; } = new FontFamily("Consolas");
+    public FontFamily FontFamily { get; set; } =
+        new FontFamily("avares://SystemMonitor.Presentation/Assets/Fonts#DejaVu Sans Mono");
 
     public Color CurveTopColor { get; set; } = Colors.LimeGreen;
     public Color CurveBottomColor { get; set; } = Colors.DarkGreen;

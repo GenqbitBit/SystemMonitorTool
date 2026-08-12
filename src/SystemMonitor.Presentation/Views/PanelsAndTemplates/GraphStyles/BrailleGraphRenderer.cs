@@ -18,7 +18,8 @@ public class BrailleGraphRenderer : IGraphContentRenderer
     public double CellWidth { get; set; } = 6;
     public double CellHeight { get; set; } = 12;
     public double FontSize { get; set; } = 10;
-    public FontFamily FontFamily { get; set; } = new FontFamily("Consolas");
+    public FontFamily FontFamily { get; set; } =
+        new FontFamily("avares://SystemMonitor.Presentation/Assets/Fonts#DejaVu Sans Mono");
 
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
         double minValue, double maxValue, DateTime windowStart, DateTime windowEnd, bool baselineAtTop = false)

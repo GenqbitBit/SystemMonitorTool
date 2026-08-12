@@ -26,7 +26,9 @@ public class MetricGraphView : Control
         AvaloniaProperty.Register<MetricGraphView, IBrush>(nameof(AxisBrush), Brushes.Gray);
 
     public static readonly StyledProperty<FontFamily> AxisFontFamilyProperty =
-        AvaloniaProperty.Register<MetricGraphView, FontFamily>(nameof(AxisFontFamily), new FontFamily("Consolas"));
+    AvaloniaProperty.Register<MetricGraphView, FontFamily>(
+        nameof(AxisFontFamily),
+        new FontFamily("avares://SystemMonitor.Presentation/Assets/Fonts#DejaVu Sans Mono"));
 
     public static readonly StyledProperty<ObservableCollection<MetricReading>?> MetricsProperty =
         AvaloniaProperty.Register<MetricGraphView, ObservableCollection<MetricReading>?>(nameof(Metrics));
