@@ -10,9 +10,9 @@ namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 
 public class BrailleAreaGraphRenderer : IGraphContentRenderer
 {
-    public double CellWidth { get; set; } = 6;
-    public double CellHeight { get; set; } = 12;
-    public double FontSize { get; set; } = 10;
+    public double CellWidth { get; set; } = 20;
+    public double CellHeight { get; set; } = 10;
+    public double FontSize { get; set; } = 20;
     public FontFamily FontFamily { get; set; } = AppFonts.Monospace;
 
     public Color CurveTopColor { get; set; } = Colors.LimeGreen;
