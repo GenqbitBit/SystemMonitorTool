@@ -156,6 +156,10 @@ public partial class CategoryMetricsView : UserControl
         AvaloniaProperty.Register<CategoryMetricsView, HorizontalAlignment>(
             nameof(ContentHorizontalAlignment), defaultValue: HorizontalAlignment.Center);
 
+    public static readonly DirectProperty<CategoryMetricsView, double> EffectiveSpacingProperty =
+    AvaloniaProperty.RegisterDirect<CategoryMetricsView, double>(
+        nameof(EffectiveSpacing), o => o.EffectiveSpacing);
+
     // Tracks whichever collection instance we're currently subscribed to, so we can
     // unsubscribe cleanly when Metrics is replaced or the view is detached — this
     // prevents duplicate handlers piling up and keeps a detached view from being
@@ -167,6 +171,8 @@ public partial class CategoryMetricsView : UserControl
         InitializeComponent();
     }
 
+    public double EffectiveSpacing => ShowCategoryHeader ? ContentSpacing : 0;
+    
     public IEnumerable<MetricReading>? Metrics
     {
         get => GetValue(MetricsProperty);
@@ -310,8 +316,6 @@ public partial class CategoryMetricsView : UserControl
 
         if (change.Property == MetricsProperty)
         {
-            // Metrics was reassigned to a different collection instance (or null) —
-            // move our CollectionChanged subscription onto whatever it points to now.
             UnsubscribeFromMetricsCollection();
             SubscribeToMetricsCollection();
         }
@@ -323,6 +327,12 @@ public partial class CategoryMetricsView : UserControl
             || change.Property == GpuDeviceIdProperty)
         {
             RaisePropertyChanged(FilteredMetricsProperty, default, default);
+        }
+
+        if (change.Property == ShowCategoryHeaderProperty
+            || change.Property == ContentSpacingProperty)
+        {
+            RaisePropertyChanged(EffectiveSpacingProperty, default, default);
         }
     }
 

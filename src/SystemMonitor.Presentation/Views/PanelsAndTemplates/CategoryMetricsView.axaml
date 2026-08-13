@@ -12,10 +12,10 @@
 
     <!-- debug border -->
     <Border debug:DebugBorder.IsEnabled="True">
-        <StackPanel HorizontalAlignment="{Binding #Root.ContentHorizontalAlignment}"
-                    VerticalAlignment="Center"
-                    MaxWidth="{Binding #Root.ContentMaxWidth}"
-                    Spacing="{Binding #Root.ContentSpacing}">
+            <StackPanel HorizontalAlignment="{Binding #Root.ContentHorizontalAlignment}"
+                VerticalAlignment="Center"
+                MaxWidth="{Binding #Root.ContentMaxWidth}"
+                Spacing="{Binding #Root.EffectiveSpacing}">
 
             <!-- Category -->
             <TextBlock Text="{Binding #Root.CategoryLabel}"
