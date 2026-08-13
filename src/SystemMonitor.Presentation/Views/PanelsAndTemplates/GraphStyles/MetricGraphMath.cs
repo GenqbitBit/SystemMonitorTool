@@ -55,6 +55,33 @@ public static class MetricGraphMath
             : value.ToString("0.0");
     }
 
+    public static (double Min, double Max) GetValueRange(
+        IReadOnlyList<MetricHistoryPoint> history, double? fixedMin = null, double? fixedMax = null)
+    {
+        if (fixedMin.HasValue && fixedMax.HasValue)
+            return (fixedMin.Value, fixedMax.Value);
+
+        if (history.Count == 0)
+            return (0, 1);
+
+        var min = history[0].Value;
+        var max = history[0].Value;
+
+        foreach (var point in history)
+        {
+            if (point.Value < min) min = point.Value;
+            if (point.Value > max) max = point.Value;
+        }
+
+        if (Math.Abs(max - min) < 0.0001)
+        {
+            min -= 1;
+            max += 1;
+        }
+
+        return (min, max);
+    }
+
     public static (double Min, double Max) ResolveDisplayRange(
     (double Min, double Max) committedRange, double? fixedMin = null, double? fixedMax = null)
     {
@@ -70,12 +97,18 @@ public static class MetricGraphMath
         return (min, max);
     }
 
-    // CHANGED: no longer takes fixedMin/fixedMax — takes the already-resolved
-    // minValue/maxValue directly, plus useFrozenValues. A fixed range never
-    // changes frame-to-frame so recomputing against it fresh is already stable;
-    // useFrozenValues=false is how fixed-range callers opt into that (skip the
-    // frozen value, always trust the live min/max). Auto-scaled callers leave it
-    // true so already-graduated points keep the Y they were frozen at.
+    public static IReadOnlyList<(double X, double Y)> ComputePoints(
+        IReadOnlyList<MetricHistoryPoint> history, double width, double height,
+        DateTime windowStart, DateTime windowEnd,
+        double? fixedMin = null, double? fixedMax = null, bool useFrozenValues = true)
+    {
+        var range = GetValueRange(history, fixedMin, fixedMax);
+        return ComputePoints(history, width, height, windowStart, windowEnd, range.Min, range.Max, useFrozenValues);
+    }
+
+    // The auto-scale path keeps already-graduated points stable by honoring
+    // the frozen NormalizedValue baked in at graduation time. Only the live tip
+    // is re-normalized against the current range; the past remains immutable.
     public static IReadOnlyList<(double X, double Y)> ComputePoints(
         IReadOnlyList<MetricHistoryPoint> history, double width, double height,
         DateTime windowStart, DateTime windowEnd,
