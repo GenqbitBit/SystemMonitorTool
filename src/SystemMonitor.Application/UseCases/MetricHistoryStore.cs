@@ -23,6 +23,16 @@ public sealed class MetricHistoryStore : IMetricHistoryStore
     // in using the range as it stood at that point's own graduation moment.
     private readonly Dictionary<string, (double Min, double Max)> _committedRange = new();
 
+    // Record() runs on the dedicated polling thread; GetHistory()/
+    // GetCommittedRange() run on the UI thread during Render(). All three
+    // touch the same Dictionary/Queue fields above with no other
+    // synchronization, so every access is serialized through this lock.
+    // Without it, a render can enumerate a Queue<T> mid-Enqueue/Dequeue on
+    // the other thread — a torn read that returns an internally
+    // inconsistent slice of history, which is what produced the
+    // appearing/disappearing "cycling" segments.
+    private readonly object _lock = new();
+
     public MetricHistoryStore(TimeSpan? window = null)
     {
         _window = window ?? TimeSpan.FromSeconds(60);
@@ -34,18 +44,23 @@ public sealed class MetricHistoryStore : IMetricHistoryStore
     {
         var now = DateTime.UtcNow;
 
-        foreach (var reading in snapshot)
+        lock (_lock)
         {
-            if (!reading.IsAvailable) continue;
+            foreach (var reading in snapshot)
+            {
+                if (!reading.IsAvailable) continue;
 
-            GraduateLiveTip(reading.Id, now);
+                GraduateLiveTip(reading.Id, now);
 
-            // The new sample becomes the live tip: unfrozen, not yet in
-            // history, doesn't touch the committed range yet.
-            _liveTip[reading.Id] = new MetricHistoryPoint(now, reading.Value);
+                // The new sample becomes the live tip: unfrozen, not yet in
+                // history, doesn't touch the committed range yet.
+                _liveTip[reading.Id] = new MetricHistoryPoint(now, reading.Value);
+            }
         }
     }
 
+    // Caller must already hold _lock — this is a private helper split out
+    // of Record for readability, not a separately-synchronized entry point.
     private void GraduateLiveTip(string metricId, DateTime now)
     {
         if (!_liveTip.TryGetValue(metricId, out var graduating))
@@ -84,29 +99,35 @@ public sealed class MetricHistoryStore : IMetricHistoryStore
 
     public IReadOnlyList<MetricHistoryPoint> GetHistory(string metricId)
     {
-        var frozen = _history.TryGetValue(metricId, out var queue)
-            ? queue.ToList()
-            : new List<MetricHistoryPoint>();
-
-        if (_liveTip.TryGetValue(metricId, out var tip) &&
-            DateTime.UtcNow - tip.Timestamp <= _window)
+        lock (_lock)
         {
-            frozen.Add(tip);
-        }
+            var frozen = _history.TryGetValue(metricId, out var queue)
+                ? queue.ToList()
+                : new List<MetricHistoryPoint>();
 
-        return frozen;
+            if (_liveTip.TryGetValue(metricId, out var tip) &&
+                DateTime.UtcNow - tip.Timestamp <= _window)
+            {
+                frozen.Add(tip);
+            }
+
+            return frozen;
+        }
     }
 
     public (double Min, double Max) GetCommittedRange(string metricId)
     {
-        if (_committedRange.TryGetValue(metricId, out var range))
-            return range;
+        lock (_lock)
+        {
+            if (_committedRange.TryGetValue(metricId, out var range))
+                return range;
 
-        // No graduated points yet — fall back to the live tip's own value
-        // instead of returning a degenerate (0,0) range.
-        if (_liveTip.TryGetValue(metricId, out var tip))
-            return (tip.Value - 1, tip.Value + 1);
+            // No graduated points yet — fall back to the live tip's own value
+            // instead of returning a degenerate (0,0) range.
+            if (_liveTip.TryGetValue(metricId, out var tip))
+                return (tip.Value - 1, tip.Value + 1);
 
-        return (0, 1);
+            return (0, 1);
+        }
     }
 }

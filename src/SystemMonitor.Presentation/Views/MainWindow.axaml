@@ -207,12 +207,14 @@
 
                                         <Grid Grid.Column="2">
                                             <panels:MetricGraphView
+                                                FixedMinValue="0"
+                                                FixedMaxValue="30"
                                                 Metrics="{Binding Metrics}"
                                                 HistoryStore="{Binding HistoryStore}"
                                                 MetricId="disk.read"
                                                 SecondaryMetricId="disk.write"
-                                                MinWidth="20"
-                                                MinHeight="20"
+                                                MinWidth="2"
+                                                MinHeight="2"
                                                 HorizontalAlignment="Left"
                                                 VerticalAlignment="Stretch">
                                                 <!-- Disk Read -->
@@ -243,13 +245,15 @@
                                 
                                 <Grid Grid.Column="2">
                                     <panels:MetricGraphView
+                                        FixedMinValue="0"
+                                        FixedMaxValue="1000"
                                         Metrics="{Binding Metrics}"
                                         HistoryStore="{Binding HistoryStore}"
                                         MetricId="network.download"
                                         SecondaryMetricId="network.upload"
                                         LineBrush="MediumPurple"
                                         SecondaryLineBrush="Magenta"
-                                        MinWidth="20" MinHeight="20"
+                                        MinWidth="2" MinHeight="2"
                                         HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                         <panels:MetricGraphView.ContentRenderer>
                                             <panels:BlockAreaGraphRenderer
