@@ -22,9 +22,10 @@ public class BrailleGraphRenderer : IGraphContentRenderer
     public FontFamily FontFamily { get; set; } = AppFonts.Monospace;
 
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
-        double minValue, double maxValue, DateTime windowStart, DateTime windowEnd, bool baselineAtTop = false)
+        double minValue, double maxValue, DateTime windowStart, DateTime windowEnd,
+        bool baselineAtTop = false, bool useFrozenValues = true)
     {
-        var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, windowStart, windowEnd, minValue, maxValue);   
+        var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, windowStart, windowEnd, minValue, maxValue, useFrozenValues);
         if (points.Count == 0)
             return;
 
