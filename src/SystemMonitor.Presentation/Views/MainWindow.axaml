@@ -62,7 +62,16 @@
 
                             <Grid Grid.Row="0" ColumnDefinitions="30*,Auto,70*">
                                 
-                                <Grid></Grid>
+                                <Grid Grid.Column="0">
+                                        <panels:CategoryMetricsView MetricId="cpu.usage"
+                                        Metrics="{Binding Metrics}"
+                                        Margin="10,10,10,10"
+                                        ShowLabel="False"
+                                        ShowCategoryHeader="False"
+                                        MetricFontSize="20"
+                                        ValueFontWeight="Bold"
+                                        ValueForeground="{DynamicResource MetricValueBrush}"/>
+                                </Grid>
 
                                 <Border Grid.Column="1"
                                     Width="1" Background="#F6F6F6" 
@@ -264,7 +273,7 @@
 
                 </Grid>
 
-                <TextBlock Text="Title"
+                <TextBlock Text="MainUI"
                     Grid.Column="1"
                     Background="Black"
                     Padding="7,0"
@@ -293,7 +302,7 @@
             FontSize="12"
             HorizontalAlignment="Right"
             VerticalAlignment="Center"
-            Text="Test UI"/>
+            Text="2026"/>
 
             </Grid>
         </Panel>
