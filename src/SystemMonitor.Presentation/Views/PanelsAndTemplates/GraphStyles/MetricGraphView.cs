@@ -73,6 +73,13 @@ public class MetricGraphView : Control
     public static readonly StyledProperty<bool> ToRightProperty =
         AvaloniaProperty.Register<MetricGraphView, bool>(nameof(ToRight), defaultValue: true);
 
+    // Independent scan direction for the secondary (bottom) half of a
+    // mirrored graph. Defaults to true (same as ToRight's default) so
+    // existing mirrored XAML that never set this keeps its current
+    // behavior. Only meaningful when SecondaryMetricId is set.
+    public static readonly StyledProperty<bool> SecondaryToRightProperty =
+        AvaloniaProperty.Register<MetricGraphView, bool>(nameof(SecondaryToRight), defaultValue: true);
+
     private INotifyCollectionChanged? _subscribedCollection;
 
     public double? FixedMinValue
@@ -183,6 +190,12 @@ public class MetricGraphView : Control
         set => SetValue(ToRightProperty, value);
     }
 
+    public bool SecondaryToRight
+    {
+        get => GetValue(SecondaryToRightProperty);
+        set => SetValue(SecondaryToRightProperty, value);
+    }
+
     static MetricGraphView()
     {
         AffectsRender<MetricGraphView>(
@@ -202,7 +215,8 @@ public class MetricGraphView : Control
             SecondaryLineBrushProperty,
             BaselineBrushProperty,
             ShowGridProperty,
-            ToRightProperty);
+            ToRightProperty,
+            SecondaryToRightProperty);
     }
 
     protected override Size MeasureOverride(Size availableSize)
@@ -417,15 +431,51 @@ public class MetricGraphView : Control
                 context.DrawLine(new Pen(GridBrush, 1), new Point(bottomRect.X, yBottom), new Point(bottomRect.X + bottomRect.Width, yBottom));
             }
 
+            // Time axis is drawn independently per half rather than once for
+            // the whole plot, since the top and bottom can now scan in
+            // opposite directions (ToRight / SecondaryToRight) — a single
+            // shared set of tick positions would only be time-correct for
+            // whichever half's direction it was computed against.
+            foreach (var (normalizedX, _) in MetricGraphMath.ComputeTimeAxisTicks(windowStart, windowEnd, timeTickCount))
+            {
+                var effectiveX = ToRight ? normalizedX : 1 - normalizedX;
+                var x = plotOrigin.X + effectiveX * plotWidth;
+                context.DrawLine(new Pen(GridBrush, 1), new Point(x, topRect.Y), new Point(x, topRect.Y + topRect.Height));
+            }
+
             foreach (var (normalizedX, label) in MetricGraphMath.ComputeTimeAxisTicks(windowStart, windowEnd, timeTickCount))
             {
                 var effectiveX = ToRight ? normalizedX : 1 - normalizedX;
                 var x = plotOrigin.X + effectiveX * plotWidth;
-                context.DrawLine(new Pen(GridBrush, 1), new Point(x, plotOrigin.Y), new Point(x, plotOrigin.Y + plotHeight));
 
                 var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
                 var textX = Math.Clamp(x - text.Width / 2, plotOrigin.X, bounds.Width - text.Width);
-                context.DrawText(text, new Point(textX, plotOrigin.Y + plotHeight + 2));
+                // Labeled just above the top half, so it doesn't collide
+                // with the shared baseline sitting between the two halves.
+                var textY = Math.Clamp(topRect.Y - text.Height - 1, 0, bounds.Height - text.Height);
+                context.DrawText(text, new Point(textX, textY));
+            }
+
+            foreach (var (normalizedX, _) in MetricGraphMath.ComputeTimeAxisTicks(windowStart, windowEnd, timeTickCount))
+            {
+                var effectiveX = SecondaryToRight ? normalizedX : 1 - normalizedX;
+                var x = plotOrigin.X + effectiveX * plotWidth;
+                context.DrawLine(new Pen(GridBrush, 1), new Point(x, bottomRect.Y), new Point(x, bottomRect.Y + bottomRect.Height));
+            }
+
+            foreach (var (normalizedX, label) in MetricGraphMath.ComputeTimeAxisTicks(windowStart, windowEnd, timeTickCount))
+            {
+                var effectiveX = SecondaryToRight ? normalizedX : 1 - normalizedX;
+                var x = plotOrigin.X + effectiveX * plotWidth;
+
+                var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
+                var textX = Math.Clamp(x - text.Width / 2, plotOrigin.X, bounds.Width - text.Width);
+                // Labeled just below the bottom half — this is the original
+                // single-time-axis label position, kept here since bottom
+                // uses the same default direction (SecondaryToRight=true)
+                // as before this feature existed.
+                var textY = plotOrigin.Y + plotHeight + 2;
+                context.DrawText(text, new Point(textX, textY));
             }
         }
 
@@ -442,7 +492,7 @@ public class MetricGraphView : Control
 
         using (context.PushClip(bottomRect))
         {
-            secondaryRenderer.Draw(context, bottomRect, secondaryHistory, secondaryRange.Max, secondaryRange.Min, windowStart, windowEnd, baselineAtTop: true, useFrozenValues: useFrozenValues, toRight: ToRight);
+            secondaryRenderer.Draw(context, bottomRect, secondaryHistory, secondaryRange.Max, secondaryRange.Min, windowStart, windowEnd, baselineAtTop: true, useFrozenValues: useFrozenValues, toRight: SecondaryToRight);
         }
 
         context.DrawLine(new Pen(BaselineBrush, 1.5), new Point(plotOrigin.X, baselineY - halfGap / 2), new Point(plotOrigin.X + plotWidth, baselineY - halfGap / 2));
@@ -458,12 +508,13 @@ public class MetricGraphView : Control
 
                 if (!secondaryRenderer.SuppressDefaultCurrentValueMarker)
                 {
-                    var secondaryPoints = MetricGraphMath.ComputePoints(secondaryHistory, bottomRect.Width, bottomRect.Height, windowStart, windowEnd, secondaryRange.Max, secondaryRange.Min, useFrozenValues, ToRight);
+                    var secondaryPoints = MetricGraphMath.ComputePoints(secondaryHistory, bottomRect.Width, bottomRect.Height, windowStart, windowEnd, secondaryRange.Max, secondaryRange.Min, useFrozenValues, SecondaryToRight);
                     if (secondaryPoints.Count > 0)
-                        DrawCurrentValueLabel(context, bottomRect.Position, secondaryPoints, secondaryHistory, SecondaryLineBrush, secondaryUnit, typeface, fontSize, bounds, ToRight, labelYOffset: 25);
+                        DrawCurrentValueLabel(context, bottomRect.Position, secondaryPoints, secondaryHistory, SecondaryLineBrush, secondaryUnit, typeface, fontSize, bounds, SecondaryToRight, labelYOffset: 25);
                 }
             }
     }
+    
     private static void DrawCurrentValueLabel(
     DrawingContext context, Point rectOrigin, IReadOnlyList<(double X, double Y)> points,
     IReadOnlyList<MetricHistoryPoint> history, IBrush brush, string unitSuffix,

@@ -353,10 +353,11 @@
 
                         <Grid Grid.Row="2" ColumnDefinitions="70*,Auto, 30*">
 
-                                <Grid Grid.Column="0" RowDefinitions="*,Auto,*">
+                                <Grid Grid.Column="0" RowDefinitions="30*,Auto,70*">
 
-                                    <Grid Grid.Row="0">
+                                    <Grid Grid.Row="0" ColumnDefinitions="90*,18">
                                         <panels:MetricGraphView
+                                            Grid.Column="0"
                                             Metrics="{Binding Metrics}"
                                             HistoryStore="{Binding HistoryStore}"
                                             MetricId="{Binding DedicatedGpuMetricId}"
@@ -378,16 +379,99 @@
                                                     BandCount="8"/>
                                                 </panels:MetricGraphView.SecondaryContentRenderer>
                                         </panels:MetricGraphView>  
+                                        <Border Grid.Column="1"
+                                        BorderBrush="#0E68B7" BorderThickness="1"  >
+                                            <Grid >
+                                                
+                                            </Grid>
+                                        </Border>
+                                            
                                     </Grid>
 
                                     <Border Grid.Row="1"
                                         Height="1" Background="#F6F6F6" 
                                         HorizontalAlignment="Stretch"></Border>
 
-                                    <Grid Grid.Row="2" ColumnDefinitions="70*,Auto,30*">                                      
+                                    <Grid Grid.Row="2" ColumnDefinitions="60*,Auto,40*">                                      
                                         
-                                        <Grid Grid.Column="0">
+                                        <Grid Grid.Column="0" ColumnDefinitions="40*,60*">
+                                            <StackPanel Grid.Row="1" ZIndex="10"
+                                                            Background="Black"
+                                                            Orientation="Horizontal"
+                                                            Spacing="2"
+                                                            Margin="0,-5,0,6"
+                                                            HorizontalAlignment="Center"
+                                                            VerticalAlignment="Top">
+                                                    <TextBlock Text="[Disk:" FontSize="12" VerticalAlignment="Center"/>
+                                                    <panels:CategoryMetricsView MetricId="disk.usage"
+                                                                                Metrics="{Binding Metrics}"
+                                                                                ShowLabel="False"
+                                                                                ShowCategoryHeader="False"
+                                                                                ValueFontWeight="Heavy"
+                                                                                MetricFontSize="10"
+                                                                                ValueForeground="{DynamicResource MetricValueBrush}"
+                                                                                VerticalAlignment="Center"/>
+                                                    <TextBlock Text="]" FontSize="12" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                             <Border 
+                                                Margin="10,30,5,30"
+                                                BorderThickness="2"
+                                                BorderBrush="#DF20ED"></Border>
+                                            <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto,Auto"
+                                                VerticalAlignment="Center"
+                                                Margin="1,0,5,0"
+                                                Background="Black"
+                                                ColumnDefinitions="Auto,*" ZIndex="10">
+                                                <!-- Total -->
+                                                <TextBlock Grid.Row="0" Grid.Column="0"
+                                                        Text="Total:"
+                                                        FontSize="9"
+                                                        VerticalAlignment="Center"
+                                                        Margin="0,0,4,0"/>
+                                                <panels:CategoryMetricsView Grid.Row="0" Grid.Column="1"
+                                                                            MetricId="disk.total"
+                                                                            Metrics="{Binding Metrics}"
+                                                                            ShowLabel="False"
+                                                                            ShowCategoryHeader="False"
+                                                                            MetricFontSize="9"
+                                                                            ValueFontWeight="Bold"
+                                                                            ValueForeground="{DynamicResource MetricValueBrush}"
+                                                                            VerticalAlignment="Center"/>
+                                                <!-- Used -->
+                                                <TextBlock Grid.Row="1" Grid.Column="0"
+                                                        Text="Used:"
+                                                        FontSize="9"
+                                                        VerticalAlignment="Center"
+                                                        Margin="0,0,4,0"/>
+                                                <panels:CategoryMetricsView Grid.Row="1" Grid.Column="1"
+                                                                            MetricId="disk.used"
+                                                                            Metrics="{Binding Metrics}"
+                                                                            ShowLabel="False"
+                                                                            ShowCategoryHeader="False"
+                                                                            MetricFontSize="9"
+                                                                            ValueFontWeight="Bold"
+                                                                            ValueForeground="{DynamicResource MetricValueBrush}"
+                                                                            VerticalAlignment="Center"/>
+                                                <!-- Free -->
+                                                <TextBlock Grid.Row="2" Grid.Column="0"
+                                                        Text="Free:"
+                                                        FontSize="9"
+                                                        VerticalAlignment="Center"
+                                                        Margin="0,0,4,0"/>
+                                                <panels:CategoryMetricsView Grid.Row="2" Grid.Column="1"
+                                                                            MetricId="disk.free"
+                                                                            Metrics="{Binding Metrics}"
+                                                                            ShowLabel="False"
+                                                                            ShowCategoryHeader="False"
+                                                                            MetricFontSize="9"
+                                                                            ValueFontWeight="Bold"
+                                                                            ValueForeground="{DynamicResource MetricValueBrush}"
+                                                                            VerticalAlignment="Center"/>
+
+                                            </Grid>
+
                                             <panels:MetricGraphView
+                                                Grid.Column="1"
                                                 Metrics="{Binding Metrics}"
                                                 HistoryStore="{Binding HistoryStore}"
                                                 MetricId="disk.usage"
@@ -411,33 +495,108 @@
                                         VerticalAlignment="Stretch">
                                         </Border>
 
-                                        <Grid Grid.Column="2">
-                                            <panels:MetricGraphView
-                                                FixedMinValue="0"
-                                                FixedMaxValue="30"
-                                                Metrics="{Binding Metrics}"
-                                                HistoryStore="{Binding HistoryStore}"
-                                                MetricId="disk.read"
-                                                SecondaryMetricId="disk.write"
-                                                MinWidth="2"
-                                                MinHeight="2"
-                                                HorizontalAlignment="Left"
-                                                VerticalAlignment="Stretch">
-                                                <!-- Disk Read -->
-                                                <panels:MetricGraphView.ContentRenderer>
-                                                    <panels:BlockAreaGraphRenderer
-                                                        TopColor="#3B82F6"
-                                                        BottomColor="#1E3A8A"
-                                                        BandCount="8"/>
-                                                </panels:MetricGraphView.ContentRenderer>
-                                                <!-- Disk Write -->
-                                                <panels:MetricGraphView.SecondaryContentRenderer>
-                                                    <panels:BlockAreaGraphRenderer
-                                                        TopColor="#FFA201"
-                                                        BottomColor="#D3E50B"
-                                                        BandCount="8"/>
-                                                    </panels:MetricGraphView.SecondaryContentRenderer>
-                                            </panels:MetricGraphView>
+                                        <Grid Grid.Column="2" ColumnDefinitions="9*,1*">
+                                            <StackPanel Grid.Row="1" ZIndex="10"
+                                                            Background="Black"
+                                                            Orientation="Horizontal"
+                                                            Spacing="2"
+                                                            Margin="0,6,0,0"
+                                                            HorizontalAlignment="Center"
+                                                            VerticalAlignment="Top">
+                                                    <TextBlock Text="read:" FontSize="9" VerticalAlignment="Center"/>
+                                                    <panels:CategoryMetricsView MetricId="disk.read"
+                                                                                Metrics="{Binding Metrics}"
+                                                                                ShowLabel="False"
+                                                                                ShowCategoryHeader="False"
+                                                                                MetricFontSize="9"
+                                                                                ValueForeground="{DynamicResource MetricValueBrush}"
+                                                                                VerticalAlignment="Center"/>
+                                                    <TextBlock Text=" ▶  " FontSize="9" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Row="1" ZIndex="10"
+                                                            Background="Black"
+                                                            Orientation="Horizontal"
+                                                            Spacing="2"
+                                                            Margin="0,0,0,6"
+                                                            HorizontalAlignment="Center"
+                                                            VerticalAlignment="Bottom">
+                                                    <TextBlock Text="  ◀ write:" FontSize="9" VerticalAlignment="Center"/>
+                                                    <panels:CategoryMetricsView MetricId="disk.write"
+                                                                                Metrics="{Binding Metrics}"
+                                                                                ShowLabel="False"
+                                                                                ShowCategoryHeader="False"
+                                                                                MetricFontSize="9"
+                                                                                ValueForeground="{DynamicResource MetricValueBrush}"
+                                                                                VerticalAlignment="Center"/>
+                                                    <TextBlock Text=" " FontSize="9" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <Border Grid.Column="0">
+                                                <Grid RowDefinitions="5*,95,5*">
+                                                    <panels:MetricGraphView
+                                                        Grid.Row="0"
+                                                        ToRight="True"
+                                                        Metrics="{Binding Metrics}"
+                                                        HistoryStore="{Binding HistoryStore}"
+                                                        MetricId="disk.read"
+                                                        MinWidth="2" MinHeight="2"
+                                                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                                        <panels:MetricGraphView.ContentRenderer>
+                                                            <panels:BlockPercentageBarRenderer MinValue="0" MaxValue="0.01"
+                                                                StartColor="#0320F8" EndColor="#09D1DB"
+                                                                UnfilledOpacity="0.5"
+                                                                MarkerBrush="White"/>
+                                                        </panels:MetricGraphView.ContentRenderer>
+                                                    </panels:MetricGraphView>
+
+                                                    <panels:MetricGraphView
+                                                        Grid.Row="1"
+                                                        FixedMinValue="0"
+                                                        FixedMaxValue="3"
+                                                        Metrics="{Binding Metrics}"
+                                                        HistoryStore="{Binding HistoryStore}"
+                                                        MetricId="disk.read"
+                                                        SecondaryMetricId="disk.write"
+                                                        ToRight="False"
+                                                        MinWidth="2"
+                                                        MinHeight="2"
+                                                        HorizontalAlignment="Left"
+                                                        VerticalAlignment="Stretch">
+                                                        <!-- Disk Read -->
+                                                        <panels:MetricGraphView.ContentRenderer>
+                                                            <panels:BlockAreaGraphRenderer
+                                                                TopColor="#F63B9F"
+                                                                BottomColor="#1E3A8A"
+                                                                BandCount="8"/>
+                                                        </panels:MetricGraphView.ContentRenderer>
+                                                        <!-- Disk Write -->
+                                                        <panels:MetricGraphView.SecondaryContentRenderer>
+                                                            <panels:BlockAreaGraphRenderer
+                                                                TopColor="#FFA201"
+                                                                BottomColor="#D3E50B"
+                                                                BandCount="8"/>
+                                                        </panels:MetricGraphView.SecondaryContentRenderer>
+                                                    </panels:MetricGraphView>
+
+                                                    <panels:MetricGraphView
+                                                        Grid.Row="2"
+                                                        ToRight="False"
+                                                        Metrics="{Binding Metrics}"
+                                                        HistoryStore="{Binding HistoryStore}"
+                                                        MetricId="disk.write"
+                                                        MinWidth="2" MinHeight="2"
+                                                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                                        <panels:MetricGraphView.ContentRenderer>
+                                                            <panels:BlockPercentageBarRenderer MinValue="0" MaxValue=".01"
+                                                                MarkerFlapAtTop="False"
+                                                                StartColor="#0320F8" EndColor="#09D1DB"
+                                                                UnfilledOpacity="0.5"
+                                                                MarkerBrush="White"/>
+                                                        </panels:MetricGraphView.ContentRenderer>
+                                                    </panels:MetricGraphView>
+                                                </Grid>
+                                            </Border>
+                                        <Grid Grid.Column="1"></Grid>
+
                                         </Grid>
                                         
                                     </Grid>
@@ -572,7 +731,7 @@
                                                 HistoryStore="{Binding HistoryStore}"
                                                 MetricId="network.upload"
                                                 FixedMinValue="0"
-                                                FixedMaxValue="1000"
+                                                FixedMaxValue="100"
                                                 MinWidth="20" MinHeight="20"
                                                 HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                                 <panels:MetricGraphView.ContentRenderer>
@@ -594,8 +753,9 @@
                                     <panels:MetricGraphView
                                         Grid.Column="2"
                                         ToRight="False"
+                                        SecondaryToRight="False"
                                         FixedMinValue="0"
-                                        FixedMaxValue="1000"
+                                        FixedMaxValue="100"
                                         Metrics="{Binding Metrics}"
                                         HistoryStore="{Binding HistoryStore}"
                                         MetricId="network.download"

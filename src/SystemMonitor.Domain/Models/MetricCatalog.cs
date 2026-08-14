@@ -81,7 +81,7 @@ public static class MetricCatalog
     public static readonly MetricCatalogEntry DiskTotal =
         new("disk.total", "Disk", "Total", MetricKind.DataSize, "GB", 512.00);
     public static readonly MetricCatalogEntry DiskRead =
-        new("disk.read", "Disk", "Read", MetricKind.DataRate, "MB/s", 12.50);
+        new("disk.read", "Disk", "Read", MetricKind.DataRate, "MB/s", 0.50);
     public static readonly MetricCatalogEntry DiskWrite =
         new("disk.write", "Disk", "Write", MetricKind.DataRate, "MB/s", 8.30);
     public static readonly MetricCatalogEntry DiskFree =
