@@ -1,4 +1,5 @@
 ﻿namespace SystemMonitor.Domain.Models;
+using System.Globalization;
 
 public enum MetricKind
 {
@@ -32,6 +33,11 @@ public class MetricReading
     public string? GpuDeviceId { get; set; }
 
     public string DisplayValue => TextValue is not null
-        ? TextValue
-        : Unit == "%" ? $"{Value}{Unit}" : $"{Value} {Unit}";
+    ? TextValue
+    : Kind switch
+    {
+        MetricKind.Percentage => $"{Value}{Unit}",
+        MetricKind.DataRate => $"{Value.ToString("N2", CultureInfo.InvariantCulture)} {Unit}",
+        _ => $"{Value} {Unit}"
+    };
 }

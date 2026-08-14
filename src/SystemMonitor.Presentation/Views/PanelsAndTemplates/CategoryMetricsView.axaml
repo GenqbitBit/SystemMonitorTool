@@ -46,14 +46,14 @@
                                        TextWrapping="Wrap"
                                        VerticalAlignment="Center"
                                        IsVisible="{Binding #Root.ShowLabel}" />
-                            <TextBlock Text="{Binding DisplayValue}"
-                                       FontSize="{Binding #Root.MetricFontSize}"
-                                       FontFamily="{Binding #Root.ContentFontFamily, Converter={x:Static local:NullToUnsetConverter.Instance}}"
-                                       FontWeight="{Binding #Root.ValueFontWeight}"
-                                       Foreground="{Binding #Root.ValueForeground, TargetNullValue={DynamicResource MetricValueBrush}}"
-                                       TextWrapping="Wrap"
-                                       VerticalAlignment="Center"
-                                       IsVisible="{Binding #Root.ShowValue}" />
+                            <TextBlock Text="{Binding Converter={StaticResource NetworkRate}}"
+                                    FontSize="{Binding #Root.MetricFontSize}"
+                                    FontFamily="{Binding #Root.ContentFontFamily, Converter={x:Static local:NullToUnsetConverter.Instance}}"
+                                    FontWeight="{Binding #Root.ValueFontWeight}"
+                                    Foreground="{Binding #Root.ValueForeground, TargetNullValue={DynamicResource MetricValueBrush}}"
+                                    TextWrapping="Wrap"
+                                    VerticalAlignment="Center"
+                                    IsVisible="{Binding #Root.ShowValue}" />
                         </StackPanel>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>

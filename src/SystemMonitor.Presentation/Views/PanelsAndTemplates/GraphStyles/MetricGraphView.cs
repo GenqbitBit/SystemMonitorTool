@@ -69,6 +69,9 @@ public class MetricGraphView : Control
 
     public static readonly StyledProperty<bool> ShowGridProperty =
         AvaloniaProperty.Register<MetricGraphView, bool>(nameof(ShowGrid), defaultValue: false);
+    
+    public static readonly StyledProperty<bool> ToRightProperty =
+        AvaloniaProperty.Register<MetricGraphView, bool>(nameof(ToRight), defaultValue: true);
 
     private INotifyCollectionChanged? _subscribedCollection;
 
@@ -174,6 +177,12 @@ public class MetricGraphView : Control
         set => SetValue(ShowGridProperty, value);
     }
 
+    public bool ToRight
+    {
+        get => GetValue(ToRightProperty);
+        set => SetValue(ToRightProperty, value);
+    }
+
     static MetricGraphView()
     {
         AffectsRender<MetricGraphView>(
@@ -192,7 +201,8 @@ public class MetricGraphView : Control
             SecondaryContentRendererProperty,
             SecondaryLineBrushProperty,
             BaselineBrushProperty,
-            ShowGridProperty);
+            ShowGridProperty,
+            ToRightProperty);
     }
 
     protected override Size MeasureOverride(Size availableSize)

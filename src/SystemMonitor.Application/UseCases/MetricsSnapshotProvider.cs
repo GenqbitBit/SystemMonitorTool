@@ -15,6 +15,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private readonly IMotherboardMonitorService _motherboard;
     private readonly IGpuMonitorService _gpu;
     private readonly IOsMonitorService _os;
+    private readonly IMetricHistoryStore _historyStore;
     private readonly Dictionary<string, Queue<double>> _smoothingWindows = new();
     private const int SmoothingWindow = 4;
     private const int DecimalPlaces = 2;
@@ -26,7 +27,8 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         INetworkMonitorService network,
         IMotherboardMonitorService motherboard,
         IGpuMonitorService gpu,
-        IOsMonitorService os)
+        IOsMonitorService os,
+        IMetricHistoryStore historyStore)
     {
         _cpu = cpu;
         _memory = memory;
@@ -35,6 +37,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         _motherboard = motherboard;
         _gpu = gpu;
         _os = os;
+        _historyStore = historyStore;
     }
 
     public IReadOnlyList<MetricReading> GetSnapshot()
@@ -46,6 +49,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         readings.Add(BuildTextReading(MetricCatalog.CpuModel, cpuInfo.ModelName));
         var cpuUsageReading = BuildReading(MetricCatalog.CpuUsage, cpuInfo.UsagePercent, smooth: true);
         readings.Add(cpuUsageReading);
+        readings.Add(BuildPeakReading(MetricCatalog.CpuUsagePeak, MetricCatalog.CpuUsage.Id));
         readings.Add(BuildComplementPercentageReading(MetricCatalog.CpuAvailable, cpuUsageReading));
         readings.Add(BuildTextReading(MetricCatalog.CpuClock, FormatClock(cpuInfo.ClockMhz)));
         readings.Add(BuildTextReading(MetricCatalog.CpuCores, cpuInfo.CoreCount.ToString()));
@@ -74,6 +78,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         readings.Add(BuildTextReading(MetricCatalog.MemoryModules, memInfo.ModuleConfig));
         readings.Add(BuildTextReading(MetricCatalog.MemoryManufacturer, memInfo.Manufacturer));
         readings.Add(BuildReading(MetricCatalog.MemoryUsage, memInfo.UsagePercent, smooth: true));
+        readings.Add(BuildPeakReading(MetricCatalog.MemoryUsagePeak, MetricCatalog.MemoryUsage.Id)); 
         readings.Add(BuildReading(MetricCatalog.MemoryUsed, usedGB));
         readings.Add(BuildReading(MetricCatalog.MemoryTotal, totalGB));
         readings.Add(BuildReading(MetricCatalog.MemoryFree, totalGB - usedGB));
@@ -92,14 +97,18 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         readings.Add(BuildReading(MetricCatalog.DiskTotal, diskInfo.TotalGB,
             labelOverride: MetricCatalog.DiskTotal.Label + diskLabelSuffix));
         readings.Add(BuildReading(MetricCatalog.DiskRead, diskInfo.ReadMBPerSec));
+        readings.Add(BuildPeakReading(MetricCatalog.DiskReadPeak, MetricCatalog.DiskRead.Id)); 
         readings.Add(BuildReading(MetricCatalog.DiskWrite, diskInfo.WriteMBPerSec));
+        readings.Add(BuildPeakReading(MetricCatalog.DiskWritePeak, MetricCatalog.DiskWrite.Id));
         readings.Add(BuildReading(MetricCatalog.DiskFree, diskInfo.TotalGB - diskInfo.UsedGB,
         labelOverride: MetricCatalog.DiskFree.Label + diskLabelSuffix));
 
         // Network
         var networkInfo = _network.GetCurrentUsage();
         readings.Add(BuildReading(MetricCatalog.NetworkDownload, networkInfo.DownloadKBPerSec));
+        readings.Add(BuildPeakReading(MetricCatalog.NetworkDownloadPeak, MetricCatalog.NetworkDownload.Id));
         readings.Add(BuildReading(MetricCatalog.NetworkUpload, networkInfo.UploadKBPerSec));
+        readings.Add(BuildPeakReading(MetricCatalog.NetworkUploadPeak, MetricCatalog.NetworkUpload.Id));
 
         // Operating System — platform-neutral, driver-free.
         // Identity first, then live counts (mirrors the CPU section's order).
@@ -171,6 +180,21 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             Unit = entry.Unit,
             IsAvailable = true,
             Value = Round(value)
+        };
+    }
+
+    private MetricReading BuildPeakReading(MetricCatalogEntry entry, string sourceMetricId)
+    {
+        var (_, max) = _historyStore.GetCommittedRange(sourceMetricId);
+        return new MetricReading
+        {
+            Id = entry.Id,
+            Category = entry.Category,
+            Label = entry.Label,
+            Kind = entry.Kind,
+            Unit = entry.Unit,
+            IsAvailable = true,
+            Value = Round(max)
         };
     }
 

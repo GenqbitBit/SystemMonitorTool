@@ -100,10 +100,10 @@ public static class MetricGraphMath
     public static IReadOnlyList<(double X, double Y)> ComputePoints(
         IReadOnlyList<MetricHistoryPoint> history, double width, double height,
         DateTime windowStart, DateTime windowEnd,
-        double? fixedMin = null, double? fixedMax = null, bool useFrozenValues = true)
+        double? fixedMin = null, double? fixedMax = null, bool useFrozenValues = true, bool toRight = true)
     {
         var range = GetValueRange(history, fixedMin, fixedMax);
-        return ComputePoints(history, width, height, windowStart, windowEnd, range.Min, range.Max, useFrozenValues);
+        return ComputePoints(history, width, height, windowStart, windowEnd, range.Min, range.Max, useFrozenValues, toRight);
     }
 
     // The auto-scale path keeps already-graduated points stable by honoring
@@ -112,14 +112,11 @@ public static class MetricGraphMath
     public static IReadOnlyList<(double X, double Y)> ComputePoints(
         IReadOnlyList<MetricHistoryPoint> history, double width, double height,
         DateTime windowStart, DateTime windowEnd,
-        double minValue, double maxValue, bool useFrozenValues = true)
+        double minValue, double maxValue, bool useFrozenValues = true, bool toRight = true)
     {
         if (width <= 0 || height <= 0 || history.Count == 0)
             return Array.Empty<(double, double)>();
 
-        // RenderMirrored deliberately calls this with min/max swapped to flip
-        // the bottom half upside-down relative to the top. Detect that so frozen
-        // historical points get flipped too, not just the live tip.
         var mirrored = maxValue < minValue;
         var orderedMin = mirrored ? maxValue : minValue;
         var orderedMax = mirrored ? minValue : maxValue;
@@ -134,7 +131,9 @@ public static class MetricGraphMath
         {
             var point = history[i];
             var normalizedX = (point.Timestamp - windowStart).TotalSeconds / windowSeconds;
-            var x = Math.Clamp(normalizedX, 0, 1) * width;
+            normalizedX = Math.Clamp(normalizedX, 0, 1);
+            if (!toRight) normalizedX = 1 - normalizedX;
+            var x = normalizedX * width;
 
             var normalizedY = useFrozenValues && point.NormalizedValue.HasValue
                 ? point.NormalizedValue.Value
