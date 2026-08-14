@@ -109,6 +109,14 @@ public static class MetricGraphMath
     // The auto-scale path keeps already-graduated points stable by honoring
     // the frozen NormalizedValue baked in at graduation time. Only the live tip
     // is re-normalized against the current range; the past remains immutable.
+    //
+    // Output is always kept ascending by X (oldest -> newest maps to
+    // points[0] -> points[^1]) regardless of toRight. toRight only flips
+    // WHERE on the canvas that ascending sequence is drawn (left-to-right
+    // vs right-to-left). Downstream consumers (BlockGraphMath.InterpolateYAt,
+    // BrailleGraphMath.InterpolateY, the "skip empty columns before first
+    // data" checks) all assume points[0].X <= points[^1].X, so this ordering
+    // must be preserved no matter which direction the graph scrolls.
     public static IReadOnlyList<(double X, double Y)> ComputePoints(
         IReadOnlyList<MetricHistoryPoint> history, double width, double height,
         DateTime windowStart, DateTime windowEnd,
@@ -117,6 +125,9 @@ public static class MetricGraphMath
         if (width <= 0 || height <= 0 || history.Count == 0)
             return Array.Empty<(double, double)>();
 
+        // RenderMirrored deliberately calls this with min/max swapped to flip
+        // the bottom half upside-down relative to the top. Detect that so frozen
+        // historical points get flipped too, not just the live tip.
         var mirrored = maxValue < minValue;
         var orderedMin = mirrored ? maxValue : minValue;
         var orderedMax = mirrored ? minValue : maxValue;
@@ -130,8 +141,7 @@ public static class MetricGraphMath
         for (int i = 0; i < history.Count; i++)
         {
             var point = history[i];
-            var normalizedX = (point.Timestamp - windowStart).TotalSeconds / windowSeconds;
-            normalizedX = Math.Clamp(normalizedX, 0, 1);
+            var normalizedX = Math.Clamp((point.Timestamp - windowStart).TotalSeconds / windowSeconds, 0, 1);
             if (!toRight) normalizedX = 1 - normalizedX;
             var x = normalizedX * width;
 
@@ -142,10 +152,14 @@ public static class MetricGraphMath
             if (mirrored) normalizedY = 1 - normalizedY;
 
             var y = height - (normalizedY * height);
-            points[i] = (x, y);
+
+            // Keep output ascending by X: when toRight is false, the direct
+            // X formula above produces a descending sequence, so we write
+            // into the mirrored output slot instead of just negating X.
+            var outIndex = toRight ? i : history.Count - 1 - i;
+            points[outIndex] = (x, y);
         }
 
         return points;
     }
-    
 }

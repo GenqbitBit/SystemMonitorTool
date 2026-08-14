@@ -69,7 +69,7 @@ public class MetricGraphView : Control
 
     public static readonly StyledProperty<bool> ShowGridProperty =
         AvaloniaProperty.Register<MetricGraphView, bool>(nameof(ShowGrid), defaultValue: false);
-    
+
     public static readonly StyledProperty<bool> ToRightProperty =
         AvaloniaProperty.Register<MetricGraphView, bool>(nameof(ToRight), defaultValue: true);
 
@@ -344,7 +344,8 @@ public class MetricGraphView : Control
 
             foreach (var (normalizedX, label) in MetricGraphMath.ComputeTimeAxisTicks(windowStart, windowEnd, timeTickCount))
             {
-                var x = plotOrigin.X + normalizedX * plotWidth;
+                var effectiveX = ToRight ? normalizedX : 1 - normalizedX;
+                var x = plotOrigin.X + effectiveX * plotWidth;
                 context.DrawLine(new Pen(GridBrush, 1), new Point(x, plotOrigin.Y), new Point(x, plotOrigin.Y + plotHeight));
 
                 var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
@@ -360,14 +361,14 @@ public class MetricGraphView : Control
 
         using (context.PushClip(plotRect))
         {
-            activeRenderer.Draw(context, plotRect, history, minValue, maxValue, windowStart, windowEnd, useFrozenValues: useFrozenValues);
+            activeRenderer.Draw(context, plotRect, history, minValue, maxValue, windowStart, windowEnd, useFrozenValues: useFrozenValues, toRight: ToRight);
         }
 
         if (!activeRenderer.SuppressDefaultCurrentValueMarker)
         {
-            var points = MetricGraphMath.ComputePoints(history, plotWidth, plotHeight, windowStart, windowEnd, minValue, maxValue, useFrozenValues);
+            var points = MetricGraphMath.ComputePoints(history, plotWidth, plotHeight, windowStart, windowEnd, minValue, maxValue, useFrozenValues, ToRight);
             if (points.Count > 0)
-                DrawCurrentValueLabel(context, plotOrigin, points, history, LineBrush, unitSuffix, typeface, fontSize, bounds);
+                DrawCurrentValueLabel(context, plotOrigin, points, history, LineBrush, unitSuffix, typeface, fontSize, bounds, ToRight);
         }
     }
 
@@ -418,7 +419,8 @@ public class MetricGraphView : Control
 
             foreach (var (normalizedX, label) in MetricGraphMath.ComputeTimeAxisTicks(windowStart, windowEnd, timeTickCount))
             {
-                var x = plotOrigin.X + normalizedX * plotWidth;
+                var effectiveX = ToRight ? normalizedX : 1 - normalizedX;
+                var x = plotOrigin.X + effectiveX * plotWidth;
                 context.DrawLine(new Pen(GridBrush, 1), new Point(x, plotOrigin.Y), new Point(x, plotOrigin.Y + plotHeight));
 
                 var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
@@ -435,12 +437,12 @@ public class MetricGraphView : Control
 
         using (context.PushClip(topRect))
         {
-            primaryRenderer.Draw(context, topRect, primaryHistory, primaryRange.Min, primaryRange.Max, windowStart, windowEnd, useFrozenValues: useFrozenValues);
+            primaryRenderer.Draw(context, topRect, primaryHistory, primaryRange.Min, primaryRange.Max, windowStart, windowEnd, useFrozenValues: useFrozenValues, toRight: ToRight);
         }
 
         using (context.PushClip(bottomRect))
         {
-            secondaryRenderer.Draw(context, bottomRect, secondaryHistory, secondaryRange.Max, secondaryRange.Min, windowStart, windowEnd, baselineAtTop: true, useFrozenValues: useFrozenValues);
+            secondaryRenderer.Draw(context, bottomRect, secondaryHistory, secondaryRange.Max, secondaryRange.Min, windowStart, windowEnd, baselineAtTop: true, useFrozenValues: useFrozenValues, toRight: ToRight);
         }
 
         context.DrawLine(new Pen(BaselineBrush, 1.5), new Point(plotOrigin.X, baselineY - halfGap / 2), new Point(plotOrigin.X + plotWidth, baselineY - halfGap / 2));
@@ -449,33 +451,36 @@ public class MetricGraphView : Control
         var secondaryUnit = GetUnitSuffix(SecondaryMetricId);
 
         if (!primaryRenderer.SuppressDefaultCurrentValueMarker)
-        {
-            var primaryPoints = MetricGraphMath.ComputePoints(primaryHistory, topRect.Width, topRect.Height, windowStart, windowEnd, primaryRange.Min, primaryRange.Max, useFrozenValues);
-            if (primaryPoints.Count > 0)
-                DrawCurrentValueLabel(context, topRect.Position, primaryPoints, primaryHistory, LineBrush, primaryUnit, typeface, fontSize, bounds, labelYOffset: -4);
-        }
+            {
+                var primaryPoints = MetricGraphMath.ComputePoints(primaryHistory, topRect.Width, topRect.Height, windowStart, windowEnd, primaryRange.Min, primaryRange.Max, useFrozenValues, ToRight);
+                if (primaryPoints.Count > 0)
+                    DrawCurrentValueLabel(context, topRect.Position, primaryPoints, primaryHistory, LineBrush, primaryUnit, typeface, fontSize, bounds, ToRight, labelYOffset: -4);
 
-        if (!secondaryRenderer.SuppressDefaultCurrentValueMarker)
-        {
-            var secondaryPoints = MetricGraphMath.ComputePoints(secondaryHistory, bottomRect.Width, bottomRect.Height, windowStart, windowEnd, secondaryRange.Max, secondaryRange.Min, useFrozenValues);
-            if (secondaryPoints.Count > 0)
-                DrawCurrentValueLabel(context, bottomRect.Position, secondaryPoints, secondaryHistory, SecondaryLineBrush, secondaryUnit, typeface, fontSize, bounds, labelYOffset: 25);
-        }
+                if (!secondaryRenderer.SuppressDefaultCurrentValueMarker)
+                {
+                    var secondaryPoints = MetricGraphMath.ComputePoints(secondaryHistory, bottomRect.Width, bottomRect.Height, windowStart, windowEnd, secondaryRange.Max, secondaryRange.Min, useFrozenValues, ToRight);
+                    if (secondaryPoints.Count > 0)
+                        DrawCurrentValueLabel(context, bottomRect.Position, secondaryPoints, secondaryHistory, SecondaryLineBrush, secondaryUnit, typeface, fontSize, bounds, ToRight, labelYOffset: 25);
+                }
+            }
     }
-
     private static void DrawCurrentValueLabel(
-        DrawingContext context, Point rectOrigin, IReadOnlyList<(double X, double Y)> points,
-        IReadOnlyList<MetricHistoryPoint> history, IBrush brush, string unitSuffix,
-        Typeface typeface, double fontSize, Rect bounds, double labelYOffset = 0)
+    DrawingContext context, Point rectOrigin, IReadOnlyList<(double X, double Y)> points,
+    IReadOnlyList<MetricHistoryPoint> history, IBrush brush, string unitSuffix,
+    Typeface typeface, double fontSize, Rect bounds, bool toRight, double labelYOffset = 0)
     {
-        var last = points[^1];
-        var lastPoint = new Point(rectOrigin.X + last.X, rectOrigin.Y + last.Y);
-        context.DrawEllipse(brush, null, lastPoint, 2.5, 2.5);
+        // points is ascending-by-X but its endpoint mapping to "newest" flips
+        // with toRight (see MetricGraphMath.ComputePoints): points[^1] is newest
+        // when toRight, points[0] is newest when !toRight. history is always
+        // chronological, so history[^1] is always the newest value.
+        var current = toRight ? points[^1] : points[0];
+        var currentPoint = new Point(rectOrigin.X + current.X, rectOrigin.Y + current.Y);
+        context.DrawEllipse(brush, null, currentPoint, 2.5, 2.5);
 
         var currentLabel = MetricGraphMath.FormatAxisValue(history[^1].Value) + unitSuffix;
         var currentText = new FormattedText(currentLabel, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
-        var labelX = Math.Clamp(lastPoint.X + 4, 0, bounds.Width - currentText.Width - 2);
-        var labelY = Math.Clamp(lastPoint.Y - currentText.Height - 2 + labelYOffset, 0, bounds.Height - currentText.Height);
+        var labelX = Math.Clamp(currentPoint.X + 4, 0, bounds.Width - currentText.Width - 2);
+        var labelY = Math.Clamp(currentPoint.Y - currentText.Height - 2 + labelYOffset, 0, bounds.Height - currentText.Height);
         context.DrawText(currentText, new Point(labelX, labelY));
     }
 

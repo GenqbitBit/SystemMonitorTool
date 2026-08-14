@@ -30,7 +30,7 @@ public class BlockPercentageBarRenderer : IGraphContentRenderer
 
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
         double minValue, double maxValue, DateTime windowStart, DateTime windowEnd,
-        bool baselineAtTop = false, bool useFrozenValues = true)
+        bool baselineAtTop = false, bool useFrozenValues = true, bool toRight = true)
     {
         if (history.Count == 0)
             return;
@@ -46,33 +46,25 @@ public class BlockPercentageBarRenderer : IGraphContentRenderer
             if (x + BlockWidth > plotRect.Width)
                 break;
 
-            // Percentage represented by THIS column's fixed position along the
-            // bar — a plain 0-100 mapping across plotRect.Width, not derived
-            // from any history shape.
             var colPct = (x + BlockWidth / 2) / plotRect.Width * 100;
+            if (!toRight) colPct = 100 - colPct;
             var t = Math.Clamp(colPct / 100.0, 0, 1);
             var color = GraphColorMath.Lerp(StartColor, EndColor, t);
 
             var isFilled = colPct <= currentValue;
-            // Alpha is baked directly into the Color rather than left to
-            // Brush.Opacity, so the dimming is guaranteed regardless of any
-            // other opacity/compositing state in the render tree.
             var drawColor = isFilled ? color : WithOpacity(color, UnfilledOpacity);
 
             context.FillRectangle(new SolidColorBrush(drawColor), new Rect(plotRect.X + x, plotRect.Y, BlockWidth, plotRect.Height));
         }
 
-        DrawTipMarker(context, plotRect, currentValue);
+        DrawTipMarker(context, plotRect, currentValue, toRight);
     }
 
-    // A precise marker at the EXACT tip position, independent of block-width
-    // quantization. Drawn as a line through the bar plus a small cap flush
-    // with the TOP of plotRect — not above it. MetricGraphView clips renderer
-    // output to plotRect (see RenderSingle's PushClip), so anything drawn
-    // above plotRect.Y is invisible no matter how large it's made.
-    private void DrawTipMarker(DrawingContext context, Rect plotRect, double currentValue)
+    private void DrawTipMarker(DrawingContext context, Rect plotRect, double currentValue, bool toRight)
     {
-        var tipX = plotRect.X + currentValue / 100.0 * plotRect.Width;
+        var fraction = currentValue / 100.0;
+        if (!toRight) fraction = 1 - fraction;
+        var tipX = plotRect.X + fraction * plotRect.Width;
         context.DrawLine(new Pen(MarkerBrush, MarkerLineThickness),
             new Point(tipX, plotRect.Y), new Point(tipX, plotRect.Y + plotRect.Height));
 
@@ -80,7 +72,7 @@ public class BlockPercentageBarRenderer : IGraphContentRenderer
         context.FillRectangle(MarkerBrush,
             new Rect(tipX - MarkerFlapWidth / 2, plotRect.Y, MarkerFlapWidth, flapHeight));
     }
-
+    
     private static Color WithOpacity(Color color, double opacity)
     {
         var alpha = (byte)(color.A * Math.Clamp(opacity, 0, 1));

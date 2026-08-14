@@ -37,7 +37,7 @@ public class BraillePercentageBarRenderer : IGraphContentRenderer
 
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
         double minValue, double maxValue, DateTime windowStart, DateTime windowEnd,
-        bool baselineAtTop = false, bool useFrozenValues = true)
+        bool baselineAtTop = false, bool useFrozenValues = true, bool toRight = true)
     {
         if (history.Count == 0)
             return;
@@ -57,7 +57,12 @@ public class BraillePercentageBarRenderer : IGraphContentRenderer
             {
                 var cellX = col * CellWidth;
 
+                // Percentage represented by THIS cell's fixed position along
+                // the bar. Mirrored when toRight is false so 100% anchors to
+                // plotRect.X instead of the far edge — keeps the gradient and
+                // fill direction a true mirror image of the toRight=true case.
                 var colPct = (cellX + CellWidth / 2) / plotRect.Width * 100;
+                if (!toRight) colPct = 100 - colPct;
                 var t = Math.Clamp(colPct / 100.0, 0, 1);
                 var color = GraphColorMath.Lerp(StartColor, EndColor, t);
 
@@ -73,16 +78,19 @@ public class BraillePercentageBarRenderer : IGraphContentRenderer
             }
         }
 
-        DrawTipMarker(context, plotRect, currentValue);
+        DrawTipMarker(context, plotRect, currentValue, toRight);
     }
 
     // Same precise, non-quantized tip marker as the block variant — drawn
     // flush with the TOP of plotRect (not above it), since MetricGraphView
     // clips renderer output to plotRect and anything above plotRect.Y is
-    // invisible no matter how large MarkerFlapHeight is set.
-    private void DrawTipMarker(DrawingContext context, Rect plotRect, double currentValue)
+    // invisible no matter how large MarkerFlapHeight is set. Mirrored when
+    // toRight is false to match the mirrored fill above.
+    private void DrawTipMarker(DrawingContext context, Rect plotRect, double currentValue, bool toRight)
     {
-        var tipX = plotRect.X + currentValue / 100.0 * plotRect.Width;
+        var fraction = currentValue / 100.0;
+        if (!toRight) fraction = 1 - fraction;
+        var tipX = plotRect.X + fraction * plotRect.Width;
         context.DrawLine(new Pen(MarkerBrush, MarkerLineThickness),
             new Point(tipX, plotRect.Y), new Point(tipX, plotRect.Y + plotRect.Height));
 

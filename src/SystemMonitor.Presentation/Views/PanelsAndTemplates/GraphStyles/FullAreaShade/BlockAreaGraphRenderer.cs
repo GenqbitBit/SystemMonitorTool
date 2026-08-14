@@ -22,15 +22,15 @@ public class BlockAreaGraphRenderer : IGraphContentRenderer
 
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
         double minValue, double maxValue, DateTime windowStart, DateTime windowEnd,
-        bool baselineAtTop = false, bool useFrozenValues = true)
+        bool baselineAtTop = false, bool useFrozenValues = true, bool toRight = true)
     {
         if (plotRect.Width < SmallPlotWidthThreshold || plotRect.Height < SmallPlotHeightThreshold)
         {
-            DrawLineFallback(context, plotRect, history, minValue, maxValue, windowStart, windowEnd, useFrozenValues);
+            DrawLineFallback(context, plotRect, history, minValue, maxValue, windowStart, windowEnd, useFrozenValues, toRight);
             return;
         }
 
-        var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, windowStart, windowEnd, minValue, maxValue, useFrozenValues);
+        var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, windowStart, windowEnd, minValue, maxValue, useFrozenValues, toRight);
         if (points.Count == 0)
             return;
 
@@ -85,9 +85,9 @@ public class BlockAreaGraphRenderer : IGraphContentRenderer
     }
 
     private void DrawLineFallback(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
-        double minValue, double maxValue, DateTime windowStart, DateTime windowEnd, bool useFrozenValues)
+        double minValue, double maxValue, DateTime windowStart, DateTime windowEnd, bool useFrozenValues, bool toRight)
     {
-        var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, windowStart, windowEnd, minValue, maxValue, useFrozenValues);
+        var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, windowStart, windowEnd, minValue, maxValue, useFrozenValues, toRight);
         if (points.Count == 0)
             return;
 

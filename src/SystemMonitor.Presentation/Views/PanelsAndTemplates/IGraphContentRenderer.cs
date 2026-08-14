@@ -10,7 +10,7 @@ public interface IGraphContentRenderer
 {
     void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
         double minValue, double maxValue, DateTime windowStart, DateTime windowEnd,
-        bool baselineAtTop = false, bool useFrozenValues = true);
+        bool baselineAtTop = false, bool useFrozenValues = true, bool toRight = true);
 
     // When true, MetricGraphView skips its own dot+value-label overlay for
     // this renderer. Defaults to false so BlockAreaGraphRenderer and
