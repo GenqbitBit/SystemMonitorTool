@@ -42,7 +42,8 @@ public static class MetricCatalog
         new("cpu.cores", "CPU", "Cores", MetricKind.Text, "", 0, SampleText: "6");
     public static readonly MetricCatalogEntry CpuThreads =
         new("cpu.threads", "CPU", "Threads", MetricKind.Text, "", 0, SampleText: "12");
-
+    public static readonly MetricCatalogEntry CpuAvailable =
+        new("cpu.available", "CPU", "Available", MetricKind.Percentage, "%", 58.00);
 
     // Memory
     public static readonly MetricCatalogEntry MemoryName =
@@ -61,6 +62,8 @@ public static class MetricCatalog
         new("memory.used", "Memory", "Used", MetricKind.DataSize, "GB", 10.20);
     public static readonly MetricCatalogEntry MemoryTotal =
         new("memory.total", "Memory", "Total", MetricKind.DataSize, "GB", 16.00);
+    public static readonly MetricCatalogEntry MemoryFree =
+        new("memory.free", "Memory", "Free", MetricKind.DataSize, "GB", 5.80);
 
     // Disk
     public static readonly MetricCatalogEntry DiskModel =
@@ -81,6 +84,8 @@ public static class MetricCatalog
         new("disk.read", "Disk", "Read", MetricKind.DataRate, "MB/s", 12.50);
     public static readonly MetricCatalogEntry DiskWrite =
         new("disk.write", "Disk", "Write", MetricKind.DataRate, "MB/s", 8.30);
+    public static readonly MetricCatalogEntry DiskFree =
+        new("disk.free", "Disk", "Free", MetricKind.DataSize, "GB", 256.00);
 
     // Network
     public static readonly MetricCatalogEntry NetworkDownload =

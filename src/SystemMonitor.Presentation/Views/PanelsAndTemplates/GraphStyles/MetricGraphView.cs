@@ -353,11 +353,12 @@ public class MetricGraphView : Control
             activeRenderer.Draw(context, plotRect, history, minValue, maxValue, windowStart, windowEnd, useFrozenValues: useFrozenValues);
         }
 
-        var points = MetricGraphMath.ComputePoints(history, plotWidth, plotHeight, windowStart, windowEnd, minValue, maxValue, useFrozenValues);
-        if (points.Count == 0)
-            return;
-
-        DrawCurrentValueLabel(context, plotOrigin, points, history, LineBrush, unitSuffix, typeface, fontSize, bounds);
+        if (!activeRenderer.SuppressDefaultCurrentValueMarker)
+        {
+            var points = MetricGraphMath.ComputePoints(history, plotWidth, plotHeight, windowStart, windowEnd, minValue, maxValue, useFrozenValues);
+            if (points.Count > 0)
+                DrawCurrentValueLabel(context, plotOrigin, points, history, LineBrush, unitSuffix, typeface, fontSize, bounds);
+        }
     }
 
     private void RenderMirrored(DrawingContext context, Rect bounds, Point plotOrigin, double plotWidth, double plotHeight)
@@ -437,13 +438,19 @@ public class MetricGraphView : Control
         var primaryUnit = GetUnitSuffix(MetricId);
         var secondaryUnit = GetUnitSuffix(SecondaryMetricId);
 
-        var primaryPoints = MetricGraphMath.ComputePoints(primaryHistory, topRect.Width, topRect.Height, windowStart, windowEnd, primaryRange.Min, primaryRange.Max, useFrozenValues);
-        if (primaryPoints.Count > 0)
-            DrawCurrentValueLabel(context, topRect.Position, primaryPoints, primaryHistory, LineBrush, primaryUnit, typeface, fontSize, bounds, labelYOffset: -4);
+        if (!primaryRenderer.SuppressDefaultCurrentValueMarker)
+        {
+            var primaryPoints = MetricGraphMath.ComputePoints(primaryHistory, topRect.Width, topRect.Height, windowStart, windowEnd, primaryRange.Min, primaryRange.Max, useFrozenValues);
+            if (primaryPoints.Count > 0)
+                DrawCurrentValueLabel(context, topRect.Position, primaryPoints, primaryHistory, LineBrush, primaryUnit, typeface, fontSize, bounds, labelYOffset: -4);
+        }
 
-        var secondaryPoints = MetricGraphMath.ComputePoints(secondaryHistory, bottomRect.Width, bottomRect.Height, windowStart, windowEnd, secondaryRange.Max, secondaryRange.Min, useFrozenValues);
-        if (secondaryPoints.Count > 0)
-            DrawCurrentValueLabel(context, bottomRect.Position, secondaryPoints, secondaryHistory, SecondaryLineBrush, secondaryUnit, typeface, fontSize, bounds, labelYOffset: 12);
+        if (!secondaryRenderer.SuppressDefaultCurrentValueMarker)
+        {
+            var secondaryPoints = MetricGraphMath.ComputePoints(secondaryHistory, bottomRect.Width, bottomRect.Height, windowStart, windowEnd, secondaryRange.Max, secondaryRange.Min, useFrozenValues);
+            if (secondaryPoints.Count > 0)
+                DrawCurrentValueLabel(context, bottomRect.Position, secondaryPoints, secondaryHistory, SecondaryLineBrush, secondaryUnit, typeface, fontSize, bounds, labelYOffset: 25);
+        }
     }
 
     private static void DrawCurrentValueLabel(

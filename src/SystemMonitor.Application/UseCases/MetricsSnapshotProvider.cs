@@ -44,7 +44,9 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         // CPU — identity rows first (emission order = display order).
         var cpuInfo = _cpu.GetCurrentUsage();
         readings.Add(BuildTextReading(MetricCatalog.CpuModel, cpuInfo.ModelName));
-        readings.Add(BuildReading(MetricCatalog.CpuUsage, cpuInfo.UsagePercent, smooth: true));
+        var cpuUsageReading = BuildReading(MetricCatalog.CpuUsage, cpuInfo.UsagePercent, smooth: true);
+        readings.Add(cpuUsageReading);
+        readings.Add(BuildComplementPercentageReading(MetricCatalog.CpuAvailable, cpuUsageReading));
         readings.Add(BuildTextReading(MetricCatalog.CpuClock, FormatClock(cpuInfo.ClockMhz)));
         readings.Add(BuildTextReading(MetricCatalog.CpuCores, cpuInfo.CoreCount.ToString()));
         readings.Add(BuildTextReading(MetricCatalog.CpuThreads, cpuInfo.ThreadCount.ToString()));
@@ -74,6 +76,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         readings.Add(BuildReading(MetricCatalog.MemoryUsage, memInfo.UsagePercent, smooth: true));
         readings.Add(BuildReading(MetricCatalog.MemoryUsed, usedGB));
         readings.Add(BuildReading(MetricCatalog.MemoryTotal, totalGB));
+        readings.Add(BuildReading(MetricCatalog.MemoryFree, totalGB - usedGB));
 
         // Disk — identity rows first, then live usage.
         var diskInfo = _disk.GetCurrentUsage();
@@ -90,6 +93,8 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             labelOverride: MetricCatalog.DiskTotal.Label + diskLabelSuffix));
         readings.Add(BuildReading(MetricCatalog.DiskRead, diskInfo.ReadMBPerSec));
         readings.Add(BuildReading(MetricCatalog.DiskWrite, diskInfo.WriteMBPerSec));
+        readings.Add(BuildReading(MetricCatalog.DiskFree, diskInfo.TotalGB - diskInfo.UsedGB,
+        labelOverride: MetricCatalog.DiskFree.Label + diskLabelSuffix));
 
         // Network
         var networkInfo = _network.GetCurrentUsage();
@@ -224,6 +229,20 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         IsAvailable = text is not null,
         TextValue = text
     };
+
+    private static MetricReading BuildComplementPercentageReading(MetricCatalogEntry entry, MetricReading source)
+    {
+        return new MetricReading
+        {
+            Id = entry.Id,
+            Category = entry.Category,
+            Label = entry.Label,
+            Kind = entry.Kind,
+            Unit = entry.Unit,
+            IsAvailable = source.IsAvailable,
+            Value = Round(100 - source.Value)
+        };
+    }
 
     private static MetricReading BuildTextReading(MetricCatalogEntry entry, string? text) => new()
     {
