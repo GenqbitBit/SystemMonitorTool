@@ -41,6 +41,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private string? integratedGpuMetricId;
 
+    [ObservableProperty]
+    private double _responsiveScale = 1.0;
+
     // One entry per physical GPU detected this snapshot, keyed on the real
     // DeviceId — drives the dynamic per-GPU panel ItemsControl in MainWindow.axaml.
     [ObservableProperty]
@@ -173,6 +176,18 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             Apply();
         else
             Dispatcher.UIThread.Post(Apply);
+    }
+
+
+    public void UpdateResponsiveScale(double windowWidth, double windowHeight)
+    {
+        const double designWidth = 850;
+        double raw = windowWidth / designWidth;
+
+        // dampen further: only apply a third of the proportional growth beyond 1.0
+        double dampened = 1.0 + (raw - 1.0) * 0.25;
+
+        ResponsiveScale = Math.Clamp(dampened, 0.9, 1.2);
     }
 
     /// <summary>

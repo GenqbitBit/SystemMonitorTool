@@ -3,12 +3,14 @@
              x:Class="SystemMonitor.Presentation.App"
              xmlns:local="using:SystemMonitor.Presentation"
              xmlns:common="using:SystemMonitor.Presentation.Common"
+             xmlns:converters="using:SystemMonitor.Presentation.Converters"
              RequestedThemeVariant="Dark">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
      <Application.Resources>
         <ResourceDictionary>
             <SolidColorBrush x:Key="MetricValueBrush" Color="#19CB90" />
+            <converters:ScaleFontSizeConverter x:Key="ScaleFontSize" />
         </ResourceDictionary>
     </Application.Resources>
 
