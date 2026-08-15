@@ -6,6 +6,8 @@ using SystemMonitor.Application.UseCases;
 using SystemMonitor.Infrastructure.Monitoring.CrossPlatform;
 using SystemMonitor.Infrastructure.Persistence;
 namespace SystemMonitor.Infrastructure;
+using SystemMonitor.Domain.AsciiArt;     
+using SystemMonitor.Application.AsciiArt; 
 
 public static class PlatformMonitoringRegistration
 {
@@ -16,6 +18,7 @@ public static class PlatformMonitoringRegistration
         // Cross-platform — Microsoft.Data.Sqlite works identically on every
         // OS, so this doesn't belong inside the Windows-only branch below.
         services.AddSingleton<IMetricHistoryPersistenceService, SqliteMetricHistoryPersistenceService>();
+        services.AddSingleton<IAsciiArtConverter, AsciiArtConverter>();
 
         if (OperatingSystem.IsWindows())
         {
