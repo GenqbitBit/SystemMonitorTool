@@ -7,8 +7,12 @@
              RequestedThemeVariant="Dark">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
-     <Application.Resources>
+    <Application.Resources>
         <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://SystemMonitor.Presentation/Resources/AppIcons.axaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
             <SolidColorBrush x:Key="MetricValueBrush" Color="#19CB90" />
             <converters:ScaleFontSizeConverter x:Key="ScaleFontSize" />
             <converters:NetworkRateConverter x:Key="NetworkRate" />

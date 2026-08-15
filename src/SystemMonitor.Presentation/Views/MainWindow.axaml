@@ -39,13 +39,9 @@
                     <Grid ColumnDefinitions="30*,Auto,70*">
 
                         <Border Grid.Column="0"
-                                Background="Black"
-                                Padding="7,0"
-                                MinWidth="50"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                Margin="0,-10,0,0"
-                                ZIndex="10">
+                        BorderBrush="White"
+                        BorderThickness="1"
+                        Margin="10">
                         </Border>
 
                         
@@ -67,7 +63,141 @@
 
                                 <Grid Grid.Row="0" ColumnDefinitions="30*,Auto,70*">
                                     
-                                    <Grid Grid.Column="0">
+                                    <Grid Grid.Column="0" ColumnDefinitions="*">
+
+                                        <Border Grid.Column="1"
+                                            Margin="0,20,15,0"
+                                            HorizontalAlignment="Right"
+                                            Width="3" Background="#13B45C" 
+                                            VerticalAlignment="Stretch">
+                                        </Border>
+
+                                        <Border Grid.Row="1"
+                                        Margin="0,15,20,0"
+                                        VerticalAlignment="Top"
+                                        Height="2" Background="#13B45C" 
+                                        HorizontalAlignment="Stretch"></Border>
+
+                                        <Border Opacity=".3">
+                                            <Image Width="120" Height="120"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                Source="{StaticResource ChipIconDrawing}" />
+                                        </Border>
+
+                                        <Grid RowDefinitions="35*,30*,20*">
+
+                                            <Grid Grid.Row="0">
+                                                <StackPanel ZIndex="10"
+                                                                    Background="Black"
+                                                                    Orientation="Horizontal"
+                                                                    Spacing="2"
+                                                                    Margin="10,10,0,0"
+                                                                    HorizontalAlignment="Left"
+                                                                    VerticalAlignment="Top">
+                                                            <TextBlock Text=" OS:" FontSize="11" VerticalAlignment="Center"/>
+                                                            <panels:CategoryMetricsView MetricId="os.name"
+                                                                                        Metrics="{Binding Metrics}"
+                                                                                        ShowLabel="False"
+                                                                                        ShowCategoryHeader="False"
+                                                                                        MetricFontSize="11"
+                                                                                        ValueForeground="{DynamicResource MetricValueBrush}"
+                                                                                        VerticalAlignment="Center"/>
+                                                            <TextBlock Text=" " FontSize="9" VerticalAlignment="Center"/>
+                                                </StackPanel>
+
+                                                <StackPanel ZIndex="10"
+                                                                    Background="#00000000"
+                                                                    Orientation="Vertical"
+                                                                    Spacing="2"
+                                                                    Margin="10,10,0,0"
+                                                                    HorizontalAlignment="Left"
+                                                                    VerticalAlignment="Bottom">
+                                                            <TextBlock Text="Version ▼" FontSize="11" VerticalAlignment="Center"/>
+                                                            <panels:CategoryMetricsView MetricId="os.version"
+                                                                                        Metrics="{Binding Metrics}"
+                                                                                        ShowLabel="False"
+                                                                                        ShowCategoryHeader="False"
+                                                                                        MetricFontSize="9"
+                                                                                        ValueForeground="{DynamicResource MetricValueBrush}"
+                                                                                        VerticalAlignment="Center"/>
+                                                            <TextBlock Text="" FontSize="9" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Grid>
+
+
+                                            <Grid  Grid.Row="1" RowDefinitions="Auto,Auto,Auto,Auto"
+                                                    VerticalAlignment="Top"
+                                                    HorizontalAlignment="Left"
+                                                    Margin="10,-5,5,0"
+                                                    Background="#00070707"
+                                                    ColumnDefinitions="Auto,*" ZIndex="10">
+                                                    <TextBlock Grid.Row="0" Grid.Column="0"
+                                                            Text="processes:"
+                                                            FontSize="9"
+                                                            VerticalAlignment="Center"
+                                                            Margin="0,0,4,0"/>
+                                                    <panels:CategoryMetricsView Grid.Row="0" Grid.Column="1"
+                                                                                MetricId="os.processes"
+                                                                                Metrics="{Binding Metrics}"
+                                                                                ShowLabel="False"
+                                                                                ShowCategoryHeader="False"
+                                                                                MetricFontSize="9"
+                                                                                ValueFontWeight="Bold"
+                                                                                ValueForeground="{DynamicResource MetricValueBrush}"
+                                                                                VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Row="1" Grid.Column="0"
+                                                            Text="threads:"
+                                                            FontSize="9"
+                                                            VerticalAlignment="Center"
+                                                            Margin="0,0,4,0"/>
+                                                    <panels:CategoryMetricsView Grid.Row="1" Grid.Column="1"
+                                                                                MetricId="os.threads"
+                                                                                Metrics="{Binding Metrics}"
+                                                                                ShowLabel="False"
+                                                                                ShowCategoryHeader="False"
+                                                                                MetricFontSize="9"
+                                                                                ValueFontWeight="Bold"
+                                                                                ValueForeground="{DynamicResource MetricValueBrush}"
+                                                                                VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Row="2" Grid.Column="0"
+                                                            Text="handles:"
+                                                            FontSize="9"
+                                                            VerticalAlignment="Center"
+                                                            Margin="0,0,4,0"/>
+                                                    <panels:CategoryMetricsView Grid.Row="2" Grid.Column="1"
+                                                                                MetricId="os.handles"
+                                                                                Metrics="{Binding Metrics}"
+                                                                                ShowLabel="False"
+                                                                                ShowCategoryHeader="False"
+                                                                                MetricFontSize="9"
+                                                                                ValueFontWeight="Bold"
+                                                                                ValueForeground="{DynamicResource MetricValueBrush}"
+                                                                                VerticalAlignment="Center"/>
+                                            </Grid>
+
+                                            <Grid Grid.Row="2">
+                                                <StackPanel ZIndex="10"
+                                                                    Background="Black"
+                                                                    Orientation="Horizontal"
+                                                                    Spacing="2"
+                                                                    Margin="10,0,0,10"
+                                                                    HorizontalAlignment="Left"
+                                                                    VerticalAlignment="Bottom">
+                                                            <TextBlock Text="MotherBoard:" FontSize="9" VerticalAlignment="Center"/>
+                                                            <panels:CategoryMetricsView MetricId="motherboard.model"
+                                                                                        Metrics="{Binding Metrics}"
+                                                                                        ShowLabel="False"
+                                                                                        ShowCategoryHeader="False"
+                                                                                        MetricFontSize="9"
+                                                                                        ValueForeground="{DynamicResource MetricValueBrush}"
+                                                                                        VerticalAlignment="Center"/>
+                                                            <TextBlock Text="" FontSize="9" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                              
+                                            </Grid>
+
+                                            
+                                        </Grid>
                                     </Grid>
 
                                     <Border Grid.Column="1"
@@ -362,8 +492,8 @@
 
                                         <Grid Grid.Row="0" ColumnDefinitions="60*,Auto,40*">
                                             <Border 
-                                                    ZIndex="-1"
-                                                    Margin="10,10,10,10"
+                                                    ZIndex="-15"
+                                                    Margin="10,10,-10,10"
                                                     BorderBrush="DeepPink"
                                                     BorderThickness="1.6">
                                             </Border>
