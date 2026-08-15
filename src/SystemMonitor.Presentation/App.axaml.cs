@@ -38,7 +38,8 @@ public partial class App : Avalonia.Application
             };
 
             var converter = provider.GetRequiredService<IAsciiArtConverter>();
-            mainWindow.AsciiPanel.DataContext = new AsciiArtPanelViewModel(converter);
+            mainWindow.AsciiPanel.DataContext =
+                new AsciiArtPanelViewModel(converter, mainWindow.StorageProvider);
 
             desktop.MainWindow = mainWindow;
         }

@@ -23,7 +23,7 @@ public partial class AsciiArtPanel : UserControl
 
     private void StartSpin()
     {
-        if (ArtVisual.RenderTransform is not RotateTransform)
+        if (ArtVisual.RenderTransform is not ScaleTransform)
             return;
 
         _spinTimer = new DispatcherTimer
@@ -32,9 +32,14 @@ public partial class AsciiArtPanel : UserControl
         };
         _spinTimer.Tick += (_, _) =>
         {
-            _angle = (_angle + 1.0) % 360.0; // ~6s per full rotation at 60fps
-            if (ArtVisual.RenderTransform is RotateTransform t)
-                t.Angle = _angle;
+            _angle = (_angle + 1.0) % 360.0;
+            double radians = _angle * Math.PI / 180.0;
+
+            if (ArtVisual.RenderTransform is ScaleTransform t)
+            {
+                t.ScaleX = Math.Cos(radians);
+                ArtVisual.Opacity = 0.35 + 0.65 * Math.Abs(Math.Cos(radians));
+            }
         };
         _spinTimer.Start();
     }
