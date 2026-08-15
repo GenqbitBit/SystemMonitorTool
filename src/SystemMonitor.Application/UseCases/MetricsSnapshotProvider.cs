@@ -134,6 +134,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             readings.Add(BuildGpuReading(MetricCatalog.GpuUsage, gpuInfo, gpuInfo.UsagePercent, smooth: true, gpuLabelSuffix));
             readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryUsed, gpuInfo, gpuUsedGB, smooth: false, gpuLabelSuffix));
             readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryTotal, gpuInfo, gpuTotalGB, smooth: false, gpuLabelSuffix));
+            readings.Add(BuildGpuTextReading(MetricCatalog.GpuModel, gpuInfo, gpuInfo.Name, gpuLabelSuffix));
         }
 
         // Temperature — now bundled into each hardware's own Info model instead
@@ -243,15 +244,18 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     };
 
     private static MetricReading BuildGpuTextReading(
-        MetricCatalogEntry entry, int gpuIndex, string? text, string labelSuffix) => new()
+    MetricCatalogEntry entry, GpuInfo gpuInfo, string? text, string labelSuffix) => new()
     {
-        Id = $"{entry.Id}.{gpuIndex}",
+        Id = $"{entry.Id}.{gpuInfo.DeviceId}",
         Category = entry.Category,
         Label = entry.Label + labelSuffix,
         Kind = entry.Kind,
         Unit = entry.Unit,
         IsAvailable = text is not null,
-        TextValue = text
+        TextValue = text,
+        GpuIndex = gpuInfo.Index,
+        GpuIsIntegrated = gpuInfo.IsIntegrated,
+        GpuDeviceId = gpuInfo.DeviceId
     };
 
     private static MetricReading BuildComplementPercentageReading(MetricCatalogEntry entry, MetricReading source)

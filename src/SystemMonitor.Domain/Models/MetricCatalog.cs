@@ -116,6 +116,8 @@ public static class MetricCatalog
         new("os.handles", "OS", "Handles", MetricKind.Text, "", 0, SampleText: "5,412,338");    
 
     // GPU
+    public static readonly MetricCatalogEntry GpuModel =
+        new("gpu.model", "GPU", "Model", MetricKind.Text, "", 0, SampleText: "NVIDIA GeForce RTX 4060");
     public static readonly MetricCatalogEntry GpuUsage =
         new("gpu.usage", "GPU", "Usage", MetricKind.Percentage, "%", 37.00);
     public static readonly MetricCatalogEntry GpuMemoryUsed =

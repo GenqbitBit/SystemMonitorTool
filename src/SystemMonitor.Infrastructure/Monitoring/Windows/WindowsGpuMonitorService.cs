@@ -39,11 +39,28 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
             var name = obj["Name"]?.ToString() ?? "Unknown";
             var vendor = obj["AdapterCompatibility"]?.ToString() ?? "Unknown";
             var driverVersion = obj["DriverVersion"]?.ToString() ?? "Unknown";
-            var wmiMemoryMb = Convert.ToDouble(obj["AdapterRAM"] ?? 0) / (1024 * 1024);
-            var integrated = LooksIntegrated(name, wmiMemoryMb);
 
             var luidFilter = ResolveGpuLuidFromDxgi(name);
             var libreHardware = ResolveGpuHardwareFromLibre(name);
+
+            // Win32_VideoController.AdapterRAM is a 32-bit field that overflows
+            // for any GPU with ~4GB+ VRAM (e.g. a 6GB RTX 4050 reports back
+            // garbage or near-zero), which was silently misclassifying dedicated
+            // GPUs as integrated. LibreHardwareMonitor reads VRAM size straight
+            // from the driver and doesn't have this problem — prefer it, and
+            // only fall back to WMI's AdapterRAM if no Libre hardware resolved
+            // for this device at all.
+            var libreMemoryMb = GetLibreGpuMemoryTotalMb(libreHardware);
+            var memoryMb = libreMemoryMb > 0
+                ? libreMemoryMb
+                : Convert.ToDouble(obj["AdapterRAM"] ?? 0) / (1024 * 1024);
+
+            var integrated = LooksIntegrated(name, memoryMb);
+
+            Debug.WriteLine(
+            $"[GPU] '{name}': libreMemoryMb={libreMemoryMb}, wmiMemoryMb=" +
+            $"{Convert.ToDouble(obj["AdapterRAM"] ?? 0) / (1024 * 1024)}, " +
+            $"resolvedMemoryMb={memoryMb}, integrated={integrated}");
 
             // DeviceId is the identity every downstream layer keys on. LUID when
             // DXGI resolved it; otherwise a logged fallback so a real resolution
@@ -80,6 +97,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
     private static string? ResolveGpuLuidFromDxgi(string gpuName)
     {
         var seenDxgiNames = new List<string>();
+        var normalizedTarget = NormalizeGpuName(gpuName);
 
         try
         {
@@ -91,7 +109,9 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
                 var dxgiName = (desc.Description ?? string.Empty).Trim();
                 seenDxgiNames.Add(dxgiName);
 
-                if (string.Equals(dxgiName, gpuName.Trim(), StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(NormalizeGpuName(dxgiName), normalizedTarget, StringComparison.OrdinalIgnoreCase)
+                    || (normalizedTarget.Length > 0 && NormalizeGpuName(dxgiName).Contains(normalizedTarget, StringComparison.OrdinalIgnoreCase))
+                    || (normalizedTarget.Length > 0 && normalizedTarget.Contains(NormalizeGpuName(dxgiName), StringComparison.OrdinalIgnoreCase)))
                 {
                     var luid = desc.Luid;
                     adapter.Dispose();
@@ -119,8 +139,11 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
             .Where(h => h.HardwareType is HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel)
             .ToList();
 
+        var normalizedTarget = NormalizeGpuName(gpuName);
         var match = candidates.FirstOrDefault(h =>
-            string.Equals(h.Name?.Trim(), gpuName.Trim(), StringComparison.OrdinalIgnoreCase));
+            string.Equals(NormalizeGpuName(h.Name), normalizedTarget, StringComparison.OrdinalIgnoreCase)
+            || (normalizedTarget.Length > 0 && NormalizeGpuName(h.Name).Contains(normalizedTarget, StringComparison.OrdinalIgnoreCase))
+            || (normalizedTarget.Length > 0 && normalizedTarget.Contains(NormalizeGpuName(h.Name), StringComparison.OrdinalIgnoreCase)));
 
         if (match is null)
         {
@@ -130,6 +153,45 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         }
 
         return match;
+    }
+
+    private static string NormalizeGpuName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var normalized = value.Trim();
+        normalized = new string(normalized
+            .Where(ch => char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch))
+            .ToArray());
+
+        return string.Join(' ', normalized.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .ToLowerInvariant();
+    }
+
+    // Reads total VRAM (MB) straight from LibreHardwareMonitor's "GPU Memory
+    // Total" sensor — used instead of WMI's AdapterRAM for integrated/dedicated
+    // classification, since AdapterRAM is a 32-bit field that overflows on
+    // GPUs with ~4GB+ VRAM. Returns 0 if no Libre hardware resolved or the
+    // sensor isn't present, signaling the caller to fall back to WMI.
+    private static double GetLibreGpuMemoryTotalMb(IHardware? hardware)
+    {
+        if (hardware is null)
+            return 0;
+
+        hardware.Update();
+
+        foreach (var sensor in hardware.Sensors)
+        {
+            if (sensor.SensorType == SensorType.SmallData
+                && sensor.Name == "GPU Memory Total"
+                && sensor.Value is float value)
+            {
+                return Math.Round(value, 2);
+            }
+        }
+
+        return 0;
     }
 
     private static bool LooksIntegrated(string name, double memoryMb)
