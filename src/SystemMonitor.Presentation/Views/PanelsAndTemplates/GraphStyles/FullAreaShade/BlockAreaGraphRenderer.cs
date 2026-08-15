@@ -8,7 +8,7 @@ namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 
 public class BlockAreaGraphRenderer : IGraphContentRenderer
 {
-    public double BlockWidth { get; set; } = 2;
+    public double BlockWidth { get; set; } = 5;
     public double BlockGap { get; set; } = 1;
     public Color TopColor { get; set; } = Colors.MediumPurple;
     public Color BottomColor { get; set; } = Colors.Indigo;
