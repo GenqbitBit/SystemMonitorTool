@@ -91,9 +91,20 @@ public class DotNetOsMonitorService : IOsMonitorService
                     ProcessCount = processes.Length,
                     ThreadCount = threadTotal,
                     HandleCount = handleTotal,
+                    // Combined view: CPU-led ranking, memory as tiebreaker (unchanged).
                     TopProcesses = sampled
                         .OrderByDescending(p => p.CpuPercent)
                         .ThenByDescending(p => p.WorkingSetMB)
+                        .Take(TopProcessCount)
+                        .ToList(),
+                    // Dedicated single-metric rankings — sorted purely on their own metric,
+                    // no cross-metric tiebreak, so each panel is an honest ranking of its metric.
+                    TopProcessesByCpu = sampled
+                        .OrderByDescending(p => p.CpuPercent)
+                        .Take(TopProcessCount)
+                        .ToList(),
+                    TopProcessesByMemory = sampled
+                        .OrderByDescending(p => p.WorkingSetMB)
                         .Take(TopProcessCount)
                         .ToList()
                 };

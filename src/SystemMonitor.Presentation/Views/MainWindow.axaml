@@ -197,6 +197,7 @@
                         
 
                                             <Grid Grid.Column="0">
+                                                <panels:CpuProcessesView Processes="{Binding TopCpuProcesses}" />
                                             </Grid>
 
                                             <Border Grid.Column="1"
@@ -215,7 +216,7 @@
                                                 HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                                 <panels:MetricGraphView.ContentRenderer>
                                                     <panels:BlockAreaGraphRenderer
-                                                        TopColor="#E0F803" BottomColor="#09DB09"
+                                                        TopColor="#03F830" BottomColor="#0917DB"
                                                         BandCount="4"/>
                                                 </panels:MetricGraphView.ContentRenderer>
                                             </panels:MetricGraphView>
@@ -230,7 +231,7 @@
                                 <Grid Grid.Row="2" ColumnDefinitions="30*,Auto,70*">
 
                                     <Grid Grid.Column="0">
-
+                                        
                                     </Grid>
 
                                     <Border Grid.Column="1"
@@ -317,7 +318,7 @@
                                         <Grid  Grid.Row="2" ColumnDefinitions="30*,Auto,70*">
 
                                             <Grid Grid.Column="0">
-                                                
+                                                <panels:MemoryProcessesView Processes="{Binding TopMemoryProcesses}" />
                                             </Grid>
 
                                             <Border Grid.Column="1"

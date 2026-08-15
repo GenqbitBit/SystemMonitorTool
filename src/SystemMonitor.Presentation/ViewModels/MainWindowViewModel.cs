@@ -60,6 +60,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private ObservableCollection<ProcessInfo> topProcesses = new();
 
+    [ObservableProperty]
+    private ObservableCollection<ProcessInfo> topCpuProcesses = new();
+
+    [ObservableProperty]
+    private ObservableCollection<ProcessInfo> topMemoryProcesses = new();
+
     public IMetricHistoryStore HistoryStore => _historyStore;
 
     public MainWindowViewModel()
@@ -172,7 +178,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             .OrderBy(g => g.Index)
             .ToList();
 
-        var processes = _os.GetCurrentInfo().TopProcesses;
+        var osInfo = _os.GetCurrentInfo();
+        var combinedProcesses = osInfo.TopProcesses;
+        var cpuProcesses = osInfo.TopProcessesByCpu;
+        var memoryProcesses = osInfo.TopProcessesByMemory;
 
         void Apply()
         {
@@ -182,7 +191,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             DedicatedGpuModelId = dedicatedModelId;
             IntegratedGpuModelId = integratedModelId;
             DetectedGpus.SyncFrom(gpus, g => g.DeviceId);
-            TopProcesses.SyncFrom(processes, p => p.ProcessId);
+            TopProcesses.SyncFrom(combinedProcesses, p => p.ProcessId);
+            TopCpuProcesses.SyncFrom(cpuProcesses, p => p.ProcessId);
+            TopMemoryProcesses.SyncFrom(memoryProcesses, p => p.ProcessId);
         }
 
         if (Dispatcher.UIThread.CheckAccess())

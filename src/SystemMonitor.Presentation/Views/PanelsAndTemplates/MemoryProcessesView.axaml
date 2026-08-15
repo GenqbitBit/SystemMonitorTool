@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="using:SystemMonitor.Domain.Models"
+             xmlns:views="using:SystemMonitor.Presentation.Views.PanelsAndTemplates"
+             xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
+             x:Class="SystemMonitor.Presentation.Views.PanelsAndTemplates.MemoryProcessesView">
+
+    <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Top" Spacing="4">
+
+        <TextBlock Text="{Binding Title, RelativeSource={RelativeSource AncestorType=views:MemoryProcessesView}}"
+            FontSize="11"
+            Opacity="0.6"
+            HorizontalAlignment="Center" />
+
+        <Grid ColumnDefinitions="*,Auto" Margin="2,0,2,2">
+            <TextBlock Grid.Column="0" Text="PROCESS" FontSize="9" FontWeight="SemiBold" Opacity="0.5" />
+            <TextBlock Grid.Column="1" Text="MEMORY"  FontSize="9" FontWeight="SemiBold" Opacity="0.5" HorizontalAlignment="Right" />
+        </Grid>
+
+        <Rectangle Height="1" Fill="Gray" Opacity="0.25" Margin="2,0,2,2" />
+
+        <ItemsControl ItemsSource="{Binding Processes, RelativeSource={RelativeSource AncestorType=views:MemoryProcessesView}}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="models:ProcessInfo">
+                    <Grid ColumnDefinitions="*,Auto" Margin="2,1">
+                        <TextBlock Grid.Column="0"
+                                Text="{Binding Name}"
+                                FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=10}"
+                                TextTrimming="CharacterEllipsis"
+                                ToolTip.Tip="{Binding Name}" />
+
+                        <TextBlock Grid.Column="1"
+                                FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=10}"
+                                Margin="8,0,0,0"
+                                HorizontalAlignment="Right">
+                            <Run Text="{Binding WorkingSetMB}" Foreground="{DynamicResource MetricValueBrush}" />
+                            <Run Text=" MB" Foreground="{DynamicResource MetricValueBrush}" />
+                        </TextBlock>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+    </StackPanel>
+
+</UserControl>

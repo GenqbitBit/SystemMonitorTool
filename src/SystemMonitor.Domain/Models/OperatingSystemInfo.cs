@@ -30,4 +30,6 @@ public class OperatingSystemInfo
     // Heaviest consumers right now, pre-sorted by the service.
     // Mirrors how CpuInfo carries its Temperatures.
     public List<ProcessInfo> TopProcesses { get; set; } = new();
+    public List<ProcessInfo> TopProcessesByCpu { get; init; } = new();
+    public List<ProcessInfo> TopProcessesByMemory { get; init; } = new();
 }
