@@ -10,9 +10,9 @@ namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 
 public class BrailleAreaGraphRenderer : IGraphContentRenderer
 {
-    public double CellWidth { get; set; } = 6;
-    public double CellHeight { get; set; } = 12;
-    public double FontSize { get; set; } = 10;
+    public double CellWidth { get; set; } = 20;
+    public double CellHeight { get; set; } = 10;
+    public double FontSize { get; set; } = 20;
     public FontFamily FontFamily { get; set; } = AppFonts.Monospace;
 
     public Color CurveTopColor { get; set; } = Colors.LimeGreen;
@@ -22,9 +22,10 @@ public class BrailleAreaGraphRenderer : IGraphContentRenderer
     public int BandCount { get; set; } = 8;
 
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
-        double minValue, double maxValue, DateTime windowStart, DateTime windowEnd, bool baselineAtTop = false)
+        double minValue, double maxValue, DateTime windowStart, DateTime windowEnd,
+        bool baselineAtTop = false, bool useFrozenValues = true, bool toRight = true)
     {
-        var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, windowStart, windowEnd, minValue, maxValue);
+        var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, windowStart, windowEnd, minValue, maxValue, useFrozenValues, toRight);
         if (points.Count == 0)
             return;
 

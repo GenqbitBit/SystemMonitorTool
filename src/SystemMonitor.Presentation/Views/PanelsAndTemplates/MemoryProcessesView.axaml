@@ -3,43 +3,33 @@
              xmlns:models="using:SystemMonitor.Domain.Models"
              xmlns:views="using:SystemMonitor.Presentation.Views.PanelsAndTemplates"
              xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
-             x:Class="SystemMonitor.Presentation.Views.PanelsAndTemplates.ProcessesView">
+             x:Class="SystemMonitor.Presentation.Views.PanelsAndTemplates.MemoryProcessesView">
 
     <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Top" Spacing="4">
 
-        <TextBlock Text="{Binding Title, RelativeSource={RelativeSource AncestorType=views:ProcessesView}}"
-                FontSize="11"
-                Opacity="0.6"
-                HorizontalAlignment="Center" />
+        <TextBlock Text="{Binding Title, RelativeSource={RelativeSource AncestorType=views:MemoryProcessesView}}"
+            FontSize="11"
+            Opacity="0.6"
+            HorizontalAlignment="Center" />
 
-        <Grid ColumnDefinitions="*,Auto,Auto" Margin="2,0,2,2">
+        <Grid ColumnDefinitions="*,Auto" Margin="2,0,2,2">
             <TextBlock Grid.Column="0" Text="PROCESS" FontSize="9" FontWeight="SemiBold" Opacity="0.5" />
-            <TextBlock Grid.Column="1" Text="CPU"     FontSize="9" FontWeight="SemiBold" Opacity="0.5" HorizontalAlignment="Right" Margin="0,0,10,0" />
-            <TextBlock Grid.Column="2" Text="MEMORY"  FontSize="9" FontWeight="SemiBold" Opacity="0.5" HorizontalAlignment="Right" />
+            <TextBlock Grid.Column="1" Text="MEMORY"  FontSize="9" FontWeight="SemiBold" Opacity="0.5" HorizontalAlignment="Right" />
         </Grid>
 
         <Rectangle Height="1" Fill="Gray" Opacity="0.25" Margin="2,0,2,2" />
 
-        <ItemsControl ItemsSource="{Binding Processes, RelativeSource={RelativeSource AncestorType=views:ProcessesView}}">
+        <ItemsControl ItemsSource="{Binding Processes, RelativeSource={RelativeSource AncestorType=views:MemoryProcessesView}}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="models:ProcessInfo">
-                    <Grid ColumnDefinitions="*,Auto,Auto" Margin="2,1">
+                    <Grid ColumnDefinitions="*,Auto" Margin="2,1">
                         <TextBlock Grid.Column="0"
                                 Text="{Binding Name}"
-                                FontWeight="SemiBold"
                                 FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=10}"
                                 TextTrimming="CharacterEllipsis"
                                 ToolTip.Tip="{Binding Name}" />
 
                         <TextBlock Grid.Column="1"
-                                FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=11}"
-                                Margin="8,0,10,0"
-                                HorizontalAlignment="Right">
-                            <Run Text="{Binding CpuPercent}" Foreground="{DynamicResource MetricValueBrush}" />
-                            <Run Text="%" Foreground="{DynamicResource MetricValueBrush}" />
-                        </TextBlock>
-
-                        <TextBlock Grid.Column="2"
                                 FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=10}"
                                 Margin="8,0,0,0"
                                 HorizontalAlignment="Right">

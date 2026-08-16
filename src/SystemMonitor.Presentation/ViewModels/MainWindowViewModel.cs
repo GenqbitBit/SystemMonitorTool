@@ -41,6 +41,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private string? integratedGpuMetricId;
 
+    [ObservableProperty]
+    private string? dedicatedGpuModelId;
+
+    [ObservableProperty]
+    private string? integratedGpuModelId;
+
+    [ObservableProperty]
+    private double _responsiveScale = 1.0;
+
     // One entry per physical GPU detected this snapshot, keyed on the real
     // DeviceId — drives the dynamic per-GPU panel ItemsControl in MainWindow.axaml.
     [ObservableProperty]
@@ -50,6 +59,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     // (the parallel tabular path, beside the scalar Metrics river).
     [ObservableProperty]
     private ObservableCollection<ProcessInfo> topProcesses = new();
+
+    [ObservableProperty]
+    private ObservableCollection<ProcessInfo> topCpuProcesses = new();
+
+    [ObservableProperty]
+    private ObservableCollection<ProcessInfo> topMemoryProcesses = new();
 
     public IMetricHistoryStore HistoryStore => _historyStore;
 
@@ -126,22 +141,34 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void AcquireAndApply()
     {
-        // Acquisition happens synchronously here, on whichever thread called
-        // this method (the dedicated polling thread after startup, or the
-        // constructor's thread for the very first call) — never the UI
-        // thread once polling is running.
         var snapshot = _metricsProvider.GetSnapshot();
 
         _historyStore.Record(snapshot);
-        _historyPersistence.Record(snapshot); // already non-blocking internally
+        _historyPersistence.Record(snapshot);
 
-        var dedicatedId = snapshot.FirstOrDefault(m =>
-            m.Id.StartsWith("gpu.usage.") && m.GpuIsIntegrated == false)?.Id;
-        var integratedId = snapshot.FirstOrDefault(m =>
-            m.Id.StartsWith("gpu.usage.") && m.GpuIsIntegrated == true)?.Id;
-
-        var gpus = snapshot
+        var gpuUsageRows = snapshot
             .Where(m => m.Id.StartsWith("gpu.usage.") && m.GpuDeviceId != null)
+            .ToList();
+
+        var dedicatedId = gpuUsageRows.FirstOrDefault(m =>
+            m.GpuIsIntegrated == false)?.Id
+            ?? gpuUsageRows.FirstOrDefault()?.Id;
+        var integratedId = gpuUsageRows.FirstOrDefault(m =>
+            m.GpuIsIntegrated == true)?.Id
+            ?? gpuUsageRows.FirstOrDefault()?.Id;
+
+        var gpuModelRows = snapshot
+            .Where(m => m.Id.StartsWith("gpu.model.") && m.GpuDeviceId != null)
+            .ToList();
+
+        var dedicatedModelId = gpuModelRows.FirstOrDefault(m =>
+            m.GpuIsIntegrated == false)?.Id
+            ?? gpuModelRows.FirstOrDefault()?.Id;
+        var integratedModelId = gpuModelRows.FirstOrDefault(m =>
+            m.GpuIsIntegrated == true)?.Id
+            ?? gpuModelRows.FirstOrDefault()?.Id;
+
+        var gpus = gpuUsageRows
             .Select(m => new GpuDeviceDisplayInfo(
                 m.GpuDeviceId!,
                 m.GpuIndex ?? 0,
@@ -151,28 +178,40 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             .OrderBy(g => g.Index)
             .ToList();
 
-        // Second consumer of the singleton OS service. Safe by design:
-        // CpuPercent is computed against real elapsed time between calls,
-        // not against tick counts, so two callers can't corrupt the rates.
-        var processes = _os.GetCurrentInfo().TopProcesses;
+        var osInfo = _os.GetCurrentInfo();
+        var combinedProcesses = osInfo.TopProcesses;
+        var cpuProcesses = osInfo.TopProcessesByCpu;
+        var memoryProcesses = osInfo.TopProcessesByMemory;
 
         void Apply()
         {
             Metrics.SyncFrom(snapshot, m => m.Id);
             DedicatedGpuMetricId = dedicatedId;
             IntegratedGpuMetricId = integratedId;
+            DedicatedGpuModelId = dedicatedModelId;
+            IntegratedGpuModelId = integratedModelId;
             DetectedGpus.SyncFrom(gpus, g => g.DeviceId);
-            TopProcesses.SyncFrom(processes, p => p.ProcessId);
+            TopProcesses.SyncFrom(combinedProcesses, p => p.ProcessId);
+            TopCpuProcesses.SyncFrom(cpuProcesses, p => p.ProcessId);
+            TopMemoryProcesses.SyncFrom(memoryProcesses, p => p.ProcessId);
         }
 
-        // The very first call (from the constructor) runs before polling has
-        // started and typically already has UI-thread access; every call
-        // after that comes from the dedicated polling thread and must
-        // marshal back to the UI thread.
         if (Dispatcher.UIThread.CheckAccess())
             Apply();
         else
             Dispatcher.UIThread.Post(Apply);
+    }
+
+
+    public void UpdateResponsiveScale(double windowWidth, double windowHeight)
+    {
+        const double designWidth = 850;
+        double raw = windowWidth / designWidth;
+
+        // dampen further: only apply a third of the proportional growth beyond 1.0
+        double dampened = 1.0 + (raw - 1.0) * 0.25;
+
+        ResponsiveScale = Math.Clamp(dampened, 0.9, 1.2);
     }
 
     /// <summary>

@@ -251,4 +251,20 @@ public class MetricGraphMathTests
         var yMovement = Math.Abs(points[1].Y - points[0].Y);
         Assert.True(yMovement < 5); // 2% of a 100px-tall graph is ~2px
     }
+
+    [Theory]
+    [InlineData(119, 40)]
+    [InlineData(100, 31)]
+    public void BlockAreaGraphRenderer_UsesLineFallback_ForSmallPlots(double width, double height)
+    {
+        Assert.True(BlockAreaGraphRenderer.ShouldUseLineFallback(width, height));
+    }
+
+    [Theory]
+    [InlineData(120, 40)]
+    [InlineData(130, 32)]
+    public void BlockAreaGraphRenderer_UsesBlockRenderer_ForNormalSizedPlots(double width, double height)
+    {
+        Assert.False(BlockAreaGraphRenderer.ShouldUseLineFallback(width, height));
+    }
 }

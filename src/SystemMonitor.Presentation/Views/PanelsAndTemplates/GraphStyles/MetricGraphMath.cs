@@ -61,8 +61,11 @@ public static class MetricGraphMath
         if (fixedMin.HasValue && fixedMax.HasValue)
             return (fixedMin.Value, fixedMax.Value);
 
-        var min = double.MaxValue;
-        var max = double.MinValue;
+        if (history.Count == 0)
+            return (0, 1);
+
+        var min = history[0].Value;
+        var max = history[0].Value;
 
         foreach (var point in history)
         {
@@ -79,22 +82,57 @@ public static class MetricGraphMath
         return (min, max);
     }
 
-    // CHANGED: domain is now the caller-supplied [windowStart, windowEnd]
-    // (a fixed, wall-clock-anchored span) instead of [history[0].Timestamp,
-    // history[^1].Timestamp] (the data's own span). This is what makes the
-    // graph scroll like an ECG monitor instead of rescaling every tick —
-    // a point's X position only depends on its own timestamp vs. the fixed
-    // window, never on how much data currently exists.
+    public static (double Min, double Max) ResolveDisplayRange(
+    (double Min, double Max) committedRange, double? fixedMin = null, double? fixedMax = null)
+    {
+        if (fixedMin.HasValue && fixedMax.HasValue)
+            return (fixedMin.Value, fixedMax.Value);
+
+        var (min, max) = committedRange;
+        if (Math.Abs(max - min) < 0.0001)
+        {
+            min -= 1;
+            max += 1;
+        }
+        return (min, max);
+    }
+
     public static IReadOnlyList<(double X, double Y)> ComputePoints(
         IReadOnlyList<MetricHistoryPoint> history, double width, double height,
         DateTime windowStart, DateTime windowEnd,
-        double? fixedMin = null, double? fixedMax = null)
+        double? fixedMin = null, double? fixedMax = null, bool useFrozenValues = true, bool toRight = true)
+    {
+        var range = GetValueRange(history, fixedMin, fixedMax);
+        return ComputePoints(history, width, height, windowStart, windowEnd, range.Min, range.Max, useFrozenValues, toRight);
+    }
+
+    // The auto-scale path keeps already-graduated points stable by honoring
+    // the frozen NormalizedValue baked in at graduation time. Only the live tip
+    // is re-normalized against the current range; the past remains immutable.
+    //
+    // Output is always kept ascending by X (oldest -> newest maps to
+    // points[0] -> points[^1]) regardless of toRight. toRight only flips
+    // WHERE on the canvas that ascending sequence is drawn (left-to-right
+    // vs right-to-left). Downstream consumers (BlockGraphMath.InterpolateYAt,
+    // BrailleGraphMath.InterpolateY, the "skip empty columns before first
+    // data" checks) all assume points[0].X <= points[^1].X, so this ordering
+    // must be preserved no matter which direction the graph scrolls.
+    public static IReadOnlyList<(double X, double Y)> ComputePoints(
+        IReadOnlyList<MetricHistoryPoint> history, double width, double height,
+        DateTime windowStart, DateTime windowEnd,
+        double minValue, double maxValue, bool useFrozenValues = true, bool toRight = true)
     {
         if (width <= 0 || height <= 0 || history.Count == 0)
             return Array.Empty<(double, double)>();
 
-        var (minValue, maxValue) = GetValueRange(history, fixedMin, fixedMax);
-        var valueRange = maxValue - minValue;
+        // RenderMirrored deliberately calls this with min/max swapped to flip
+        // the bottom half upside-down relative to the top. Detect that so frozen
+        // historical points get flipped too, not just the live tip.
+        var mirrored = maxValue < minValue;
+        var orderedMin = mirrored ? maxValue : minValue;
+        var orderedMax = mirrored ? minValue : maxValue;
+        var valueRange = orderedMax - orderedMin;
+        if (Math.Abs(valueRange) < 0.0001) valueRange = 1;
 
         var windowSeconds = (windowEnd - windowStart).TotalSeconds;
         if (windowSeconds <= 0) windowSeconds = 1;
@@ -103,11 +141,23 @@ public static class MetricGraphMath
         for (int i = 0; i < history.Count; i++)
         {
             var point = history[i];
-            var normalizedX = (point.Timestamp - windowStart).TotalSeconds / windowSeconds;
-            var x = Math.Clamp(normalizedX, 0, 1) * width; // guards a sample landing a beat after windowEnd was captured
-            var normalizedY = (point.Value - minValue) / valueRange;
+            var normalizedX = Math.Clamp((point.Timestamp - windowStart).TotalSeconds / windowSeconds, 0, 1);
+            if (!toRight) normalizedX = 1 - normalizedX;
+            var x = normalizedX * width;
+
+            var normalizedY = useFrozenValues && point.NormalizedValue.HasValue
+                ? point.NormalizedValue.Value
+                : Math.Clamp((point.Value - orderedMin) / valueRange, 0, 1);
+
+            if (mirrored) normalizedY = 1 - normalizedY;
+
             var y = height - (normalizedY * height);
-            points[i] = (x, y);
+
+            // Keep output ascending by X: when toRight is false, the direct
+            // X formula above produces a descending sequence, so we write
+            // into the mirrored output slot instead of just negating X.
+            var outIndex = toRight ? i : history.Count - 1 - i;
+            points[outIndex] = (x, y);
         }
 
         return points;

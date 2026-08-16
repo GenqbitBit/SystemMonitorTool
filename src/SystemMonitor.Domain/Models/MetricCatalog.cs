@@ -42,7 +42,8 @@ public static class MetricCatalog
         new("cpu.cores", "CPU", "Cores", MetricKind.Text, "", 0, SampleText: "6");
     public static readonly MetricCatalogEntry CpuThreads =
         new("cpu.threads", "CPU", "Threads", MetricKind.Text, "", 0, SampleText: "12");
-
+    public static readonly MetricCatalogEntry CpuAvailable =
+        new("cpu.available", "CPU", "Available", MetricKind.Percentage, "%", 58.00);
 
     // Memory
     public static readonly MetricCatalogEntry MemoryName =
@@ -61,6 +62,8 @@ public static class MetricCatalog
         new("memory.used", "Memory", "Used", MetricKind.DataSize, "GB", 10.20);
     public static readonly MetricCatalogEntry MemoryTotal =
         new("memory.total", "Memory", "Total", MetricKind.DataSize, "GB", 16.00);
+    public static readonly MetricCatalogEntry MemoryFree =
+        new("memory.free", "Memory", "Free", MetricKind.DataSize, "GB", 5.80);
 
     // Disk
     public static readonly MetricCatalogEntry DiskModel =
@@ -78,9 +81,11 @@ public static class MetricCatalog
     public static readonly MetricCatalogEntry DiskTotal =
         new("disk.total", "Disk", "Total", MetricKind.DataSize, "GB", 512.00);
     public static readonly MetricCatalogEntry DiskRead =
-        new("disk.read", "Disk", "Read", MetricKind.DataRate, "MB/s", 12.50);
+        new("disk.read", "Disk", "Read", MetricKind.DataRate, "MB/s", 0.50);
     public static readonly MetricCatalogEntry DiskWrite =
         new("disk.write", "Disk", "Write", MetricKind.DataRate, "MB/s", 8.30);
+    public static readonly MetricCatalogEntry DiskFree =
+        new("disk.free", "Disk", "Free", MetricKind.DataSize, "GB", 256.00);
 
     // Network
     public static readonly MetricCatalogEntry NetworkDownload =
@@ -111,6 +116,8 @@ public static class MetricCatalog
         new("os.handles", "OS", "Handles", MetricKind.Text, "", 0, SampleText: "5,412,338");    
 
     // GPU
+    public static readonly MetricCatalogEntry GpuModel =
+        new("gpu.model", "GPU", "Model", MetricKind.Text, "", 0, SampleText: "NVIDIA GeForce RTX 4060");
     public static readonly MetricCatalogEntry GpuUsage =
         new("gpu.usage", "GPU", "Usage", MetricKind.Percentage, "%", 37.00);
     public static readonly MetricCatalogEntry GpuMemoryUsed =
@@ -158,16 +165,34 @@ public static class MetricCatalog
         new("temp.gpu.vrsoc.1", "GPU", "GPU VR SoC (GPU 1 - Integrated: AMD Radeon Graphics)",
             MetricKind.Temperature, "°C", 43.00, 35.00, 55.00, 44.00, SampleIsPrimary: true);
 
+    // Peaks — since-app-launch highs, sourced from IMetricHistoryStore's
+    // committed range (expand-only, same lifetime semantics as temp Min/Max).
+    // Not independently tracked; MetricsSnapshotProvider reads the source
+    // metric's committed Max at snapshot time.
+    public static readonly MetricCatalogEntry CpuUsagePeak =
+        new("cpu.usage.peak", "CPU", "Usage Peak", MetricKind.Percentage, "%", 78.00);
+    public static readonly MetricCatalogEntry MemoryUsagePeak =
+        new("memory.usage.peak", "Memory", "Usage Peak", MetricKind.Percentage, "%", 85.00);
+    public static readonly MetricCatalogEntry NetworkDownloadPeak =
+        new("network.download.peak", "Network", "Download Peak", MetricKind.DataRate, "KB/s", 3500.00);
+    public static readonly MetricCatalogEntry NetworkUploadPeak =
+        new("network.upload.peak", "Network", "Upload Peak", MetricKind.DataRate, "KB/s", 900.00);
+    public static readonly MetricCatalogEntry DiskReadPeak =
+        new("disk.read.peak", "Disk", "Read Peak", MetricKind.DataRate, "MB/s", 45.00);
+    public static readonly MetricCatalogEntry DiskWritePeak =
+        new("disk.write.peak", "Disk", "Write Peak", MetricKind.DataRate, "MB/s", 30.00);
+
+
     public static IReadOnlyList<MetricCatalogEntry> All { get; } = new[]
-    {
-        CpuModel, CpuUsage, CpuClock, CpuCores, CpuThreads,   
-        MemoryName, MemoryType, MemorySpeed, MemoryModules, MemoryManufacturer, MemoryUsage, MemoryUsed, MemoryTotal,
-        DiskModel, DiskType, DiskBus, DiskFileSystem, DiskUsage, DiskUsed, DiskTotal, DiskRead, DiskWrite,
-        NetworkDownload, NetworkUpload,
-        MotherboardModel, MotherboardChipset,
-        OsName, OsVersion, OsUptime, OsProcesses, OsThreads, OsHandles,
-        GpuUsage0, GpuMemoryUsed0, GpuMemoryTotal0,
-        GpuUsage1, GpuMemoryUsed1, GpuMemoryTotal1,
-        TempCpuCore, TempGpuCoreDedicated, TempGpuSubDedicated, TempGpuPrimaryIntegrated
-    };
+        {
+            CpuModel, CpuUsage, CpuUsagePeak, CpuClock, CpuCores, CpuThreads,   
+            MemoryName, MemoryType, MemorySpeed, MemoryModules, MemoryManufacturer, MemoryUsage, MemoryUsagePeak, MemoryUsed, MemoryTotal,
+            DiskModel, DiskType, DiskBus, DiskFileSystem, DiskUsage, DiskUsed, DiskTotal, DiskRead, DiskReadPeak, DiskWrite, DiskWritePeak,
+            NetworkDownload, NetworkDownloadPeak, NetworkUpload, NetworkUploadPeak,
+            MotherboardModel, MotherboardChipset,
+            OsName, OsVersion, OsUptime, OsProcesses, OsThreads, OsHandles,
+            GpuUsage0, GpuMemoryUsed0, GpuMemoryTotal0,
+            GpuUsage1, GpuMemoryUsed1, GpuMemoryTotal1,
+            TempCpuCore, TempGpuCoreDedicated, TempGpuSubDedicated, TempGpuPrimaryIntegrated
+        };
 }

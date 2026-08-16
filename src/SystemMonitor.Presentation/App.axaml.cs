@@ -8,6 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Infrastructure.Monitoring;
 using SystemMonitor.Infrastructure;
+using SystemMonitor.Domain.AsciiArt;
+using SystemMonitor.Presentation.Views.PanelsAndTemplates;
+using SystemMonitor.Application.AsciiArt;
 
 namespace SystemMonitor.Presentation;
 
@@ -24,14 +27,21 @@ public partial class App : Avalonia.Application
         services.AddPlatformMonitoringServices();
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<MetricsTableViewModel>();
+        services.AddSingleton<IAsciiArtConverter, AsciiArtConverter>();
         var provider = services.BuildServiceProvider();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow
+            var mainWindow = new MainWindow
             {
                 DataContext = provider.GetRequiredService<MainWindowViewModel>(),
             };
+
+            var converter = provider.GetRequiredService<IAsciiArtConverter>();
+            mainWindow.AsciiPanel.DataContext =
+                new AsciiArtPanelViewModel(converter, mainWindow.StorageProvider);
+
+            desktop.MainWindow = mainWindow;
         }
 
         base.OnFrameworkInitializationCompleted();

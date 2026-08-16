@@ -1,0 +1,274 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
+        xmlns:panels="using:SystemMonitor.Presentation.Views.PanelsAndTemplates"
+        xmlns:views="using:SystemMonitor.Presentation.Views"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:debug="using:SystemMonitor.Presentation.Debugging"
+        mc:Ignorable="d"
+        x:Class="SystemMonitor.Presentation.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/pixelmonitor.png"
+        Title="MainUI"
+        d:DesignWidth="850"
+        d:DesignHeight="550"
+        Width="850"
+        Height="550"
+        MinWidth="850"
+        MinHeight="550">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel />
+    </Design.DataContext>
+
+
+    <!-- Root -->
+    <Grid RowDefinitions="96*,4*"
+        RowSpacing="2"
+        Margin="5,10,5,5">
+
+        <!-- Grid0 (contents) -->
+        <Border Grid.Row="0"
+                BorderBrush="White"
+                BorderThickness="1"
+                CornerRadius="1">
+            
+            <Grid Margin="0">
+                
+                <!-- Actual Content -->
+                <Grid ColumnDefinitions="30*,Auto,70*">
+
+                    <Border Grid.Column="0"
+                    Margin="8,8,5,8"
+                    BorderBrush="White"
+                    BorderThickness="1"
+                    CornerRadius="1">
+                    <Grid ></Grid>
+                    </Border>
+                    
+                    <Border Grid.Column="1"
+                        Width="1" Background="#F6F6F6" 
+                        VerticalAlignment="Stretch">
+                    </Border>
+
+                    <Border Grid.Column="2"
+                    Margin="0"
+                    BorderBrush="Transparent"
+                    BorderThickness="1"
+                    CornerRadius="1">
+                    <Grid RowDefinitions="65*,Auto,35*">
+
+                        <Grid Grid.Row="0" RowDefinitions="*,Auto,*">
+
+                            <Grid Grid.Row="0">
+                                <panels:MetricGraphView
+                                    Metrics="{Binding Metrics}"
+                                    HistoryStore="{Binding HistoryStore}"
+                                    MetricId="cpu.usage"
+                                    FixedMinValue="0"
+                                    FixedMaxValue="100"
+                                    MinWidth="20" MinHeight="20"
+                                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                    <panels:MetricGraphView.ContentRenderer>
+                                        <panels:BlockAreaGraphRenderer
+                                            TopColor="#F80303" BottomColor="#0DD56E"
+                                            BandCount="15"/>
+                                    </panels:MetricGraphView.ContentRenderer>
+                                </panels:MetricGraphView>
+                            </Grid>
+
+                            <Border Grid.Row="1"
+                            Height="1" Background="#F6F6F6" 
+                            HorizontalAlignment="Stretch"></Border>
+
+                            <Grid Grid.Row="2">
+                                <panels:MetricGraphView
+                                    Metrics="{Binding Metrics}"
+                                    HistoryStore="{Binding HistoryStore}"
+                                    MetricId="memory.usage"
+                                    FixedMinValue="0"
+                                    FixedMaxValue="100"
+                                    MinWidth="180" MinHeight="140"
+                                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                    <panels:MetricGraphView.ContentRenderer>
+                                        <panels:BlockAreaGraphRenderer
+                                            TopColor="#D14DEE" BottomColor="#1234CE"
+                                            BandCount="5"/>
+                                    </panels:MetricGraphView.ContentRenderer>
+                                </panels:MetricGraphView>
+                            </Grid>
+
+                        </Grid>
+
+
+                        <Border Grid.Row="1"
+                        Height="1" Background="#F6F6F6" 
+                        HorizontalAlignment="Stretch"></Border>
+
+                        <Grid Grid.Row="2" ColumnDefinitions="70*,Auto, 30*">
+
+                                <Grid Grid.Column="0" RowDefinitions="*,Auto,*">
+
+                                    <Grid Grid.Row="0">
+                                        <panels:MetricGraphView
+                                            Metrics="{Binding Metrics}"
+                                            HistoryStore="{Binding HistoryStore}"
+                                            MetricId="{Binding DedicatedGpuMetricId}"
+                                            SecondaryMetricId="{Binding IntegratedGpuMetricId}"
+                                            FixedMinValue="0"
+                                            FixedMaxValue="100"
+                                            LineBrush="#7C3AED"
+                                            SecondaryLineBrush="#F59E0B"
+                                            MinWidth="20" MinHeight="20"
+                                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                            <panels:MetricGraphView.ContentRenderer>
+                                                <panels:BlockAreaGraphRenderer
+                                                    TopColor="#7C3AED" BottomColor="#4C1D95"
+                                                    BandCount="8"/>
+                                                </panels:MetricGraphView.ContentRenderer>
+                                            <panels:MetricGraphView.SecondaryContentRenderer>
+                                                <panels:BlockAreaGraphRenderer
+                                                    TopColor="#F59E0B" BottomColor="#B45309"
+                                                    BandCount="8"/>
+                                                </panels:MetricGraphView.SecondaryContentRenderer>
+                                        </panels:MetricGraphView>  
+                                    </Grid>
+
+                                     <Border Grid.Row="1"
+                                        Height="1" Background="#F6F6F6" 
+                                        HorizontalAlignment="Stretch"></Border>
+
+                                    <Grid Grid.Row="2" ColumnDefinitions="30*,Auto,70*">
+
+                                        <Grid Grid.Column="0">
+                                            <panels:MetricGraphView
+                                                Metrics="{Binding Metrics}"
+                                                HistoryStore="{Binding HistoryStore}"
+                                                MetricId="disk.read"
+                                                SecondaryMetricId="disk.write"
+                                                MinWidth="20"
+                                                MinHeight="20"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Stretch">
+                                                <!-- Disk Read -->
+                                                <panels:MetricGraphView.ContentRenderer>
+                                                    <panels:BlockAreaGraphRenderer
+                                                        TopColor="#3B82F6"
+                                                        BottomColor="#1E3A8A"
+                                                        BandCount="8"/>
+                                                </panels:MetricGraphView.ContentRenderer>
+                                                <!-- Disk Write -->
+                                                <panels:MetricGraphView.SecondaryContentRenderer>
+                                                    <panels:BlockAreaGraphRenderer
+                                                        TopColor="#FFA201"
+                                                        BottomColor="#D3E50B"
+                                                        BandCount="8"/>
+                                                    </panels:MetricGraphView.SecondaryContentRenderer>
+                                            </panels:MetricGraphView>
+                                        </Grid>
+                                        
+                                        <Border Grid.Column="1"
+                                        Width="1" Background="#F6F6F6" 
+                                        VerticalAlignment="Stretch">
+                                        </Border>
+
+                                        <Grid Grid.Column="3">
+                                            <panels:MetricGraphView
+                                                Metrics="{Binding Metrics}"
+                                                HistoryStore="{Binding HistoryStore}"
+                                                MetricId="disk.usage"
+                                                FixedMinValue="0"
+                                                FixedMaxValue="100"
+                                                MinWidth="20"
+                                                MinHeight="20"
+                                                HorizontalAlignment="Stretch"
+                                                VerticalAlignment="Stretch">
+                                                <panels:MetricGraphView.ContentRenderer>
+                                                    <panels:BlockAreaGraphRenderer
+                                                        TopColor="#22C55E"
+                                                        BottomColor="#3E0AEB"
+                                                        BandCount="10"/>
+                                                    </panels:MetricGraphView.ContentRenderer>
+                                            </panels:MetricGraphView>
+                                        </Grid>
+                                        
+                                    </Grid>
+
+                                </Grid>
+
+                                <Border Grid.Column="1"
+                                Width="1" Background="#F6F6F6" 
+                                VerticalAlignment="Stretch">
+                                </Border>
+                                
+                                <Grid Grid.Column="2">
+                                    <panels:MetricGraphView
+                                        Metrics="{Binding Metrics}"
+                                        HistoryStore="{Binding HistoryStore}"
+                                        MetricId="network.download"
+                                        SecondaryMetricId="network.upload"
+                                        LineBrush="MediumPurple"
+                                        SecondaryLineBrush="Magenta"
+                                        MinWidth="20" MinHeight="20"
+                                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                        <panels:MetricGraphView.ContentRenderer>
+                                            <panels:BlockAreaGraphRenderer
+                                                TopColor="MediumPurple" BottomColor="Indigo"
+                                                BandCount="8"/>
+                                        </panels:MetricGraphView.ContentRenderer>
+                                        <panels:MetricGraphView.SecondaryContentRenderer>
+                                            <panels:BlockAreaGraphRenderer
+                                                TopColor="Magenta" BottomColor="DeepPink"
+                                                BandCount="8"/>
+                                            </panels:MetricGraphView.SecondaryContentRenderer>
+                                    </panels:MetricGraphView>
+                                </Grid>
+
+                        </Grid>
+                        
+                    </Grid>
+                    </Border>
+
+
+
+                </Grid>
+
+                <TextBlock Text="Title"
+                    Grid.Column="1"
+                    Background="Black"
+                    Padding="7,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Margin="10,-5,0,0"
+                    FontSize="11"/>
+            </Grid>
+
+            
+        </Border>
+
+        <!-- Grid1 Panel (few txt) -->
+        <Panel Grid.Row="1">
+            <!--Container-->
+            <Grid ColumnDefinitions="70*,30*"
+                Margin="10,0,25,0">
+
+            <TextBlock Grid.Column="0" 
+            FontSize="12"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Center"
+            Text="Currenty on Development | https://github.com/GenqbitBit/SystemMonitorTool"/>
+
+            <TextBlock Grid.Column="1" 
+            FontSize="12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Center"
+            Text="Test UI"/>
+
+            </Grid>
+        </Panel>
+
+    </Grid>
+    <!-- Root -->
+
+</Window>

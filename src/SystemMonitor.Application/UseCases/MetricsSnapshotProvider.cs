@@ -15,6 +15,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private readonly IMotherboardMonitorService _motherboard;
     private readonly IGpuMonitorService _gpu;
     private readonly IOsMonitorService _os;
+    private readonly IMetricHistoryStore _historyStore;
     private readonly Dictionary<string, Queue<double>> _smoothingWindows = new();
     private const int SmoothingWindow = 4;
     private const int DecimalPlaces = 2;
@@ -26,7 +27,8 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         INetworkMonitorService network,
         IMotherboardMonitorService motherboard,
         IGpuMonitorService gpu,
-        IOsMonitorService os)
+        IOsMonitorService os,
+        IMetricHistoryStore historyStore)
     {
         _cpu = cpu;
         _memory = memory;
@@ -35,6 +37,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         _motherboard = motherboard;
         _gpu = gpu;
         _os = os;
+        _historyStore = historyStore;
     }
 
     public IReadOnlyList<MetricReading> GetSnapshot()
@@ -44,7 +47,10 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         // CPU — identity rows first (emission order = display order).
         var cpuInfo = _cpu.GetCurrentUsage();
         readings.Add(BuildTextReading(MetricCatalog.CpuModel, cpuInfo.ModelName));
-        readings.Add(BuildReading(MetricCatalog.CpuUsage, cpuInfo.UsagePercent, smooth: true));
+        var cpuUsageReading = BuildReading(MetricCatalog.CpuUsage, cpuInfo.UsagePercent, smooth: true);
+        readings.Add(cpuUsageReading);
+        readings.Add(BuildPeakReading(MetricCatalog.CpuUsagePeak, MetricCatalog.CpuUsage.Id));
+        readings.Add(BuildComplementPercentageReading(MetricCatalog.CpuAvailable, cpuUsageReading));
         readings.Add(BuildTextReading(MetricCatalog.CpuClock, FormatClock(cpuInfo.ClockMhz)));
         readings.Add(BuildTextReading(MetricCatalog.CpuCores, cpuInfo.CoreCount.ToString()));
         readings.Add(BuildTextReading(MetricCatalog.CpuThreads, cpuInfo.ThreadCount.ToString()));
@@ -72,8 +78,10 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         readings.Add(BuildTextReading(MetricCatalog.MemoryModules, memInfo.ModuleConfig));
         readings.Add(BuildTextReading(MetricCatalog.MemoryManufacturer, memInfo.Manufacturer));
         readings.Add(BuildReading(MetricCatalog.MemoryUsage, memInfo.UsagePercent, smooth: true));
+        readings.Add(BuildPeakReading(MetricCatalog.MemoryUsagePeak, MetricCatalog.MemoryUsage.Id)); 
         readings.Add(BuildReading(MetricCatalog.MemoryUsed, usedGB));
         readings.Add(BuildReading(MetricCatalog.MemoryTotal, totalGB));
+        readings.Add(BuildReading(MetricCatalog.MemoryFree, totalGB - usedGB));
 
         // Disk — identity rows first, then live usage.
         var diskInfo = _disk.GetCurrentUsage();
@@ -89,12 +97,18 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         readings.Add(BuildReading(MetricCatalog.DiskTotal, diskInfo.TotalGB,
             labelOverride: MetricCatalog.DiskTotal.Label + diskLabelSuffix));
         readings.Add(BuildReading(MetricCatalog.DiskRead, diskInfo.ReadMBPerSec));
+        readings.Add(BuildPeakReading(MetricCatalog.DiskReadPeak, MetricCatalog.DiskRead.Id)); 
         readings.Add(BuildReading(MetricCatalog.DiskWrite, diskInfo.WriteMBPerSec));
+        readings.Add(BuildPeakReading(MetricCatalog.DiskWritePeak, MetricCatalog.DiskWrite.Id));
+        readings.Add(BuildReading(MetricCatalog.DiskFree, diskInfo.TotalGB - diskInfo.UsedGB,
+        labelOverride: MetricCatalog.DiskFree.Label + diskLabelSuffix));
 
         // Network
         var networkInfo = _network.GetCurrentUsage();
         readings.Add(BuildReading(MetricCatalog.NetworkDownload, networkInfo.DownloadKBPerSec));
+        readings.Add(BuildPeakReading(MetricCatalog.NetworkDownloadPeak, MetricCatalog.NetworkDownload.Id));
         readings.Add(BuildReading(MetricCatalog.NetworkUpload, networkInfo.UploadKBPerSec));
+        readings.Add(BuildPeakReading(MetricCatalog.NetworkUploadPeak, MetricCatalog.NetworkUpload.Id));
 
         // Operating System — platform-neutral, driver-free.
         // Identity first, then live counts (mirrors the CPU section's order).
@@ -120,6 +134,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             readings.Add(BuildGpuReading(MetricCatalog.GpuUsage, gpuInfo, gpuInfo.UsagePercent, smooth: true, gpuLabelSuffix));
             readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryUsed, gpuInfo, gpuUsedGB, smooth: false, gpuLabelSuffix));
             readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryTotal, gpuInfo, gpuTotalGB, smooth: false, gpuLabelSuffix));
+            readings.Add(BuildGpuTextReading(MetricCatalog.GpuModel, gpuInfo, gpuInfo.Name, gpuLabelSuffix));
         }
 
         // Temperature — now bundled into each hardware's own Info model instead
@@ -169,6 +184,21 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         };
     }
 
+    private MetricReading BuildPeakReading(MetricCatalogEntry entry, string sourceMetricId)
+    {
+        var (_, max) = _historyStore.GetCommittedRange(sourceMetricId);
+        return new MetricReading
+        {
+            Id = entry.Id,
+            Category = entry.Category,
+            Label = entry.Label,
+            Kind = entry.Kind,
+            Unit = entry.Unit,
+            IsAvailable = true,
+            Value = Round(max)
+        };
+    }
+
     private MetricReading BuildGpuReading(
         MetricCatalogEntry entry, GpuInfo gpuInfo, double rawValue, bool smooth, string labelSuffix)
     {
@@ -214,16 +244,33 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     };
 
     private static MetricReading BuildGpuTextReading(
-        MetricCatalogEntry entry, int gpuIndex, string? text, string labelSuffix) => new()
+    MetricCatalogEntry entry, GpuInfo gpuInfo, string? text, string labelSuffix) => new()
     {
-        Id = $"{entry.Id}.{gpuIndex}",
+        Id = $"{entry.Id}.{gpuInfo.DeviceId}",
         Category = entry.Category,
         Label = entry.Label + labelSuffix,
         Kind = entry.Kind,
         Unit = entry.Unit,
         IsAvailable = text is not null,
-        TextValue = text
+        TextValue = text,
+        GpuIndex = gpuInfo.Index,
+        GpuIsIntegrated = gpuInfo.IsIntegrated,
+        GpuDeviceId = gpuInfo.DeviceId
     };
+
+    private static MetricReading BuildComplementPercentageReading(MetricCatalogEntry entry, MetricReading source)
+    {
+        return new MetricReading
+        {
+            Id = entry.Id,
+            Category = entry.Category,
+            Label = entry.Label,
+            Kind = entry.Kind,
+            Unit = entry.Unit,
+            IsAvailable = source.IsAvailable,
+            Value = Round(100 - source.Value)
+        };
+    }
 
     private static MetricReading BuildTextReading(MetricCatalogEntry entry, string? text) => new()
     {

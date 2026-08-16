@@ -1,12 +1,36 @@
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Globalization;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Data.Converters;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
+
+/// <summary>
+/// A bound value of null still counts as a "local value" in Avalonia and
+/// therefore outranks Style/theme setters (e.g. an app-wide
+/// Style Selector="TextBlock" setting FontFamily). For properties on this view
+/// where null is meant to mean "don't override — let the app Style/theme
+/// decide" (ContentFontFamily, LabelForeground), bind through this converter
+/// so a null source value clears the local value entirely instead of forcing
+/// it to null, letting Style setters apply as expected.
+/// </summary>
+internal sealed class NullToUnsetConverter : IValueConverter
+{
+    public static readonly NullToUnsetConverter Instance = new();
+
+    public object Convert(object? value, System.Type targetType, object? parameter, CultureInfo culture)
+        => value ?? AvaloniaProperty.UnsetValue;
+
+    public object ConvertBack(object? value, System.Type targetType, object? parameter, CultureInfo culture)
+        => throw new System.NotSupportedException();
+}
 
 /// <summary>
 /// Renders a set of metrics as a header + list.
@@ -25,6 +49,16 @@ namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 ///   - ShowLabel (default true)         -> show/hide each reading's Label text
 ///   - ShowValue (default true)         -> show/hide each reading's DisplayValue text
 ///   - ShowCategoryHeader (default true) -> show/hide the header TextBlock entirely
+/// Styling — all optional, each falls back to the previous hardcoded look so
+/// existing usages render unchanged; set any of these per-instance to override:
+///   - CategoryFontSize / CategoryOpacity   -> header text
+///   - MetricFontSize                       -> both label and value text
+///   - LabelFontWeight / LabelForeground    -> label text
+///   - ValueFontWeight / ValueForeground    -> value text (Foreground falls back
+///                                              to MetricValueBrush resource if unset)
+///   - ContentFontFamily                    -> shared font family for header + rows
+///   - ContentMaxWidth / ContentSpacing /
+///     ContentHorizontalAlignment           -> outer layout
 ///
 /// Metrics refresh: the bound ObservableCollection is now mutated in place every
 /// tick (see ObservableCollectionSyncExtensions.SyncFrom) rather than replaced, so
@@ -70,6 +104,62 @@ public partial class CategoryMetricsView : UserControl
         AvaloniaProperty.RegisterDirect<CategoryMetricsView, IEnumerable<MetricReading>?>(
             nameof(FilteredMetrics), o => o.FilteredMetrics);
 
+    // --- Styling properties -------------------------------------------------
+    // Each defaults to the value that used to be hardcoded in the AXAML, so any
+    // existing consumer that doesn't set these renders exactly as before. Panels
+    // that want a different look (bigger header, non-bold label, custom brush,
+    // tighter layout, etc.) now set these instead of touching the template.
+
+    public static readonly StyledProperty<double> CategoryFontSizeProperty =
+        AvaloniaProperty.Register<CategoryMetricsView, double>(nameof(CategoryFontSize), defaultValue: 11);
+
+    public static readonly StyledProperty<double> CategoryOpacityProperty =
+        AvaloniaProperty.Register<CategoryMetricsView, double>(nameof(CategoryOpacity), defaultValue: 0.6);
+
+    public static readonly StyledProperty<double> MetricFontSizeProperty =
+        AvaloniaProperty.Register<CategoryMetricsView, double>(nameof(MetricFontSize), defaultValue: 11);
+
+    public static readonly StyledProperty<FontWeight> LabelFontWeightProperty =
+        AvaloniaProperty.Register<CategoryMetricsView, FontWeight>(nameof(LabelFontWeight), defaultValue: FontWeight.SemiBold);
+
+    // Value never had an explicit weight in the original template (so it rendered
+    // at whatever the default/Normal weight is) — default kept the same here.
+    public static readonly StyledProperty<FontWeight> ValueFontWeightProperty =
+        AvaloniaProperty.Register<CategoryMetricsView, FontWeight>(nameof(ValueFontWeight), defaultValue: FontWeight.Normal);
+
+    // Null means "inherit ambient font family" (same as the original template,
+    // which never set FontFamily anywhere). Applies to header, label, and value —
+    // set it once per instance rather than per-row. Bound in XAML through
+    // NullToUnsetConverter so an unset instance truly defers to app Styles.
+    public static readonly StyledProperty<FontFamily?> ContentFontFamilyProperty =
+        AvaloniaProperty.Register<CategoryMetricsView, FontFamily?>(nameof(ContentFontFamily));
+
+    // Null means "don't set it" -> label inherits ambient foreground, same as
+    // the original hardcoded template (which never set a label Foreground).
+    // Bound in XAML through NullToUnsetConverter so an unset instance truly
+    // defers to app Styles/theme instead of forcing Foreground to null.
+    public static readonly StyledProperty<IBrush?> LabelForegroundProperty =
+        AvaloniaProperty.Register<CategoryMetricsView, IBrush?>(nameof(LabelForeground));
+
+    // Null means "use the MetricValueBrush theme resource", matching the
+    // original hardcoded DynamicResource binding. Set this to override per-instance.
+    public static readonly StyledProperty<IBrush?> ValueForegroundProperty =
+        AvaloniaProperty.Register<CategoryMetricsView, IBrush?>(nameof(ValueForeground));
+
+    public static readonly StyledProperty<double> ContentMaxWidthProperty =
+        AvaloniaProperty.Register<CategoryMetricsView, double>(nameof(ContentMaxWidth), defaultValue: 300);
+
+    public static readonly StyledProperty<double> ContentSpacingProperty =
+        AvaloniaProperty.Register<CategoryMetricsView, double>(nameof(ContentSpacing), defaultValue: 2);
+
+    public static readonly StyledProperty<HorizontalAlignment> ContentHorizontalAlignmentProperty =
+        AvaloniaProperty.Register<CategoryMetricsView, HorizontalAlignment>(
+            nameof(ContentHorizontalAlignment), defaultValue: HorizontalAlignment.Center);
+
+    public static readonly DirectProperty<CategoryMetricsView, double> EffectiveSpacingProperty =
+    AvaloniaProperty.RegisterDirect<CategoryMetricsView, double>(
+        nameof(EffectiveSpacing), o => o.EffectiveSpacing);
+
     // Tracks whichever collection instance we're currently subscribed to, so we can
     // unsubscribe cleanly when Metrics is replaced or the view is detached — this
     // prevents duplicate handlers piling up and keeps a detached view from being
@@ -81,6 +171,8 @@ public partial class CategoryMetricsView : UserControl
         InitializeComponent();
     }
 
+    public double EffectiveSpacing => ShowCategoryHeader ? ContentSpacing : 0;
+    
     public IEnumerable<MetricReading>? Metrics
     {
         get => GetValue(MetricsProperty);
@@ -129,6 +221,72 @@ public partial class CategoryMetricsView : UserControl
         set => SetValue(GpuDeviceIdProperty, value);
     }
 
+    public double CategoryFontSize
+    {
+        get => GetValue(CategoryFontSizeProperty);
+        set => SetValue(CategoryFontSizeProperty, value);
+    }
+
+    public double CategoryOpacity
+    {
+        get => GetValue(CategoryOpacityProperty);
+        set => SetValue(CategoryOpacityProperty, value);
+    }
+
+    public double MetricFontSize
+    {
+        get => GetValue(MetricFontSizeProperty);
+        set => SetValue(MetricFontSizeProperty, value);
+    }
+
+    public FontWeight LabelFontWeight
+    {
+        get => GetValue(LabelFontWeightProperty);
+        set => SetValue(LabelFontWeightProperty, value);
+    }
+
+    public FontWeight ValueFontWeight
+    {
+        get => GetValue(ValueFontWeightProperty);
+        set => SetValue(ValueFontWeightProperty, value);
+    }
+
+    public FontFamily? ContentFontFamily
+    {
+        get => GetValue(ContentFontFamilyProperty);
+        set => SetValue(ContentFontFamilyProperty, value);
+    }
+
+    public IBrush? LabelForeground
+    {
+        get => GetValue(LabelForegroundProperty);
+        set => SetValue(LabelForegroundProperty, value);
+    }
+
+    public IBrush? ValueForeground
+    {
+        get => GetValue(ValueForegroundProperty);
+        set => SetValue(ValueForegroundProperty, value);
+    }
+
+    public double ContentMaxWidth
+    {
+        get => GetValue(ContentMaxWidthProperty);
+        set => SetValue(ContentMaxWidthProperty, value);
+    }
+
+    public double ContentSpacing
+    {
+        get => GetValue(ContentSpacingProperty);
+        set => SetValue(ContentSpacingProperty, value);
+    }
+
+    public HorizontalAlignment ContentHorizontalAlignment
+    {
+        get => GetValue(ContentHorizontalAlignmentProperty);
+        set => SetValue(ContentHorizontalAlignmentProperty, value);
+    }
+
     public IEnumerable<MetricReading>? FilteredMetrics
     {
         get
@@ -158,8 +316,6 @@ public partial class CategoryMetricsView : UserControl
 
         if (change.Property == MetricsProperty)
         {
-            // Metrics was reassigned to a different collection instance (or null) —
-            // move our CollectionChanged subscription onto whatever it points to now.
             UnsubscribeFromMetricsCollection();
             SubscribeToMetricsCollection();
         }
@@ -171,6 +327,12 @@ public partial class CategoryMetricsView : UserControl
             || change.Property == GpuDeviceIdProperty)
         {
             RaisePropertyChanged(FilteredMetricsProperty, default, default);
+        }
+
+        if (change.Property == ShowCategoryHeaderProperty
+            || change.Property == ContentSpacingProperty)
+        {
+            RaisePropertyChanged(EffectiveSpacingProperty, default, default);
         }
     }
 

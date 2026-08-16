@@ -75,6 +75,7 @@ public partial class MetricsTableViewModel : ViewModelBase, IDisposable
 
     private void AcquireAndApply()
     {
+        
         var rows = _snapshotProvider.GetSnapshot()
             .Where(r => r.IsAvailable)
             .Select(MetricTableRow.From)

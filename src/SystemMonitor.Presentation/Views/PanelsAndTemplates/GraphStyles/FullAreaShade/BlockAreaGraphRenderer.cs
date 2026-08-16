@@ -8,16 +8,29 @@ namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 
 public class BlockAreaGraphRenderer : IGraphContentRenderer
 {
-    public double BlockWidth { get; set; } = 3;
+    public double BlockWidth { get; set; } = 5;
     public double BlockGap { get; set; } = 1;
     public Color TopColor { get; set; } = Colors.MediumPurple;
     public Color BottomColor { get; set; } = Colors.Indigo;
     public int BandCount { get; set; } = 5;
 
+    public double SmallPlotWidthThreshold { get; set; } = 120;
+    public double SmallPlotHeightThreshold { get; set; } = 32;
+
+    public static bool ShouldUseLineFallback(double width, double height)
+        => width < 120 || height < 32;
+
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
-        double minValue, double maxValue, DateTime windowStart, DateTime windowEnd, bool baselineAtTop = false)
+        double minValue, double maxValue, DateTime windowStart, DateTime windowEnd,
+        bool baselineAtTop = false, bool useFrozenValues = true, bool toRight = true)
     {
-        var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, windowStart, windowEnd, minValue, maxValue);
+        if (plotRect.Width < SmallPlotWidthThreshold || plotRect.Height < SmallPlotHeightThreshold)
+        {
+            DrawLineFallback(context, plotRect, history, minValue, maxValue, windowStart, windowEnd, useFrozenValues, toRight);
+            return;
+        }
+
+        var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, windowStart, windowEnd, minValue, maxValue, useFrozenValues, toRight);
         if (points.Count == 0)
             return;
 
@@ -69,5 +82,23 @@ public class BlockAreaGraphRenderer : IGraphContentRenderer
                     new Rect(plotRect.X + x, bandTop, BlockWidth, drawHeight));
             }
         }
+    }
+
+    private void DrawLineFallback(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
+        double minValue, double maxValue, DateTime windowStart, DateTime windowEnd, bool useFrozenValues, bool toRight)
+    {
+        var points = MetricGraphMath.ComputePoints(history, plotRect.Width, plotRect.Height, windowStart, windowEnd, minValue, maxValue, useFrozenValues, toRight);
+        if (points.Count == 0)
+            return;
+
+        var geometry = new StreamGeometry();
+        using (var stream = geometry.Open())
+        {
+            stream.BeginFigure(new Point(plotRect.X + points[0].X, plotRect.Y + points[0].Y), isFilled: false);
+            for (int i = 1; i < points.Count; i++)
+                stream.LineTo(new Point(plotRect.X + points[i].X, plotRect.Y + points[i].Y));
+        }
+
+        context.DrawGeometry(null, new Pen(new SolidColorBrush(TopColor), 1.2), geometry);
     }
 }
