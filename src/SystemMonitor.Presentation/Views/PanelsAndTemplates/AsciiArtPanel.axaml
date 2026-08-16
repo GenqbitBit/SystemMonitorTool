@@ -2,16 +2,95 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:panels="using:SystemMonitor.Presentation.Views.PanelsAndTemplates"
              x:Class="SystemMonitor.Presentation.Views.PanelsAndTemplates.AsciiArtPanel"
+             xmlns:conv="using:SystemMonitor.Presentation.Converters"
              x:DataType="panels:AsciiArtPanelViewModel">
 
-  <Grid RowDefinitions="Auto,*">
-    <Button Grid.Row="0"
-            Content="Upload Image"
-            Command="{Binding UploadCommand}"
-            HorizontalAlignment="Center"
-            Margin="4"/>
+  <Grid ColumnDefinitions="*">
 
-    <Panel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="False">
+    <Grid Grid.Column="0"
+      Margin="0,0,0,0"
+      HorizontalAlignment="Right"
+      VerticalAlignment="Bottom">
+      <Grid.Styles>
+        <Style Selector="Button">
+          <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button:pointerover /template/ ContentPresenter">
+          <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button:pressed /template/ ContentPresenter">
+          <Setter Property="Background" Value="Transparent"/>
+        </Style>
+      </Grid.Styles>
+
+      <Button Command="{Binding TogglePlaybackCommand}"
+            HorizontalAlignment="Center">
+        <Panel Width="15" Height="15">
+          <Image 
+                Stretch="Uniform"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Opacity="{Binding IsPlaying, Converter={x:Static conv:BoolToOpacityConverter.Instance}}">
+            <Image.Transitions>
+              <Transitions>
+                <DoubleTransition Property="Opacity" Duration="0:0:0.2"/>
+              </Transitions>
+            </Image.Transitions>
+            <Image.Source>
+              <DrawingImage Drawing="{StaticResource PauseIconDrawing}"/>
+            </Image.Source>
+          </Image>
+          <Image
+                Stretch="Uniform"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Opacity="{Binding IsPlaying, Converter={x:Static conv:BoolToOpacityConverter.Inverted}}">
+            <Image.Transitions>
+              <Transitions>
+                <DoubleTransition Property="Opacity" Duration="0:0:0.2"/>
+              </Transitions>
+            </Image.Transitions>
+            <Image.Source>
+              <DrawingImage Drawing="{StaticResource PlayIconDrawing}"/>
+            </Image.Source>
+          </Image>
+        </Panel>
+      </Button>
+    </Grid>
+
+    <Grid Grid.Column="0"
+      HorizontalAlignment="Right"
+      VerticalAlignment="Bottom"
+      Margin="0,0,-1.5,25">
+      <Grid.Styles>
+        <Style Selector="Button">
+          <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button:pointerover /template/ ContentPresenter">
+          <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button:pressed /template/ ContentPresenter">
+          <Setter Property="Background" Value="Transparent"/>
+        </Style>
+      </Grid.Styles>
+
+      <Button Command="{Binding UploadCommand}"
+            HorizontalAlignment="Left">
+        <Panel Width="15" Height="15"
+          HorizontalAlignment="Right">
+          <Image Stretch="Uniform"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+            <Image.Source>
+              <DrawingImage Drawing="{StaticResource UploadIconDrawing}"/>
+            </Image.Source>
+          </Image>
+        </Panel>
+      </Button>
+    </Grid>
+    
+
+    <Panel Grid.Column="0" HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="False">
       <panels:AsciiArtVisual x:Name="ArtVisual"
                             Art="{Binding CurrentArt}"
                             HorizontalAlignment="Center"
