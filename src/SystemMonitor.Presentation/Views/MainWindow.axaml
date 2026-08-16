@@ -39,9 +39,10 @@
                     <Grid ColumnDefinitions="30*,Auto,70*">
 
                         <Border Grid.Column="0"
-                        BorderBrush="White"
-                        BorderThickness="1"
-                        Margin="10">
+                                BorderBrush="White"
+                                BorderThickness="1"
+                                Margin="10">
+                            <panels:HardwareTreeView DataContext="{Binding HardwareTree}"/>
                         </Border>
 
                         

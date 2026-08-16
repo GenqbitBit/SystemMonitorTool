@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Collections.ObjectModel;
 using System.Threading;
@@ -17,6 +18,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 {
     private readonly IMetricsSnapshotProvider _metricsProvider;
     private readonly IMetricHistoryStore _historyStore;
+    private readonly HardwareTreeViewModel _hardwareTree;
     private readonly IMetricHistoryPersistenceService _historyPersistence;
     private readonly IOsMonitorService _os;
 
@@ -67,11 +69,19 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private ObservableCollection<ProcessInfo> topMemoryProcesses = new();
 
     public IMetricHistoryStore HistoryStore => _historyStore;
+    public HardwareTreeViewModel HardwareTree => _hardwareTree;
+
+    private sealed class DesignTimeHardwareTreeProvider : IHardwareTreeProvider
+    {
+        public IReadOnlyList<HardwareTreeNode> DiscoverTree() => Array.Empty<HardwareTreeNode>();
+        public void RefreshValues(IReadOnlyList<HardwareTreeNode> roots) { }
+    }
 
     public MainWindowViewModel()
     : this(new CatalogDesignTimeMetricsSnapshotProvider(), new MetricHistoryStore(),
-           new DotNetOsMonitorService(), new SqliteMetricHistoryPersistenceService(),
-           new MetricsTableViewModel(new CatalogDesignTimeMetricsSnapshotProvider()))
+        new DotNetOsMonitorService(), new SqliteMetricHistoryPersistenceService(),
+        new MetricsTableViewModel(new CatalogDesignTimeMetricsSnapshotProvider()),
+        new DesignTimeHardwareTreeProvider())
     {
     }
 
@@ -80,13 +90,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         IMetricHistoryStore historyStore,
         IOsMonitorService os,
         IMetricHistoryPersistenceService historyPersistence,
-        MetricsTableViewModel metricsTable)
+        MetricsTableViewModel metricsTable,
+        IHardwareTreeProvider hardwareTreeProvider)
     {
         _metricsProvider = metricsProvider;
         _historyStore = historyStore;
         _os = os;
         _historyPersistence = historyPersistence;
         MetricsTable = metricsTable;
+        _hardwareTree = new HardwareTreeViewModel(hardwareTreeProvider);
 
         // One synchronous acquisition up front so the designer and the first
         // frame have data immediately, matching the original constructor's
@@ -202,6 +214,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             Dispatcher.UIThread.Post(Apply);
     }
 
+    
 
     public void UpdateResponsiveScale(double windowWidth, double windowHeight)
     {
@@ -224,5 +237,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _pollingCts.Cancel();
         _pollingThread?.Join(TimeSpan.FromSeconds(2));
         _pollingCts.Dispose();
+        _hardwareTree.Dispose();
     }
 }

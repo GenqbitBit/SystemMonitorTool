@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
+             x:Class="SystemMonitor.Presentation.Views.PanelsAndTemplates.HardwareTreeView"
+             x:DataType="vm:HardwareTreeViewModel">
+
+    <Grid RowDefinitions="Auto,Auto,*">
+
+        <TextBlock Grid.Row="0"
+                   Text="Hardware"
+                   FontSize="10"
+                   Foreground="White"
+                   Margin="4,4,0,2"/>
+
+        <Button Grid.Row="1"
+                Content="⟳ Refresh"
+                FontSize="9"
+                Padding="4,2"
+                Margin="4,0,4,4"
+                HorizontalAlignment="Stretch"
+                Command="{Binding RefreshCommand}"/>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <TreeView ItemsSource="{Binding Roots}"
+                      Background="Transparent"
+                      BorderThickness="0">
+                <TreeView.Styles>
+                    <Style Selector="TreeViewItem">
+                        <Setter Property="Padding" Value="2,1"/>
+                        <Setter Property="MinHeight" Value="16"/>
+                    </Style>
+                </TreeView.Styles>
+                <TreeView.ItemTemplate>
+                    <TreeDataTemplate ItemsSource="{Binding Children}">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding Name}"
+                                       FontSize="9"
+                                       Foreground="{DynamicResource MetricValueBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="110"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding DisplayValue}"
+                                       IsVisible="{Binding IsLeaf}"
+                                       FontSize="9"
+                                       FontWeight="Bold"
+                                       Foreground="{DynamicResource MetricValueBrush}"
+                                       Margin="4,0,0,0"/>
+                        </Grid>
+                    </TreeDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+        </ScrollViewer>
+    </Grid>
+
+</UserControl>
