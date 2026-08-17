@@ -27,6 +27,26 @@
             RowSpacing="2"
             Margin="5,10,5,5">
 
+            <!--nav test-->
+            <ItemsControl Grid.Row="0" ItemsSource="{Binding NavItems}"
+                        HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Margin="6,-8,0,0" ZIndex="10">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="6"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:NavItemViewModel">
+                        <ToggleButton Content="{Binding Label}"
+                                    Command="{Binding SelectCommand}"
+                                    IsChecked="{Binding IsActive}"
+                                    Classes="nav-tab"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <!--nav test-->
+
             <!-- Grid0 (contents) -->
             <Border Grid.Row="0"
                     BorderBrush="White"
@@ -1051,14 +1071,7 @@
 
                     </Grid>
 
-                    <TextBlock Text="MainUI"
-                        Grid.Column="1"
-                        Background="Black"
-                        Padding="7,0"
-                        HorizontalAlignment="Left"
-                        VerticalAlignment="Top"
-                        Margin="10,-5,0,0"
-                        FontSize="11"/>
+                    
                 </Grid>
 
                 

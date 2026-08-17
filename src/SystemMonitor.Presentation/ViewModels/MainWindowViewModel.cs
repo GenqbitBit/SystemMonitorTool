@@ -11,6 +11,7 @@ using SystemMonitor.Application.UseCases;
 using SystemMonitor.Infrastructure.Monitoring.CrossPlatform;
 using SystemMonitor.Infrastructure.Persistence;
 using SystemMonitor.Presentation.Common;
+using SystemMonitor.Presentation.Services;
 
 namespace SystemMonitor.Presentation.ViewModels;
 
@@ -24,7 +25,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     // A single dedicated background thread drives polling instead of
     // DispatcherTimer.Tick (which ran the expensive work on the UI thread)
-    // or Task.Run per tick (which hands the work to a *different* ThreadPool
+    // or Task.Run per tick (which hands the work to a different ThreadPool
     // thread every cycle). Hardware-access libraries such as
     // LibreHardwareMonitorLib can behave inconsistently when called from a
     // different thread each time; a dedicated thread gives GetSnapshot() the
@@ -69,19 +70,28 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private ObservableCollection<ProcessInfo> topMemoryProcesses = new();
 
     public IMetricHistoryStore HistoryStore => _historyStore;
+
     public HardwareTreeViewModel HardwareTree => _hardwareTree;
 
     private sealed class DesignTimeHardwareTreeProvider : IHardwareTreeProvider
     {
-        public IReadOnlyList<HardwareTreeNode> DiscoverTree() => Array.Empty<HardwareTreeNode>();
-        public void RefreshValues(IReadOnlyList<HardwareTreeNode> roots) { }
+        public IReadOnlyList<HardwareTreeNode> DiscoverTree() =>
+            Array.Empty<HardwareTreeNode>();
+
+        public void RefreshValues(IReadOnlyList<HardwareTreeNode> roots)
+        {
+        }
     }
 
     public MainWindowViewModel()
-    : this(new CatalogDesignTimeMetricsSnapshotProvider(), new MetricHistoryStore(),
-        new DotNetOsMonitorService(), new SqliteMetricHistoryPersistenceService(),
-        new MetricsTableViewModel(new CatalogDesignTimeMetricsSnapshotProvider()),
-        new DesignTimeHardwareTreeProvider())
+        : this(
+            new CatalogDesignTimeMetricsSnapshotProvider(),
+            new MetricHistoryStore(),
+            new DotNetOsMonitorService(),
+            new SqliteMetricHistoryPersistenceService(),
+            new MetricsTableViewModel(
+                new CatalogDesignTimeMetricsSnapshotProvider()),
+            new DesignTimeHardwareTreeProvider())
     {
     }
 
@@ -97,8 +107,18 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _historyStore = historyStore;
         _os = os;
         _historyPersistence = historyPersistence;
+
         MetricsTable = metricsTable;
         _hardwareTree = new HardwareTreeViewModel(hardwareTreeProvider);
+
+        NavItems = new ObservableCollection<NavItemViewModel>
+        {
+            new("Settings", SelectNavItem),
+            new("Themes", SelectNavItem),
+            new("Logs", SelectNavItem),
+            new("View Top Processes", SelectNavItem),
+            new("View Data Table", SelectNavItem),
+        };
 
         // One synchronous acquisition up front so the designer and the first
         // frame have data immediately, matching the original constructor's
@@ -112,6 +132,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 IsBackground = true,
                 Name = "MetricsPolling"
             };
+
             // WMI/COM-based hardware access can require an STA thread. The UI
             // thread that ran the first AcquireAndApply() call above is STA
             // by convention on Windows; this dedicated thread defaults to MTA
@@ -119,12 +140,27 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             // first one silently fail for COM-based providers.
             if (OperatingSystem.IsWindows())
                 _pollingThread.SetApartmentState(ApartmentState.STA);
+
             _pollingThread.Start();
         }
     }
 
-    // This table's view-model.
     public MetricsTableViewModel MetricsTable { get; }
+
+    public ObservableCollection<NavItemViewModel> NavItems { get; }
+
+    private void SelectNavItem(NavItemViewModel selected)
+    {
+        foreach (var item in NavItems)
+            item.IsActive = item == selected;
+
+        // Notify the MainWindow that a sub-window should be opened.
+        // The actual Window instance and window-opening logic remain
+        // outside the ViewModel.
+        OpenPanelRequested?.Invoke(selected.Label);
+    }
+
+    public event Action<string>? OpenPanelRequested;
 
     private void PollLoop()
     {
@@ -146,6 +182,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             }
 
             var remaining = interval - stopwatch.Elapsed;
+
             if (remaining > TimeSpan.Zero)
                 Thread.Sleep(remaining);
         }
@@ -159,23 +196,29 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _historyPersistence.Record(snapshot);
 
         var gpuUsageRows = snapshot
-            .Where(m => m.Id.StartsWith("gpu.usage.") && m.GpuDeviceId != null)
+            .Where(m =>
+                m.Id.StartsWith("gpu.usage.") &&
+                m.GpuDeviceId != null)
             .ToList();
 
         var dedicatedId = gpuUsageRows.FirstOrDefault(m =>
             m.GpuIsIntegrated == false)?.Id
             ?? gpuUsageRows.FirstOrDefault()?.Id;
+
         var integratedId = gpuUsageRows.FirstOrDefault(m =>
             m.GpuIsIntegrated == true)?.Id
             ?? gpuUsageRows.FirstOrDefault()?.Id;
 
         var gpuModelRows = snapshot
-            .Where(m => m.Id.StartsWith("gpu.model.") && m.GpuDeviceId != null)
+            .Where(m =>
+                m.Id.StartsWith("gpu.model.") &&
+                m.GpuDeviceId != null)
             .ToList();
 
         var dedicatedModelId = gpuModelRows.FirstOrDefault(m =>
             m.GpuIsIntegrated == false)?.Id
             ?? gpuModelRows.FirstOrDefault()?.Id;
+
         var integratedModelId = gpuModelRows.FirstOrDefault(m =>
             m.GpuIsIntegrated == true)?.Id
             ?? gpuModelRows.FirstOrDefault()?.Id;
@@ -185,12 +228,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 m.GpuDeviceId!,
                 m.GpuIndex ?? 0,
                 m.GpuIsIntegrated ?? false,
-                $"GPU {m.GpuIndex} ({(m.GpuIsIntegrated == true ? "Integrated" : "Dedicated")})"))
+                $"GPU {m.GpuIndex} ({(m.GpuIsIntegrated == true
+                    ? "Integrated"
+                    : "Dedicated")})"))
             .DistinctBy(g => g.DeviceId)
             .OrderBy(g => g.Index)
             .ToList();
 
         var osInfo = _os.GetCurrentInfo();
+
         var combinedProcesses = osInfo.TopProcesses;
         var cpuProcesses = osInfo.TopProcessesByCpu;
         var memoryProcesses = osInfo.TopProcessesByMemory;
@@ -198,14 +244,28 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         void Apply()
         {
             Metrics.SyncFrom(snapshot, m => m.Id);
+
             DedicatedGpuMetricId = dedicatedId;
             IntegratedGpuMetricId = integratedId;
+
             DedicatedGpuModelId = dedicatedModelId;
             IntegratedGpuModelId = integratedModelId;
-            DetectedGpus.SyncFrom(gpus, g => g.DeviceId);
-            TopProcesses.SyncFrom(combinedProcesses, p => p.ProcessId);
-            TopCpuProcesses.SyncFrom(cpuProcesses, p => p.ProcessId);
-            TopMemoryProcesses.SyncFrom(memoryProcesses, p => p.ProcessId);
+
+            DetectedGpus.SyncFrom(
+                gpus,
+                g => g.DeviceId);
+
+            TopProcesses.SyncFrom(
+                combinedProcesses,
+                p => p.ProcessId);
+
+            TopCpuProcesses.SyncFrom(
+                cpuProcesses,
+                p => p.ProcessId);
+
+            TopMemoryProcesses.SyncFrom(
+                memoryProcesses,
+                p => p.ProcessId);
         }
 
         if (Dispatcher.UIThread.CheckAccess())
@@ -214,17 +274,22 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             Dispatcher.UIThread.Post(Apply);
     }
 
-    
-
-    public void UpdateResponsiveScale(double windowWidth, double windowHeight)
+    public void UpdateResponsiveScale(
+        double windowWidth,
+        double windowHeight)
     {
         const double designWidth = 850;
+
         double raw = windowWidth / designWidth;
 
-        // dampen further: only apply a third of the proportional growth beyond 1.0
+        // Dampen further: only apply a third of the proportional
+        // growth beyond 1.0.
         double dampened = 1.0 + (raw - 1.0) * 0.25;
 
-        ResponsiveScale = Math.Clamp(dampened, 0.9, 1.2);
+        ResponsiveScale = Math.Clamp(
+            dampened,
+            0.9,
+            1.2);
     }
 
     /// <summary>
@@ -235,8 +300,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         _pollingCts.Cancel();
-        _pollingThread?.Join(TimeSpan.FromSeconds(2));
+
+        _pollingThread?.Join(
+            TimeSpan.FromSeconds(2));
+
         _pollingCts.Dispose();
+
         _hardwareTree.Dispose();
     }
 }
