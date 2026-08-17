@@ -42,7 +42,10 @@
                                 BorderBrush="White"
                                 BorderThickness="1"
                                 Margin="10">
-                            <panels:HardwareTreeView DataContext="{Binding HardwareTree}"/>
+                            <Grid RowDefinitions="*">
+                                <panels:HardwareTreeView Grid.Row="0"
+                                 DataContext="{Binding HardwareTree}"/>
+                            </Grid>
                         </Border>
 
                         
@@ -67,34 +70,12 @@
                                     <Grid Grid.Column="0" ColumnDefinitions="*">
                                         
                                         <Border Grid.Row="1"
-                                        Margin="0,15,20,0"
+                                        Margin="0,15,0,0"
                                         VerticalAlignment="Top"
                                         Height="2" Background="#13B45C" 
                                         HorizontalAlignment="Stretch"></Border>
 
-                                        <Border Grid.Row="1"
-                                        Margin="80,20,20,0"
-                                        VerticalAlignment="Top"
-                                        Height="2" Background="#13B45C" 
-                                        HorizontalAlignment="Stretch"></Border>
 
-                                        <Border Grid.Row="1"
-                                        Margin="130,25,20,0"
-                                        VerticalAlignment="Top"
-                                        Height="2" Background="#13B45C" 
-                                        HorizontalAlignment="Stretch"></Border>
-                                        
-                                        <Border Grid.Row="1"
-                                        Margin="110,30,20,0"
-                                        VerticalAlignment="Top"
-                                        Height="2" Background="#13B45C" 
-                                        HorizontalAlignment="Stretch"></Border>
-
-                                        <Border Grid.Row="1"
-                                        Margin="120,35,20,0"
-                                        VerticalAlignment="Top"
-                                        Height="2" Background="#13B45C" 
-                                        HorizontalAlignment="Stretch"></Border>
 
                                         <Border Opacity=".3">
                                             <Image Width="120" Height="120"

@@ -14,6 +14,11 @@ public partial class HardwareTreeNodeViewModel : ObservableObject
         _node = node;
         Children = new ObservableCollection<HardwareTreeNodeViewModel>(
             node.Children.Select(c => new HardwareTreeNodeViewModel(c)));
+
+        for (int i = 0; i < Children.Count; i++)
+        {
+            Children[i].IsFirstChild = i == 0;
+        }
     }
 
     public string Name => _node.Name;
@@ -22,6 +27,8 @@ public partial class HardwareTreeNodeViewModel : ObservableObject
 
     [ObservableProperty] private string _displayValue = "N/A";
     [ObservableProperty] private bool _isAvailable;
+
+    public bool IsFirstChild { get; set; }
 
     public void Refresh()
     {
