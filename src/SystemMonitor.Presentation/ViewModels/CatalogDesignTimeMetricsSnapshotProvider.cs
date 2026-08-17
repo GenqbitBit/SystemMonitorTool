@@ -30,4 +30,6 @@ internal class CatalogDesignTimeMetricsSnapshotProvider : IMetricsSnapshotProvid
             IsPrimary = entry.SampleIsPrimary
         }).ToList();
     }
+
+    
 }

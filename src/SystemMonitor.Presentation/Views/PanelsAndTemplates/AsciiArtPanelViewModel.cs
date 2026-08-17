@@ -29,6 +29,7 @@ public partial class AsciiArtPanelViewModel : ObservableObject
     [ObservableProperty] private string? errorMessage;
     [ObservableProperty] private double rotationCenterX;
     [ObservableProperty] private double rotationCenterY;
+    [ObservableProperty] private bool isPlaying = true; 
     [ObservableProperty] private RelativePoint rotationOrigin = new(0.5, 0.5, RelativeUnit.Relative);
 
     public AsciiArtPanelViewModel(IAsciiArtConverter converter, IStorageProvider storageProvider)
@@ -85,6 +86,9 @@ public partial class AsciiArtPanelViewModel : ObservableObject
             IsLoading = false;
         }
     }
+
+    [RelayCommand]
+    private void TogglePlayback() => IsPlaying = !IsPlaying;
 
     private async Task LoadFromStreamAsync(System.IO.Stream stream)
     {

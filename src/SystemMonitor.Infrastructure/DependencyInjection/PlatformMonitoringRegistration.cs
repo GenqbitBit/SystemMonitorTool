@@ -30,6 +30,8 @@ public static class PlatformMonitoringRegistration
             services.AddSingleton<IGpuMonitorService, WindowsGpuMonitorService>();
             services.AddSingleton<IMetricsSnapshotProvider, MetricsSnapshotProvider>();
             services.AddSingleton<IMetricHistoryStore>(_ => new MetricHistoryStore(TimeSpan.FromSeconds(60)));
+            services.AddSingleton<IHardwareTreeProvider>(sp =>
+            new WindowsHardwareTreeProvider(LibreHardwareMonitorHost.Instance.Computer));
             
         }
         else if (OperatingSystem.IsLinux())

@@ -28,8 +28,9 @@ public sealed class LibreHardwareMonitorHost
         {
             IsCpuEnabled = true,
             IsGpuEnabled = true,
+            IsMemoryEnabled = true,
             IsStorageEnabled = true,
-            IsMotherboardEnabled = true
+            IsMotherboardEnabled = true,
         };
         Computer.Open();
 

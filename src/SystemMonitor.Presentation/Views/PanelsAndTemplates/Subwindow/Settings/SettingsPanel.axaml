@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
+             x:Class="SystemMonitor.Presentation.Views.Subwindows.Settings.SettingsPanel"
+             x:DataType="vm:SettingsPanelViewModel">
+    <!-- actual settings controls go here -->
+    <TextBlock Text="Settings go here" />
+</UserControl>
