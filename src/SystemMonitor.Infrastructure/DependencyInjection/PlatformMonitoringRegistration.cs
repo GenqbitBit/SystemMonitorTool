@@ -15,8 +15,6 @@ public static class PlatformMonitoringRegistration
     {
         services.AddSingleton<IOsMonitorService, DotNetOsMonitorService>();
 
-        // Cross-platform — Microsoft.Data.Sqlite works identically on every
-        // OS, so this doesn't belong inside the Windows-only branch below.
         services.AddSingleton<IMetricHistoryPersistenceService, SqliteMetricHistoryPersistenceService>();
         services.AddSingleton<IAsciiArtConverter, AsciiArtConverter>();
 

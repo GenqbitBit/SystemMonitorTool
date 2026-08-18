@@ -4,7 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using Microsoft.Data.Sqlite; // requires the "Microsoft.Data.Sqlite" NuGet package
+using Microsoft.Data.Sqlite; 
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
