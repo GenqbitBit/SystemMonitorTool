@@ -97,7 +97,9 @@ public class PanelWindowService : IPanelWindowService
         {
             PanelLabels.Settings => new SettingsWindow(),
             PanelLabels.Themes => new ThemesWindow(),
-            PanelLabels.Logs => new LogsWindow(),
+            PanelLabels.Logs => vm is not null
+                ? new LogsWindow { DataContext = vm.LogsPanel }
+                : null,
             PanelLabels.ViewDataTable => vm is not null
                 ? new DataTableWindow { DataContext = vm.MetricsTable }
                 : null,
