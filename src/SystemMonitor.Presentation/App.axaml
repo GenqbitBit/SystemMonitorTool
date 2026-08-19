@@ -14,10 +14,10 @@
                 <ResourceInclude Source="avares://SystemMonitor.Presentation/Resources/AppIcons.axaml"/>
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- Fallback theme resources.
+            <!-- Fallback theme resources (Neon Dark).
                  ThemeResourceApplier.Apply replaces these with the active theme. -->
 
-            <SolidColorBrush x:Key="MetricValueBrush" Color="#19CB90" />
+            <SolidColorBrush x:Key="MetricValueBrush" Color="#C084FC" />
             <SolidColorBrush x:Key="WindowBorderBrush" Color="White" />
             <SolidColorBrush x:Key="SeparatorBrush" Color="#F6F6F6" />
             <SolidColorBrush x:Key="LabelBackgroundBrush" Color="Black" />
@@ -26,16 +26,16 @@
             <SolidColorBrush x:Key="NavTabHoverBackground" Color="#2A4FB0" />
             <SolidColorBrush x:Key="NavTabActiveBackground" Color="#1F1F1F" />
 
-            <SolidColorBrush x:Key="PanelAccentBorderBrush" Color="#DF20ED" />
+            <SolidColorBrush x:Key="PanelAccentBorderBrush" Color="#A855F7" />
 
-            <SolidColorBrush x:Key="Accent1Brush" Color="#4D03F8" />
-            <SolidColorBrush x:Key="Accent2Brush" Color="#03F844" />
-            <SolidColorBrush x:Key="Accent3Brush" Color="#EC03F8" />
-            <SolidColorBrush x:Key="Accent4Brush" Color="#0320F8" />
+            <SolidColorBrush x:Key="Accent1Brush" Color="#C084FC" />
+            <SolidColorBrush x:Key="Accent2Brush" Color="#A855F7" />
+            <SolidColorBrush x:Key="Accent3Brush" Color="#7C3AED" />
+            <SolidColorBrush x:Key="Accent4Brush" Color="#5B21B6" />
 
-            <SolidColorBrush x:Key="PositiveBrush" Color="#22C55E" />
-            <SolidColorBrush x:Key="WarningBrush" Color="#FFA201" />
-            <SolidColorBrush x:Key="CriticalBrush" Color="#DB0909" />
+            <SolidColorBrush x:Key="PositiveBrush" Color="#C084FC" />
+            <SolidColorBrush x:Key="WarningBrush" Color="#9333EA" />
+            <SolidColorBrush x:Key="CriticalBrush" Color="#4C1D95" />
 
             <converters:ScaleFontSizeConverter x:Key="ScaleFontSize" />
             <converters:NetworkRateConverter x:Key="NetworkRate" />
