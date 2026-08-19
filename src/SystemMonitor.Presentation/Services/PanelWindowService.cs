@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using SystemMonitor.Presentation.Views.Subwindows.Settings;
+using SystemMonitor.Presentation.Theming;
 using SystemMonitor.Presentation.Views.Subwindows.DataTable;
 using SystemMonitor.Presentation.Views.Subwindows.TopProcesses;
 using SystemMonitor.Presentation.Views.Subwindows.Themes;
@@ -96,7 +97,10 @@ public class PanelWindowService : IPanelWindowService
         return label switch
         {
             PanelLabels.Settings => new SettingsWindow(),
-            PanelLabels.Themes => new ThemesWindow(),
+            PanelLabels.Themes => new ThemesWindow
+                {
+                    DataContext = new ThemesPanelViewModel(ThemeRuntime.Service)
+                },
             PanelLabels.Logs => vm is not null
                 ? new LogsWindow { DataContext = vm.LogsPanel }
                 : null,

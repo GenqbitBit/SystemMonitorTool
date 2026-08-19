@@ -8,7 +8,7 @@ using SystemMonitor.Presentation.Common;
 
 namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 
-public class BrailleAreaGraphRenderer : IGraphContentRenderer
+public class BrailleAreaGraphRenderer : IGraphContentRenderer, IThemeableGraphRenderer
 {
     public double CellWidth { get; set; } = 20;
     public double CellHeight { get; set; } = 10;
@@ -20,6 +20,14 @@ public class BrailleAreaGraphRenderer : IGraphContentRenderer
     public Color AreaTopColor { get; set; } = Colors.MediumPurple;
     public Color AreaBottomColor { get; set; } = Colors.Indigo;
     public int BandCount { get; set; } = 8;
+
+    public void ApplyPalette(Color primary, Color secondary)
+    {
+        AreaTopColor = primary;
+        AreaBottomColor = secondary;
+        CurveTopColor = primary;
+        CurveBottomColor = secondary;
+    }
 
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
         double minValue, double maxValue, DateTime windowStart, DateTime windowEnd,

@@ -10,7 +10,7 @@ namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 // Always renders the full fixed-width bar; ignores windowStart/windowEnd,
 // minValue/maxValue params, and useFrozenValues entirely, and never calls
 // MetricGraphMath.ComputePoints. Only the latest sample matters.
-public class BlockPercentageBarRenderer : IGraphContentRenderer
+public class BlockPercentageBarRenderer : IGraphContentRenderer, IThemeableGraphRenderer
 {
     public double BlockWidth { get; set; } = 2;
     public double BlockGap { get; set; } = 1;
@@ -32,6 +32,12 @@ public class BlockPercentageBarRenderer : IGraphContentRenderer
 
     public bool SuppressDefaultCurrentValueMarker => true;
 
+    public void ApplyPalette(Color primary, Color secondary)
+    {
+        StartColor = primary;
+        EndColor = secondary;
+    }
+    
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
         double minValue, double maxValue, DateTime windowStart, DateTime windowEnd,
         bool baselineAtTop = false, bool useFrozenValues = true, bool toRight = true)

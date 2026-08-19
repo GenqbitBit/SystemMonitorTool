@@ -80,7 +80,16 @@ public class MetricGraphView : Control
     public static readonly StyledProperty<bool> SecondaryToRightProperty =
         AvaloniaProperty.Register<MetricGraphView, bool>(nameof(SecondaryToRight), defaultValue: true);
 
+    public static readonly StyledProperty<Theming.GraphRole?> GraphRoleProperty =
+        AvaloniaProperty.Register<MetricGraphView, Theming.GraphRole?>(nameof(GraphRole));
+
     private INotifyCollectionChanged? _subscribedCollection;
+
+    public Theming.GraphRole? GraphRole
+    {
+        get => GetValue(GraphRoleProperty);
+        set => SetValue(GraphRoleProperty, value);
+    }
 
     public double? FixedMinValue
     {
@@ -247,12 +256,36 @@ public class MetricGraphView : Control
     {
         base.OnAttachedToVisualTree(e);
         SubscribeToMetricsCollection();
+
+        ApplyThemeColors();
+        Theming.ThemeRuntime.Service.ThemeChanged += OnThemeChanged;
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
         UnsubscribeFromMetricsCollection();
+        Theming.ThemeRuntime.Service.ThemeChanged -= OnThemeChanged;
+    }
+
+    private void OnThemeChanged(object? sender, Domain.Models.Theming.ThemeDefinition theme)
+    {
+        ApplyThemeColors();
+        InvalidateVisual();
+    }
+
+    private void ApplyThemeColors()
+    {
+        if (GraphRole is not { } role)
+            return;
+
+        var (primary, secondary) = Theming.GraphRoleMap.Resolve(role, Theming.ThemeRuntime.Service.CurrentTheme);
+
+        if (ContentRenderer is IThemeableGraphRenderer themeable)
+            themeable.ApplyPalette(primary, secondary);
+
+        if (SecondaryContentRenderer is IThemeableGraphRenderer secondaryThemeable)
+            secondaryThemeable.ApplyPalette(primary, secondary);
     }
 
     private void SubscribeToMetricsCollection()
