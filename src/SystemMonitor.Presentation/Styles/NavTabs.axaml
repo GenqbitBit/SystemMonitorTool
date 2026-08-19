@@ -3,7 +3,7 @@
 
     <!-- Base navigation tab -->
     <Style Selector="ToggleButton.nav-tab">
-        <Setter Property="Background" Value="#3B6FE0"/>
+        <Setter Property="Background" Value="{DynamicResource NavTabBackground}"/>
         <Setter Property="Padding" Value="7,0"/>
         <Setter Property="FontSize" Value="11"/>
         <Setter Property="ZIndex" Value="10"/>
@@ -13,33 +13,33 @@
         <Setter Property="FontSize" Value="11"/>
     </Style>
 
-    <!-- Hover: mini violet -->
+    <!-- Hover -->
     <Style Selector="ToggleButton.nav-tab:pointerover">
-        <Setter Property="Background" Value="#2A4FB0"/>
+        <Setter Property="Background" Value="{DynamicResource NavTabHoverBackground}"/>
         <Setter Property="Opacity" Value="1"/>
     </Style>
     <Style Selector="ToggleButton.nav-tab:pointerover /template/ ContentPresenter">
-        <Setter Property="Background" Value="#2A4FB0"/>
+        <Setter Property="Background" Value="{DynamicResource NavTabHoverBackground}"/>
         <Setter Property="Opacity" Value="1"/>
     </Style>
 
-    <!-- Checked / active: deeper blue -->
+    <!-- Checked / active -->
     <Style Selector="ToggleButton.nav-tab:checked">
-        <Setter Property="Background" Value="#2A4FB0"/>
+        <Setter Property="Background" Value="{DynamicResource NavTabActiveBackground}"/>
         <Setter Property="Opacity" Value="1"/>
     </Style>
     <Style Selector="ToggleButton.nav-tab:checked /template/ ContentPresenter">
-        <Setter Property="Background" Value="#2A4FB0"/>
+        <Setter Property="Background" Value="{DynamicResource NavTabActiveBackground}"/>
         <Setter Property="Opacity" Value="1"/>
     </Style>
 
     <!-- Checked + Hover -->
     <Style Selector="ToggleButton.nav-tab:checked:pointerover">
-        <Setter Property="Background" Value="#2A4FB0"/>
+        <Setter Property="Background" Value="{DynamicResource NavTabActiveBackground}"/>
         <Setter Property="Opacity" Value="1"/>
     </Style>
     <Style Selector="ToggleButton.nav-tab:checked:pointerover /template/ ContentPresenter">
-        <Setter Property="Background" Value="#2A4FB0"/>
+        <Setter Property="Background" Value="{DynamicResource NavTabActiveBackground}"/>
         <Setter Property="Opacity" Value="1"/>
     </Style>
 
