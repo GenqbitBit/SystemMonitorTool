@@ -49,7 +49,7 @@ public partial class AsciiArtPanel : UserControl
         if (ArtVisual.RenderTransform is not ScaleTransform)
             return;
 
-        _spinTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        _spinTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
         _spinTimer.Tick += (_, _) =>
         {
             _angle = (_angle + 1.0) % 360.0;

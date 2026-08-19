@@ -13,10 +13,10 @@ namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 
 public partial class AsciiArtPanelViewModel : ObservableObject
 {
-    private const int Columns = 33;
-    private const int Rows = 18;
-    private const double CellWidth = 4.0;
-    private const double CellHeight = 6.5;
+    private const int Columns = 18;
+    private const int Rows = 10;
+    private const double CellWidth = 7.3;
+    private const double CellHeight = 11.7;
 
     private static readonly Uri FixedArtSourceUri =
         new("avares://SystemMonitor.Presentation/Assets/AsciiArt/source.png");

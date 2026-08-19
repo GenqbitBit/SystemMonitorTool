@@ -4,9 +4,6 @@ namespace SystemMonitor.Application.AsciiArt;
 
 public sealed class AsciiArtConverter : IAsciiArtConverter
 {
-    // Ordered dark -> light. Tune density/length to taste.
-    private const string Ramp = " .:-=+*#%@";
-
     public AsciiCell[,] Convert(IPixelSource source, int columns, int rows)
     {
         var cells = new AsciiCell[rows, columns];
@@ -18,20 +15,28 @@ public sealed class AsciiArtConverter : IAsciiArtConverter
         {
             for (int col = 0; col < columns; col++)
             {
-                var (r, g, b, brightness) = SampleBlock(
+                var (r, g, b, brightness, hasContent) = SampleBlock(
                     source,
                     (int)(col * blockW), (int)(row * blockH),
                     (int)blockW, (int)blockH);
 
-                char glyph = MapBrightnessToGlyph(brightness);
-                cells[row, col] = new AsciiCell(glyph, r, g, b);
+                if (!hasContent)
+                {
+                    cells[row, col] = new AsciiCell(' ', 0, 0, 0, 0);
+                    continue;
+                }
+
+                int tier = (int)Math.Round(brightness * (AsciiGlyphRamp.Tiers.Length - 1));
+                tier = Math.Clamp(tier, 0, AsciiGlyphRamp.Tiers.Length - 1);
+
+                cells[row, col] = new AsciiCell(AsciiGlyphRamp.Tiers[tier], r, g, b, tier);
             }
         }
 
         return cells;
     }
 
-    private static (byte R, byte G, byte B, double Brightness) SampleBlock(
+    private static (byte R, byte G, byte B, double Brightness, bool HasContent) SampleBlock(
         IPixelSource source, int startX, int startY, int w, int h)
     {
         w = Math.Max(1, w);
@@ -48,28 +53,20 @@ public sealed class AsciiArtConverter : IAsciiArtConverter
             for (int x = startX; x < endX; x++)
             {
                 var (r, g, b, a) = source.GetPixel(x, y);
-                if (a == 0) continue; // skip fully transparent pixels
+                if (a == 0) continue;
                 sumR += r; sumG += g; sumB += b;
                 count++;
             }
         }
 
-        if (count == 0) return (0, 0, 0, 0);
+        if (count == 0) return (0, 0, 0, 0, false);
 
         byte avgR = (byte)(sumR / count);
         byte avgG = (byte)(sumG / count);
         byte avgB = (byte)(sumB / count);
 
-        // Perceptual luminance, normalized 0..1
         double brightness = (0.299 * avgR + 0.587 * avgG + 0.114 * avgB) / 255.0;
 
-        return (avgR, avgG, avgB, brightness);
-    }
-
-    private static char MapBrightnessToGlyph(double brightness)
-    {
-        int index = (int)(brightness * (Ramp.Length - 1));
-        index = Math.Clamp(index, 0, Ramp.Length - 1);
-        return Ramp[index];
+        return (avgR, avgG, avgB, brightness, true);
     }
 }
