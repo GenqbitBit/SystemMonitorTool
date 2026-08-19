@@ -1,3 +1,4 @@
+using System.Linq;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
@@ -46,8 +47,11 @@ public sealed class MetricHistoryStore : IMetricHistoryStore
 
         lock (_lock)
         {
+            var activeMetricIds = new HashSet<string>();
             foreach (var reading in snapshot)
             {
+                activeMetricIds.Add(reading.Id);
+
                 if (!reading.IsAvailable) continue;
 
                 GraduateLiveTip(reading.Id, now);
@@ -56,6 +60,25 @@ public sealed class MetricHistoryStore : IMetricHistoryStore
                 // history, doesn't touch the committed range yet.
                 _liveTip[reading.Id] = new MetricHistoryPoint(now, reading.Value);
             }
+
+            PruneInactiveMetricIds(activeMetricIds);
+        }
+    }
+
+    private void PruneInactiveMetricIds(HashSet<string> activeMetricIds)
+    {
+        var retainedMetricIds = _history.Keys
+            .Concat(_liveTip.Keys)
+            .Concat(_committedRange.Keys)
+            .Where(id => !activeMetricIds.Contains(id))
+            .Distinct()
+            .ToList();
+
+        foreach (var metricId in retainedMetricIds)
+        {
+            _history.Remove(metricId);
+            _liveTip.Remove(metricId);
+            _committedRange.Remove(metricId);
         }
     }
 

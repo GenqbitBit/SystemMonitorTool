@@ -141,6 +141,8 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             readings.Add(BuildGpuTextReading(MetricCatalog.GpuModel, gpuInfo, gpuInfo.Name, gpuLabelSuffix));
         }
 
+
+        PruneSmoothingWindows(readings);
         // Temperature — now bundled into each hardware's own Info model instead
         // of a centralized ITemperatureMonitorService. Kept at the same position
         // (end of the snapshot) to minimize output-order drift from before.
@@ -170,6 +172,17 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         }
 
         return readings;
+    }
+
+    private void PruneSmoothingWindows(IReadOnlyList<MetricReading> readings)
+    {
+        var activeIds = new HashSet<string>(readings.Select(reading => reading.Id));
+        foreach (var metricId in _smoothingWindows.Keys
+                     .Where(id => !activeIds.Contains(id))
+                     .ToList())
+        {
+            _smoothingWindows.Remove(metricId);
+        }
     }
 
     private MetricReading BuildReading(

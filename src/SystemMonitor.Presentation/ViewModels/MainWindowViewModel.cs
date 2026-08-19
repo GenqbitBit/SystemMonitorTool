@@ -17,6 +17,17 @@ namespace SystemMonitor.Presentation.ViewModels;
 
 public partial class MainWindowViewModel : ViewModelBase, IDisposable
 {
+    private sealed class DesignTimeDependencies
+    {
+        public IMetricsSnapshotProvider MetricsProvider { get; } = new CatalogDesignTimeMetricsSnapshotProvider();
+        public IMetricHistoryStore HistoryStore { get; } = new MetricHistoryStore();
+        public IOsMonitorService Os { get; } = new DotNetOsMonitorService();
+        public IMetricHistoryPersistenceService HistoryPersistence { get; } = new SqliteMetricHistoryPersistenceService();
+        public IEventLogService EventLog { get; } = new SqliteEventLogService();
+        public MetricsTableViewModel MetricsTable { get; } = new MetricsTableViewModel();
+        public IHardwareTreeProvider HardwareTreeProvider { get; } = new DesignTimeHardwareTreeProvider();
+    }
+
     private readonly IMetricsSnapshotProvider _metricsProvider;
     private readonly IMetricHistoryStore _historyStore;
     private readonly HardwareTreeViewModel _hardwareTree;
@@ -80,18 +91,20 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     public MainWindowViewModel()
+        : this(new DesignTimeDependencies())
+    {
+    }
+
+    private MainWindowViewModel(DesignTimeDependencies dependencies)
         : this(
-            new CatalogDesignTimeMetricsSnapshotProvider(),
-            new MetricHistoryStore(),
-            new DotNetOsMonitorService(),
-            new SqliteMetricHistoryPersistenceService(),
-            new SqliteEventLogService(),
-            new ThresholdMonitorService(
-                new SqliteEventLogService(),
-                Array.Empty<MetricThreshold>()),
-            new MetricsTableViewModel(
-                new CatalogDesignTimeMetricsSnapshotProvider()),
-            new DesignTimeHardwareTreeProvider())
+            dependencies.MetricsProvider,
+            dependencies.HistoryStore,
+            dependencies.Os,
+            dependencies.HistoryPersistence,
+            dependencies.EventLog,
+            new ThresholdMonitorService(dependencies.EventLog, Array.Empty<MetricThreshold>()),
+            dependencies.MetricsTable,
+            dependencies.HardwareTreeProvider)
     {
     }
 
@@ -292,6 +305,16 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void DrainUiUpdates()
     {
+        if (_disposed)
+        {
+            lock (_uiUpdateGate)
+            {
+                _pendingUiUpdate = null;
+                _uiUpdateQueued = false;
+            }
+            return;
+        }
+
         while (true)
         {
             Action? update;
@@ -332,6 +355,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             return;
 
         _disposed = true;
+        lock (_uiUpdateGate)
+            _pendingUiUpdate = null;
         _pollingCts.Cancel();
 
         _pollingThread?.Join(

@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -11,7 +12,7 @@ using Avalonia;
 
 namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 
-public partial class AsciiArtPanelViewModel : ObservableObject
+public partial class AsciiArtPanelViewModel : ObservableObject, IDisposable
 {
     private const int Columns = 18;
     private const int Rows = 10;
@@ -23,6 +24,8 @@ public partial class AsciiArtPanelViewModel : ObservableObject
 
     private readonly IAsciiArtConverter _converter;
     private readonly IStorageProvider _storageProvider;
+    private CancellationTokenSource _loadCts = new();
+    private bool _disposed;
 
     [ObservableProperty] private AsciiCell[,]? currentArt;
     [ObservableProperty] private bool isLoading;
@@ -41,12 +44,16 @@ public partial class AsciiArtPanelViewModel : ObservableObject
 
     private async Task LoadFixedArtAsync()
     {
+        var cancellationToken = BeginLoad();
         ErrorMessage = null;
         IsLoading = true;
         try
         {
             await using var stream = AssetLoader.Open(FixedArtSourceUri);
-            await LoadFromStreamAsync(stream);
+            await LoadFromStreamAsync(stream, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception ex)
         {
@@ -61,7 +68,10 @@ public partial class AsciiArtPanelViewModel : ObservableObject
     [RelayCommand]
     private async Task Upload()
     {
+        if (_disposed) return;
+
         ErrorMessage = null;
+        CancellationToken cancellationToken = default;
         try
         {
             var files = await _storageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -74,8 +84,12 @@ public partial class AsciiArtPanelViewModel : ObservableObject
             if (files.Count == 0) return;
 
             IsLoading = true;
+            cancellationToken = BeginLoad();
             await using var stream = await files[0].OpenReadAsync();
-            await LoadFromStreamAsync(stream);
+            await LoadFromStreamAsync(stream, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception ex)
         {
@@ -90,20 +104,47 @@ public partial class AsciiArtPanelViewModel : ObservableObject
     [RelayCommand]
     private void TogglePlayback() => IsPlaying = !IsPlaying;
 
-    private async Task LoadFromStreamAsync(System.IO.Stream stream)
+    private CancellationToken BeginLoad()
+    {
+        _loadCts.Cancel();
+        _loadCts.Dispose();
+        _loadCts = new CancellationTokenSource();
+        return _loadCts.Token;
+    }
+
+    private async Task LoadFromStreamAsync(System.IO.Stream stream, CancellationToken cancellationToken)
     {
         using var bitmap = WriteableBitmap.Decode(stream);
         using var pixelSource = new WriteableBitmapPixelSource(bitmap);
 
-        CurrentArt = await Task.Run(() => _converter.Convert(pixelSource, Columns, Rows));
+        var art = await Task.Run(
+            () => _converter.Convert(pixelSource, Columns, Rows),
+            cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_disposed) return;
+
+        CurrentArt = art;
 
         _ = Dispatcher.UIThread.InvokeAsync(
         () =>
         {
+            if (_disposed || cancellationToken.IsCancellationRequested)
+                return;
+
             var (centerX, centerY) = CalculateAsciiContentCenter(CurrentArt);
             RotationOrigin = new RelativePoint(centerX, centerY, RelativeUnit.Absolute);
         },
         DispatcherPriority.Background);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+
+        _disposed = true;
+        _loadCts.Cancel();
+        _loadCts.Dispose();
     }
 
     private (double centerX, double centerY) CalculateAsciiContentCenter(AsciiCell[,]? art)
