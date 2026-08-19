@@ -7,39 +7,78 @@
 
     <DockPanel Margin="10">
 
-        <Button DockPanel.Dock="Top"
-                Content="⟳ Refresh"
-                Command="{Binding RefreshCommand}"
-                FontSize="10"
-                Foreground="White"
-                Margin="0,0,0,10"/>
+        <!-- Toolbar -->
+        <StackPanel DockPanel.Dock="Top"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    Margin="0,0,0,10">
+
+            <Button Content="⟳ Refresh"
+                    Command="{Binding RefreshCommand}"
+                    FontSize="10"
+                    Foreground="{DynamicResource MetricValueBrush}"/>
+
+            <Button Content="Delete Logs"
+                    Command="{Binding DeleteLogsCommand}"
+                    FontSize="10"
+                    Foreground="{DynamicResource MetricValueBrush}"
+                    Background="{DynamicResource CriticalBrush}"/>
+        </StackPanel>
+
+        <!-- Column headers -->
+        <StackPanel DockPanel.Dock="Top"
+                    Orientation="Horizontal"
+                    Spacing="5"
+                    Margin="0,0,0,4">
+
+            <TextBlock Text="Timestamp"
+                       Width="150"
+                       FontSize="10"
+                       FontWeight="Bold"
+                       Foreground="{DynamicResource SeparatorLineBrush}"/>
+
+            <TextBlock Text="Type"
+                       Width="120"
+                       FontSize="10"
+                       FontWeight="Bold"
+                       Foreground="{DynamicResource SeparatorLineBrush}"/>
+
+            <TextBlock Text="Message"
+                       FontSize="10"
+                       FontWeight="Bold"
+                       Foreground="{DynamicResource SeparatorLineBrush}"/>
+        </StackPanel>
 
         <ListBox ItemsSource="{Binding Entries}"
                  Background="Transparent">
 
             <ListBox.ItemTemplate>
                 <DataTemplate>
+
                     <StackPanel Orientation="Horizontal"
                                 Spacing="5">
 
                         <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:M/d/yyyy h:mm tt}'}"
-                                    Width="150"
-                                    FontSize="10"
-                                    Foreground="{DynamicResource MetricValueBrush}"/>
+                                   Width="150"
+                                   FontSize="10"
+                                   Foreground="{DynamicResource MetricValueBrush}"/>
 
                         <TextBlock Text="{Binding Type}"
                                    Width="120"
                                    FontSize="10"
-                                   Foreground="White"/>
+                                   Foreground="{DynamicResource MetricValueBrush}"/>
 
                         <TextBlock Text="{Binding Message}"
                                    FontSize="10"
-                                   Foreground="White"/>
+                                   Foreground="{DynamicResource MetricValueBrush}"/>
 
                     </StackPanel>
+
                 </DataTemplate>
             </ListBox.ItemTemplate>
 
         </ListBox>
+
     </DockPanel>
+
 </UserControl>

@@ -38,6 +38,17 @@ public sealed class SqliteEventLogService : IEventLogService, IDisposable
     private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(15);
     private DateTime _lastCleanup = DateTime.MinValue;
 
+    public async Task DeleteAllEventsAsync()
+    {
+        using var delete = _connection.CreateCommand();
+        delete.CommandText = "DELETE FROM events;";
+        await delete.ExecuteNonQueryAsync().ConfigureAwait(false);
+
+        using var reset = _connection.CreateCommand();
+        reset.CommandText = "DELETE FROM sqlite_sequence WHERE name = 'events';";
+        await reset.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
     public SqliteEventLogService()
     {
         var appDataFolder = Path.Combine(

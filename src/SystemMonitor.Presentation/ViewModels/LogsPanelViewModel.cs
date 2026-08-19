@@ -27,6 +27,13 @@ public partial class LogsPanelViewModel : ObservableObject
     [RelayCommand]
     private async Task Refresh() => await LoadAsync();
 
+    [RelayCommand]
+    private async Task DeleteLogs()
+    {
+        await _eventLog.DeleteAllEventsAsync();
+        await LoadAsync();
+    }
+
     private async Task LoadAsync()
     {
         var results = await _eventLog.GetEventsAsync(type: SelectedTypeFilter);

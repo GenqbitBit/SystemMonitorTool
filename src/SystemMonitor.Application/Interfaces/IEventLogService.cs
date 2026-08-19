@@ -10,4 +10,6 @@ public interface IEventLogService
         string? type = null,
         DateTime? since = null,
         int limit = 200);
+
+    Task DeleteAllEventsAsync();
 }
