@@ -21,17 +21,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly IMetricHistoryStore _historyStore;
     private readonly HardwareTreeViewModel _hardwareTree;
     private readonly IMetricHistoryPersistenceService _historyPersistence;
+    private readonly IEventLogService _eventLog;
+    private readonly IThresholdMonitorService _thresholdMonitor;
     private readonly IOsMonitorService _os;
 
-    // A single dedicated background thread drives polling instead of
-    // DispatcherTimer.Tick (which ran the expensive work on the UI thread)
-    // or Task.Run per tick (which hands the work to a different ThreadPool
-    // thread every cycle). Hardware-access libraries such as
-    // LibreHardwareMonitorLib can behave inconsistently when called from a
-    // different thread each time; a dedicated thread gives GetSnapshot() the
-    // same consistent calling thread every cycle, matching how the original
-    // DispatcherTimer.Tick always ran on the same (UI) thread — just moved
-    // off it.
     private readonly Thread? _pollingThread;
     private readonly CancellationTokenSource _pollingCts = new();
 
@@ -53,13 +46,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private double _responsiveScale = 1.0;
 
-    // One entry per physical GPU detected this snapshot, keyed on the real
-    // DeviceId — drives the dynamic per-GPU panel ItemsControl in MainWindow.axaml.
     [ObservableProperty]
     private ObservableCollection<GpuDeviceDisplayInfo> detectedGpus = new();
 
-    // The heaviest processes right now — the OS section's live table
-    // (the parallel tabular path, beside the scalar Metrics river).
     [ObservableProperty]
     private ObservableCollection<ProcessInfo> topProcesses = new();
 
@@ -89,6 +78,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             new MetricHistoryStore(),
             new DotNetOsMonitorService(),
             new SqliteMetricHistoryPersistenceService(),
+            new SqliteEventLogService(),
+            new ThresholdMonitorService(
+                new SqliteEventLogService(),
+                Array.Empty<MetricThreshold>()),
             new MetricsTableViewModel(
                 new CatalogDesignTimeMetricsSnapshotProvider()),
             new DesignTimeHardwareTreeProvider())
@@ -100,6 +93,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         IMetricHistoryStore historyStore,
         IOsMonitorService os,
         IMetricHistoryPersistenceService historyPersistence,
+        IEventLogService eventLog,
+        IThresholdMonitorService thresholdMonitor,
         MetricsTableViewModel metricsTable,
         IHardwareTreeProvider hardwareTreeProvider)
     {
@@ -107,9 +102,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _historyStore = historyStore;
         _os = os;
         _historyPersistence = historyPersistence;
+        _eventLog = eventLog;
+        _thresholdMonitor = thresholdMonitor;
 
         MetricsTable = metricsTable;
-        _hardwareTree = new HardwareTreeViewModel(hardwareTreeProvider);
+        LogsPanel = new LogsPanelViewModel(eventLog);
+        _hardwareTree = new HardwareTreeViewModel(hardwareTreeProvider, eventLog);
 
         NavItems = new ObservableCollection<NavItemViewModel>
         {
@@ -120,9 +118,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             new("View Data Table", SelectNavItem),
         };
 
-        // One synchronous acquisition up front so the designer and the first
-        // frame have data immediately, matching the original constructor's
-        // behavior of calling RefreshMetrics() before the timer starts.
         AcquireAndApply();
 
         if (!Avalonia.Controls.Design.IsDesignMode)
@@ -133,19 +128,20 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 Name = "MetricsPolling"
             };
 
-            // WMI/COM-based hardware access can require an STA thread. The UI
-            // thread that ran the first AcquireAndApply() call above is STA
-            // by convention on Windows; this dedicated thread defaults to MTA
-            // unless told otherwise, which can make every call after the
-            // first one silently fail for COM-based providers.
             if (OperatingSystem.IsWindows())
                 _pollingThread.SetApartmentState(ApartmentState.STA);
+
+            _eventLog.LogEvent(
+                EventType.SessionStart,
+                "Application session started");
 
             _pollingThread.Start();
         }
     }
 
     public MetricsTableViewModel MetricsTable { get; }
+
+    public LogsPanelViewModel LogsPanel { get; }
 
     public ObservableCollection<NavItemViewModel> NavItems { get; }
 
@@ -154,9 +150,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         foreach (var item in NavItems)
             item.IsActive = item == selected;
 
-        // Notify the MainWindow that a sub-window should be opened.
-        // The actual Window instance and window-opening logic remain
-        // outside the ViewModel.
         OpenPanelRequested?.Invoke(selected.Label);
     }
 
@@ -175,10 +168,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             {
                 AcquireAndApply();
             }
-            catch
+            catch (Exception ex)
             {
-                // A single failed acquisition shouldn't kill the polling loop —
-                // just skip this tick and try again next cycle.
+                _eventLog.LogEvent(EventType.Error, ex.Message);
             }
 
             var remaining = interval - stopwatch.Elapsed;
@@ -194,6 +186,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         _historyStore.Record(snapshot);
         _historyPersistence.Record(snapshot);
+        _thresholdMonitor.Check(snapshot);
 
         var gpuUsageRows = snapshot
             .Where(m =>
@@ -282,8 +275,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         double raw = windowWidth / designWidth;
 
-        // Dampen further: only apply a third of the proportional
-        // growth beyond 1.0.
         double dampened = 1.0 + (raw - 1.0) * 0.25;
 
         ResponsiveScale = Math.Clamp(
@@ -292,11 +283,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             1.2);
     }
 
-    /// <summary>
-    /// Signals the polling thread to stop and waits briefly for it to exit.
-    /// Call this on window close/app shutdown so the background thread doesn't
-    /// keep running (and keep polling hardware) past the window's lifetime.
-    /// </summary>
     public void Dispose()
     {
         _pollingCts.Cancel();
@@ -307,5 +293,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _pollingCts.Dispose();
 
         _hardwareTree.Dispose();
+
+        (_historyPersistence as IDisposable)?.Dispose();
+        (_eventLog as IDisposable)?.Dispose();
     }
 }

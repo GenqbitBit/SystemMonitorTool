@@ -1,13 +1,9 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
-        xmlns:panels="using:SystemMonitor.Presentation.Views.Subwindows.Themes"
+        xmlns:themes="using:SystemMonitor.Presentation.Views.Subwindows.Themes"
         x:Class="SystemMonitor.Presentation.Views.Subwindows.Themes.ThemesWindow"
-        x:DataType="vm:ThemesPanelViewModel"
         Title="Themes"
-        Width="650" Height="450"
-        MinWidth="650" MinHeight="450"
-        CanResize="False"
-        WindowStartupLocation="CenterOwner">
-    <panels:ThemesPanel/>
+        Width="320" Height="360"
+        CanResize="False">
+    <themes:ThemesPanel/>
 </Window>

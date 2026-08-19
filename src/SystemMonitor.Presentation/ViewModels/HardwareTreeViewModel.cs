@@ -6,12 +6,14 @@ using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SystemMonitor.Application.Interfaces;
+using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Presentation.ViewModels;
 
 public partial class HardwareTreeViewModel : ObservableObject, IDisposable
 {
     private readonly IHardwareTreeProvider _provider;
+    private readonly IEventLogService _eventLog;
     private readonly Thread _pollThread;
     private volatile bool _running = true;
     private List<Domain.Models.HardwareTreeNode> _roots = new();
@@ -20,9 +22,10 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<HardwareTreeNodeViewModel> Roots { get; } = new();
 
-    public HardwareTreeViewModel(IHardwareTreeProvider provider)
+    public HardwareTreeViewModel(IHardwareTreeProvider provider, IEventLogService eventLog)
     {
         _provider = provider;
+        _eventLog = eventLog;
         Discover(); // initial shape scan on startup
 
         _pollThread = new Thread(PollLoop) { IsBackground = true };
@@ -49,15 +52,23 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
         var sw = System.Diagnostics.Stopwatch.StartNew();
         while (_running)
         {
-            if (sw.Elapsed >= ValueRefreshInterval)
+            try
             {
-                sw.Restart();
-                _provider.RefreshValues(_roots);
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                if (sw.Elapsed >= ValueRefreshInterval)
                 {
-                    foreach (var vm in Roots) vm.Refresh();
-                });
+                    sw.Restart();
+                    _provider.RefreshValues(_roots);
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        foreach (var vm in Roots) vm.Refresh();
+                    });
+                }
             }
+            catch (Exception ex)
+            {
+                _eventLog.LogEvent(EventType.Error, ex.Message);
+            }
+
             Thread.Sleep(100);
         }
     }
@@ -65,6 +76,6 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _running = false;
-        _pollThread.Join(500);
+        _pollThread.Join(TimeSpan.FromSeconds(2));
     }
 }

@@ -16,7 +16,18 @@ public static class PlatformMonitoringRegistration
         services.AddSingleton<IOsMonitorService, DotNetOsMonitorService>();
 
         services.AddSingleton<IMetricHistoryPersistenceService, SqliteMetricHistoryPersistenceService>();
+        services.AddSingleton<IEventLogService, SqliteEventLogService>();
         services.AddSingleton<IAsciiArtConverter, AsciiArtConverter>();
+
+        services.AddSingleton<IThresholdMonitorService>(sp =>
+        new ThresholdMonitorService(
+            sp.GetRequiredService<IEventLogService>(),
+            new[]
+            {
+                new MetricThreshold("cpu.usage", WarningValue: 80, CriticalValue: 90),
+                new MetricThreshold("memory.usage", WarningValue: 50, CriticalValue: 95),
+                new MetricThreshold("disk.usage", WarningValue: 85, CriticalValue: 95),
+            }));
 
         if (OperatingSystem.IsWindows())
         {

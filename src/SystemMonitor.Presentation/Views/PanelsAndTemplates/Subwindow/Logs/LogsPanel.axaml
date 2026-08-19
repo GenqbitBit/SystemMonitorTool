@@ -2,6 +2,44 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
              x:Class="SystemMonitor.Presentation.Views.Subwindows.Logs.LogsPanel"
-             x:DataType="vm:LogsPanelViewModel">
-    <TextBlock Text="Logs go here" />
+             x:DataType="vm:LogsPanelViewModel"
+             Background="Transparent">
+
+    <DockPanel Margin="10">
+
+        <Button DockPanel.Dock="Top"
+                Content="⟳ Refresh"
+                Command="{Binding RefreshCommand}"
+                FontSize="10"
+                Foreground="White"
+                Margin="0,0,0,10"/>
+
+        <ListBox ItemsSource="{Binding Entries}"
+                 Background="Transparent">
+
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal"
+                                Spacing="5">
+
+                        <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:M/d/yyyy h:mm tt}'}"
+                                    Width="150"
+                                    FontSize="10"
+                                    Foreground="{DynamicResource MetricValueBrush}"/>
+
+                        <TextBlock Text="{Binding Type}"
+                                   Width="120"
+                                   FontSize="10"
+                                   Foreground="White"/>
+
+                        <TextBlock Text="{Binding Message}"
+                                   FontSize="10"
+                                   Foreground="White"/>
+
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+
+        </ListBox>
+    </DockPanel>
 </UserControl>

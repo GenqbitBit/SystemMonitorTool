@@ -25,10 +25,17 @@ public partial class App : Avalonia.Application
     {
         var services = new ServiceCollection();
         services.AddPlatformMonitoringServices();
+        services.AddThemingServices();              
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<MetricsTableViewModel>();
         services.AddSingleton<IAsciiArtConverter, AsciiArtConverter>();
         var provider = services.BuildServiceProvider();
+
+        var themeService = provider.GetRequiredService<IThemeService>();  
+        SystemMonitor.Presentation.Theming.ThemeRuntime.Service = themeService; 
+        SystemMonitor.Presentation.Theming.ThemeResourceApplier.Apply(themeService.CurrentTheme); 
+        themeService.ThemeChanged += (_, theme) =>
+            SystemMonitor.Presentation.Theming.ThemeResourceApplier.Apply(theme); 
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {

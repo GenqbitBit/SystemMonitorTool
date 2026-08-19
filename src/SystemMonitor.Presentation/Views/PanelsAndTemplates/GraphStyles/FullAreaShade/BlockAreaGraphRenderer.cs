@@ -6,7 +6,7 @@ using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 
-public class BlockAreaGraphRenderer : IGraphContentRenderer
+public class BlockAreaGraphRenderer : IGraphContentRenderer, IThemeableGraphRenderer
 {
     public double BlockWidth { get; set; } = 5;
     public double BlockGap { get; set; } = 1;
@@ -20,6 +20,12 @@ public class BlockAreaGraphRenderer : IGraphContentRenderer
     public static bool ShouldUseLineFallback(double width, double height)
         => width < 120 || height < 32;
 
+    public void ApplyPalette(Color primary, Color secondary)
+    {
+        TopColor = primary;
+        BottomColor = secondary;
+    }
+    
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
         double minValue, double maxValue, DateTime windowStart, DateTime windowEnd,
         bool baselineAtTop = false, bool useFrozenValues = true, bool toRight = true)

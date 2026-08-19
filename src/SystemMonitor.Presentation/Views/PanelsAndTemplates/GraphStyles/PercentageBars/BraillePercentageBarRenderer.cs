@@ -11,7 +11,7 @@ namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 // Braille-texture counterpart to BlockPercentageBarRenderer — same static
 // progress-bar behavior (no history/axes, only the latest sample),
 // rendered with solid braille cells (all 8 dots lit) instead of blocks.
-public class BraillePercentageBarRenderer : IGraphContentRenderer
+public class BraillePercentageBarRenderer : IGraphContentRenderer, IThemeableGraphRenderer
 {
     public double CellWidth { get; set; } = 15;
     public double CellHeight { get; set; } = 10;
@@ -38,6 +38,12 @@ public class BraillePercentageBarRenderer : IGraphContentRenderer
     // solid-looking cell, same conventions as the area renderer's dot cells.
     private const byte FullCellMask = 0xFF;
 
+    public void ApplyPalette(Color primary, Color secondary)
+    {
+        StartColor = primary;
+        EndColor = secondary;
+    }
+    
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
         double minValue, double maxValue, DateTime windowStart, DateTime windowEnd,
         bool baselineAtTop = false, bool useFrozenValues = true, bool toRight = true)

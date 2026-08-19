@@ -1,7 +1,19 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
+             xmlns:theming="using:SystemMonitor.Domain.Models.Theming"
              x:Class="SystemMonitor.Presentation.Views.Subwindows.Themes.ThemesPanel"
              x:DataType="vm:ThemesPanelViewModel">
-    <TextBlock Text="Themes go here" />
+    <StackPanel Margin="16" Spacing="10">
+        <TextBlock Text="Select a theme" FontSize="14"/>
+        <ListBox ItemsSource="{Binding AvailableThemes}"
+                 SelectedItem="{Binding SelectedTheme}"
+                 Background="Transparent">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="theming:ThemeDefinition">
+                    <TextBlock Text="{Binding DisplayName}" Padding="4"/>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </StackPanel>
 </UserControl>

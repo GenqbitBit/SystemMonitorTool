@@ -5,7 +5,8 @@
              xmlns:common="using:SystemMonitor.Presentation.Common"
              xmlns:converters="using:SystemMonitor.Presentation.Converters"
              RequestedThemeVariant="Dark">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+    <!-- "Default" ThemeVariant follows system theme variant.
+         "Dark" or "Light" are other available options. -->
 
     <Application.Resources>
         <ResourceDictionary>
@@ -13,27 +14,51 @@
                 <ResourceInclude Source="avares://SystemMonitor.Presentation/Resources/AppIcons.axaml"/>
             </ResourceDictionary.MergedDictionaries>
 
+            <!-- Fallback theme resources.
+                 ThemeResourceApplier.Apply replaces these with the active theme. -->
+
             <SolidColorBrush x:Key="MetricValueBrush" Color="#19CB90" />
+            <SolidColorBrush x:Key="WindowBorderBrush" Color="White" />
+            <SolidColorBrush x:Key="SeparatorBrush" Color="#F6F6F6" />
+            <SolidColorBrush x:Key="LabelBackgroundBrush" Color="Black" />
+
             <SolidColorBrush x:Key="NavTabBackground" Color="Black" />
+            <SolidColorBrush x:Key="NavTabHoverBackground" Color="#2A4FB0" />
             <SolidColorBrush x:Key="NavTabActiveBackground" Color="#1F1F1F" />
+
+            <SolidColorBrush x:Key="PanelAccentBorderBrush" Color="#DF20ED" />
+
+            <SolidColorBrush x:Key="Accent1Brush" Color="#4D03F8" />
+            <SolidColorBrush x:Key="Accent2Brush" Color="#03F844" />
+            <SolidColorBrush x:Key="Accent3Brush" Color="#EC03F8" />
+            <SolidColorBrush x:Key="Accent4Brush" Color="#0320F8" />
+
+            <SolidColorBrush x:Key="PositiveBrush" Color="#22C55E" />
+            <SolidColorBrush x:Key="WarningBrush" Color="#FFA201" />
+            <SolidColorBrush x:Key="CriticalBrush" Color="#DB0909" />
+
             <converters:ScaleFontSizeConverter x:Key="ScaleFontSize" />
             <converters:NetworkRateConverter x:Key="NetworkRate" />
         </ResourceDictionary>
     </Application.Resources>
 
-    
     <Application.DataTemplates>
         <local:ViewLocator />
     </Application.DataTemplates>
 
     <Application.Styles>
         <FluentTheme />
+
         <Style Selector="TemplatedControl">
-            <Setter Property="FontFamily" Value="{x:Static common:AppFonts.Monospace}" />
+            <Setter Property="FontFamily"
+                    Value="{x:Static common:AppFonts.Monospace}" />
         </Style>
+
         <Style Selector="TextBlock">
-            <Setter Property="FontFamily" Value="{x:Static common:AppFonts.Monospace}" />
+            <Setter Property="FontFamily"
+                    Value="{x:Static common:AppFonts.Monospace}" />
         </Style>
+
         <StyleInclude Source="avares://SystemMonitor.Presentation/Styles/NavTabs.axaml"/>
     </Application.Styles>
 

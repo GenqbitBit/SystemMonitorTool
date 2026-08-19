@@ -160,7 +160,7 @@ public sealed class SqliteMetricHistoryPersistenceService : IMetricHistoryPersis
         using var readerResult = await select.ExecuteReaderAsync().ConfigureAwait(false);
         while (await readerResult.ReadAsync().ConfigureAwait(false))
         {
-            var timestamp = new DateTime(readerResult.GetInt64(0), DateTimeKind.Utc);
+            var timestamp = new DateTime(readerResult.GetInt64(0), DateTimeKind.Utc).ToLocalTime();
             var value = readerResult.GetDouble(1);
             results.Add(new MetricHistoryPoint(timestamp, value));
         }
