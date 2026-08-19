@@ -39,9 +39,10 @@ public partial class App : Avalonia.Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            var mainViewModel = provider.GetRequiredService<MainWindowViewModel>();
             var mainWindow = new MainWindow
             {
-                DataContext = provider.GetRequiredService<MainWindowViewModel>(),
+                DataContext = mainViewModel,
             };
 
             var converter = provider.GetRequiredService<IAsciiArtConverter>();
@@ -49,6 +50,11 @@ public partial class App : Avalonia.Application
                 new AsciiArtPanelViewModel(converter, mainWindow.StorageProvider);
 
             desktop.MainWindow = mainWindow;
+            desktop.ShutdownRequested += (_, _) =>
+            {
+                mainViewModel.Dispose();
+                provider.Dispose();
+            };
         }
 
         base.OnFrameworkInitializationCompleted();

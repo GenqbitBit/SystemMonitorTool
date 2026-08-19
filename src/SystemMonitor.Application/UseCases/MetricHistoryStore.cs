@@ -101,14 +101,28 @@ public sealed class MetricHistoryStore : IMetricHistoryStore
     {
         lock (_lock)
         {
-            var frozen = _history.TryGetValue(metricId, out var queue)
-                ? queue.ToList()
-                : new List<MetricHistoryPoint>();
-
-            if (_liveTip.TryGetValue(metricId, out var tip) &&
-                DateTime.UtcNow - tip.Timestamp <= _window)
+            var now = DateTime.UtcNow;
+            var frozen = new List<MetricHistoryPoint>();
+            if (_history.TryGetValue(metricId, out var queue))
             {
-                frozen.Add(tip);
+                while (queue.Count > 0 && now - queue.Peek().Timestamp > _window)
+                    queue.Dequeue();
+
+                frozen.AddRange(queue);
+            }
+
+            if (_liveTip.TryGetValue(metricId, out var tip))
+            {
+                if (now - tip.Timestamp <= _window)
+                    frozen.Add(tip);
+                else
+                    _liveTip.Remove(metricId);
+            }
+
+            if (frozen.Count == 0 && !_liveTip.ContainsKey(metricId))
+            {
+                _history.Remove(metricId);
+                _committedRange.Remove(metricId);
             }
 
             return frozen;

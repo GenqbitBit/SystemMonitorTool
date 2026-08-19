@@ -22,6 +22,16 @@ public class DotNetOsMonitorService : IOsMonitorService
     private readonly object _gate = new();
     private Dictionary<int, TimeSpan> _previousCpuTimes = new();
     private DateTime _previousSampleUtc;
+    private OperatingSystemInfo? _lastInfo;
+
+    public OperatingSystemInfo? LastInfo
+    {
+        get
+        {
+            lock (_gate)
+                return _lastInfo;
+        }
+    }
 
     public OperatingSystemInfo GetCurrentInfo()
     {
@@ -112,6 +122,7 @@ public class DotNetOsMonitorService : IOsMonitorService
                 // This tick becomes next tick's memory.
                 _previousCpuTimes = nextCpuTimes;
                 _previousSampleUtc = now;
+                _lastInfo = result;
                 return result;
             }
             finally

@@ -35,23 +35,11 @@ public sealed class WindowsHardwareTreeProvider : IHardwareTreeProvider
     {
         lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
         {
-            foreach (var hardware in _computer.Hardware)
-            {
-                UpdateRecursive(hardware);
-            }
-
             foreach (var root in roots)
             {
                 ApplyValues(root, BuildSensorLookup());
             }
         }
-    }
-
-    private static void UpdateRecursive(IHardware hardware)
-    {
-        hardware.Update();
-        foreach (var sub in hardware.SubHardware)
-            UpdateRecursive(sub);
     }
 
     private Dictionary<string, ISensor> BuildSensorLookup()

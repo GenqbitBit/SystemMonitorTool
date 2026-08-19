@@ -13,6 +13,7 @@ public class BlockAreaGraphRenderer : IGraphContentRenderer, IThemeableGraphRend
     public Color TopColor { get; set; } = Colors.MediumPurple;
     public Color BottomColor { get; set; } = Colors.Indigo;
     public int BandCount { get; set; } = 5;
+    private readonly Dictionary<Color, SolidColorBrush> _brushes = new();
 
     public double SmallPlotWidthThreshold { get; set; } = 120;
     public double SmallPlotHeightThreshold { get; set; } = 32;
@@ -24,6 +25,7 @@ public class BlockAreaGraphRenderer : IGraphContentRenderer, IThemeableGraphRend
     {
         TopColor = primary;
         BottomColor = secondary;
+        _brushes.Clear();
     }
     
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
@@ -84,10 +86,20 @@ public class BlockAreaGraphRenderer : IGraphContentRenderer, IThemeableGraphRend
                 var color = GraphColorMath.Lerp(TopColor, BottomColor, t);
 
                 var drawHeight = bandHeight + (b < BandCount - 1 ? overlap : 0);
-                context.FillRectangle(new SolidColorBrush(color),
+                context.FillRectangle(GetBrush(color),
                     new Rect(plotRect.X + x, bandTop, BlockWidth, drawHeight));
             }
         }
+    }
+
+    private SolidColorBrush GetBrush(Color color)
+    {
+        if (_brushes.TryGetValue(color, out var brush))
+            return brush;
+
+        brush = new SolidColorBrush(color);
+        _brushes[color] = brush;
+        return brush;
     }
 
     private void DrawLineFallback(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,

@@ -1,4 +1,5 @@
 using LibreHardwareMonitor.Hardware;
+using SystemMonitor.Application.Interfaces;
 
 namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
@@ -14,7 +15,7 @@ namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 /// prefers constructor injection, convert Instance into a registered
 /// singleton and inject it — the rest of the code stays the same.
 /// </summary>
-public sealed class LibreHardwareMonitorHost
+public sealed class LibreHardwareMonitorHost : IHardwareRefreshService, IDisposable
 {
     /// <summary>The one and only instance, created on first use.</summary>
     public static LibreHardwareMonitorHost Instance { get; } = new();
@@ -28,6 +29,15 @@ public sealed class LibreHardwareMonitorHost
 
     /// <summary>The shared hardware view every service reads from.</summary>
     public Computer Computer { get; }
+
+    public void RefreshAll()
+    {
+        lock (UpdateSyncRoot)
+        {
+            foreach (var hardware in Computer.Hardware)
+                UpdateRecursive(hardware);
+        }
+    }
 
     private LibreHardwareMonitorHost()
     {
@@ -65,8 +75,6 @@ public sealed class LibreHardwareMonitorHost
             foreach (var hardware in Computer.Hardware)
             {
                 if (hardware.HardwareType != type) continue;
-                hardware.Update();
-
                 foreach (var sensor in hardware.Sensors)
                 {
                     if (sensor.SensorType == SensorType.Power &&
@@ -90,8 +98,6 @@ public sealed class LibreHardwareMonitorHost
             foreach (var hardware in Computer.Hardware)
             {
                 if (hardware.HardwareType != HardwareType.Cpu) continue;
-                hardware.Update();
-
                 foreach (var sensor in hardware.Sensors)
                 {
                     if (sensor.SensorType == SensorType.Clock &&
@@ -105,4 +111,17 @@ public sealed class LibreHardwareMonitorHost
 
     private static double? PositiveOrNull(float? value) =>
         value is { } v && v > 0 ? v : null;
+
+    private static void UpdateRecursive(IHardware hardware)
+    {
+        hardware.Update();
+        foreach (var subHardware in hardware.SubHardware)
+            UpdateRecursive(subHardware);
+    }
+
+    public void Dispose()
+    {
+        lock (UpdateSyncRoot)
+            Computer.Close();
+    }
 }

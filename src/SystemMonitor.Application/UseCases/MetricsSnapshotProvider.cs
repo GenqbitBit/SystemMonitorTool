@@ -16,6 +16,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private readonly IGpuMonitorService _gpu;
     private readonly IOsMonitorService _os;
     private readonly IMetricHistoryStore _historyStore;
+    private readonly IHardwareRefreshService? _hardwareRefresh;
     private readonly Dictionary<string, Queue<double>> _smoothingWindows = new();
     private const int SmoothingWindow = 4;
     private const int DecimalPlaces = 2;
@@ -28,7 +29,8 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         IMotherboardMonitorService motherboard,
         IGpuMonitorService gpu,
         IOsMonitorService os,
-        IMetricHistoryStore historyStore)
+        IMetricHistoryStore historyStore,
+        IHardwareRefreshService? hardwareRefresh = null)
     {
         _cpu = cpu;
         _memory = memory;
@@ -38,10 +40,12 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         _gpu = gpu;
         _os = os;
         _historyStore = historyStore;
+        _hardwareRefresh = hardwareRefresh;
     }
 
     public IReadOnlyList<MetricReading> GetSnapshot()
     {
+        _hardwareRefresh?.RefreshAll();
         var readings = new List<MetricReading>();
 
         // CPU — identity rows first (emission order = display order).

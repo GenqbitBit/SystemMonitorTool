@@ -11,20 +11,22 @@ public static class BlockGraphMath
         if (x <= points[0].X) return points[0].Y;
         if (x >= points[^1].X) return points[^1].Y;
 
-        for (int i = 0; i < points.Count - 1; i++)
+        var low = 0;
+        var high = points.Count - 1;
+        while (high - low > 1)
         {
-            var a = points[i];
-            var b = points[i + 1];
-
-            if (x >= a.X && x <= b.X)
-            {
-                if (b.X - a.X < 0.0001) return a.Y;
-
-                var t = (x - a.X) / (b.X - a.X);
-                return a.Y + t * (b.Y - a.Y);
-            }
+            var middle = low + (high - low) / 2;
+            if (points[middle].X <= x)
+                low = middle;
+            else
+                high = middle;
         }
 
-        return points[^1].Y;
+        var left = points[low];
+        var right = points[high];
+        if (right.X - left.X < 0.0001) return left.Y;
+
+        var t = (x - left.X) / (right.X - left.X);
+        return left.Y + t * (right.Y - left.Y);
     }
 }

@@ -10,7 +10,7 @@ using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
-public class WindowsDiskMonitorService : IDiskMonitorService
+public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
 {
     private readonly string _driveName;
     private readonly PerformanceCounter _readCounter;
@@ -218,8 +218,6 @@ public class WindowsDiskMonitorService : IDiskMonitorService
 
         lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
         {
-            _libreHardware.Update();
-
             var temperatureSensors = _libreHardware.Sensors
                 .Where(s => s.SensorType == SensorType.Temperature)
                 .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
@@ -283,5 +281,11 @@ public class WindowsDiskMonitorService : IDiskMonitorService
                 index++;
             }
         }
+    }
+
+    public void Dispose()
+    {
+        _readCounter.Dispose();
+        _writeCounter.Dispose();
     }
 }

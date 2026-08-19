@@ -87,6 +87,16 @@ public class PanelWindowService : IPanelWindowService
         };
 
         _openWindows[label] = window;
+
+        if (label == PanelLabels.ViewDataTable && owner.DataContext is MainWindowViewModel ownerVm)
+            ownerVm.MetricsTable.SetActive(true, ownerVm.LatestSnapshot);
+
+        window.Closed += (_, _) =>
+        {
+            if (label == PanelLabels.ViewDataTable && owner.DataContext is MainWindowViewModel ownerVm)
+                ownerVm.MetricsTable.SetActive(false);
+        };
+
         window.Show(owner);
     }
 

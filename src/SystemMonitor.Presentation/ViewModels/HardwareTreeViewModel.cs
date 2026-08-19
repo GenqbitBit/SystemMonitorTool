@@ -15,6 +15,7 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
     private readonly IHardwareTreeProvider _provider;
     private readonly IEventLogService _eventLog;
     private readonly Thread _pollThread;
+    private readonly ManualResetEventSlim _stopSignal = new();
     private volatile bool _running = true;
     private List<Domain.Models.HardwareTreeNode> _roots = new();
 
@@ -69,13 +70,16 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
                 _eventLog.LogEvent(EventType.Error, ex.Message);
             }
 
-            Thread.Sleep(100);
+            if (_stopSignal.Wait(ValueRefreshInterval))
+                break;
         }
     }
 
     public void Dispose()
     {
         _running = false;
+        _stopSignal.Set();
         _pollThread.Join(TimeSpan.FromSeconds(2));
+        _stopSignal.Dispose();
     }
 }

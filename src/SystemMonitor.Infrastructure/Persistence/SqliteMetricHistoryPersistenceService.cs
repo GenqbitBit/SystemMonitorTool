@@ -19,7 +19,7 @@ namespace SystemMonitor.Infrastructure.Persistence;
 /// Design notes:
 ///  - Writes go through a background Channel, never directly on the
 ///    caller's thread. Record() just enqueues and returns immediately —
-///    safe to call every 700ms from the UI's DispatcherTimer without
+///    safe to call every 900ms from the UI's monitoring cycle without
 ///    causing jank from disk I/O.
 ///  - A single background loop drains the channel and writes in batches
 ///    inside one transaction per tick, which is far cheaper than one
@@ -50,7 +50,13 @@ public sealed class SqliteMetricHistoryPersistenceService : IMetricHistoryPersis
 
         InitializeDatabase();
 
-        _writeQueue = Channel.CreateUnbounded<(string, DateTime, double)>();
+        _writeQueue = Channel.CreateBounded<(string, DateTime, double)>(
+            new BoundedChannelOptions(20_000)
+            {
+                FullMode = BoundedChannelFullMode.DropOldest,
+                SingleReader = true,
+                SingleWriter = false
+            });
         _backgroundWriterTask = Task.Run(BackgroundWriteLoopAsync);
     }
 
@@ -171,10 +177,13 @@ public sealed class SqliteMetricHistoryPersistenceService : IMetricHistoryPersis
     public void Dispose()
     {
         _writeQueue.Writer.TryComplete();
-        _cts.Cancel();
         try
         {
-            _backgroundWriterTask.Wait(TimeSpan.FromSeconds(2));
+            if (!_backgroundWriterTask.Wait(TimeSpan.FromSeconds(2)))
+            {
+                _cts.Cancel();
+                _backgroundWriterTask.Wait(TimeSpan.FromSeconds(1));
+            }
         }
         catch
         {

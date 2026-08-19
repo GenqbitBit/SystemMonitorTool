@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Presentation.Common;
 
@@ -69,7 +70,7 @@ public static class ObservableCollectionSyncExtensions
                 // Same key, same position now — only write (and notify) if the value
                 // actually changed. Records/structs compare by value, so an unchanged
                 // reading is a no-op here instead of a PropertyChanged + visual update.
-                if (!EqualityComparer<TItem>.Default.Equals(target[i], item))
+                if (!AreMeaningfullyEqual(target[i], item))
                     target[i] = item;
             }
             else
@@ -89,5 +90,29 @@ public static class ObservableCollectionSyncExtensions
         for (int i = 0; i < target.Count; i++)
             map[keySelector(target[i])] = i;
         return map;
+    }
+
+    private static bool AreMeaningfullyEqual<TItem>(TItem current, TItem latest)
+    {
+        if (current is MetricReading currentMetric && latest is MetricReading latestMetric)
+        {
+            return currentMetric.Id == latestMetric.Id
+                && currentMetric.Category == latestMetric.Category
+                && currentMetric.Label == latestMetric.Label
+                && currentMetric.Kind == latestMetric.Kind
+                && currentMetric.Unit == latestMetric.Unit
+                && currentMetric.IsAvailable == latestMetric.IsAvailable
+                && currentMetric.Value == latestMetric.Value
+                && currentMetric.Min == latestMetric.Min
+                && currentMetric.Max == latestMetric.Max
+                && currentMetric.Average == latestMetric.Average
+                && currentMetric.TextValue == latestMetric.TextValue
+                && currentMetric.IsPrimary == latestMetric.IsPrimary
+                && currentMetric.GpuIndex == latestMetric.GpuIndex
+                && currentMetric.GpuIsIntegrated == latestMetric.GpuIsIntegrated
+                && currentMetric.GpuDeviceId == latestMetric.GpuDeviceId;
+        }
+
+        return EqualityComparer<TItem>.Default.Equals(current, latest);
     }
 }

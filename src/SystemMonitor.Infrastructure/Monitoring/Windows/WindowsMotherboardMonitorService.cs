@@ -14,9 +14,7 @@ namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 /// </summary>
 public sealed class WindowsMotherboardMonitorService : IMotherboardMonitorService
 {
-    private readonly Computer _computer = new() { IsMotherboardEnabled = true };
-
-    public WindowsMotherboardMonitorService() => _computer.Open();
+    private readonly Computer _computer = LibreHardwareMonitorHost.Instance.Computer;
 
     public MotherboardInfo? GetCurrentInfo()
     {
@@ -27,9 +25,6 @@ public sealed class WindowsMotherboardMonitorService : IMotherboardMonitorServic
 
             if (board is null)
                 return null; // detection failed; the UI will hide the card
-
-            // Refresh this hardware's sensors before reading them.
-            board.Update();
 
             // Policy: first temperature sensor found on the board.
             double? temperature = board.Sensors

@@ -31,6 +31,7 @@ public static class PlatformMonitoringRegistration
 
         if (OperatingSystem.IsWindows())
         {
+            services.AddSingleton<IHardwareRefreshService>(_ => LibreHardwareMonitorHost.Instance);
             services.AddSingleton<ICpuMonitorService, WindowsCpuMonitorService>();
             services.AddSingleton<IMemoryMonitorService, WindowsMemoryMonitorService>();
             services.AddSingleton<IDiskMonitorService, WindowsDiskMonitorService>();

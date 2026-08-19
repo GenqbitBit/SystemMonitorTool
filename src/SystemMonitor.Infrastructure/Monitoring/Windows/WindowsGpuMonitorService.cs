@@ -181,8 +181,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 
         lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
         {
-            hardware.Update();
-
             foreach (var sensor in hardware.Sensors)
             {
                 if (sensor.SensorType == SensorType.SmallData
@@ -243,8 +241,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 
         lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
         {
-            device.LibreHardware.Update();
-
             double totalMb = 0;
             double usedMb = 0;
 
@@ -278,8 +274,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 
         lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
         {
-            device.LibreHardware.Update();
-
             var temperatureSensors = device.LibreHardware.Sensors
                 .Where(s => s.SensorType == SensorType.Temperature)
                 .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)

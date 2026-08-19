@@ -24,6 +24,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly IEventLogService _eventLog;
     private readonly IThresholdMonitorService _thresholdMonitor;
     private readonly IOsMonitorService _os;
+    private IReadOnlyList<MetricReading> _latestSnapshot = Array.Empty<MetricReading>();
+    private readonly object _uiUpdateGate = new();
+    private Action? _pendingUiUpdate;
+    private bool _uiUpdateQueued;
+    private bool _disposed;
 
     private readonly Thread? _pollingThread;
     private readonly CancellationTokenSource _pollingCts = new();
@@ -61,6 +66,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public IMetricHistoryStore HistoryStore => _historyStore;
 
     public HardwareTreeViewModel HardwareTree => _hardwareTree;
+
+    public IReadOnlyList<MetricReading> LatestSnapshot => _latestSnapshot;
 
     private sealed class DesignTimeHardwareTreeProvider : IHardwareTreeProvider
     {
@@ -158,7 +165,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private void PollLoop()
     {
         var stopwatch = new System.Diagnostics.Stopwatch();
-        var interval = TimeSpan.FromMilliseconds(700);
+        var interval = TimeSpan.FromMilliseconds(900);
 
         while (!_pollingCts.IsCancellationRequested)
         {
@@ -183,6 +190,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private void AcquireAndApply()
     {
         var snapshot = _metricsProvider.GetSnapshot();
+        _latestSnapshot = snapshot;
 
         _historyStore.Record(snapshot);
         _historyPersistence.Record(snapshot);
@@ -228,7 +236,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             .OrderBy(g => g.Index)
             .ToList();
 
-        var osInfo = _os.GetCurrentInfo();
+        var osInfo = _os.LastInfo ?? _os.GetCurrentInfo();
 
         var combinedProcesses = osInfo.TopProcesses;
         var cpuProcesses = osInfo.TopProcessesByCpu;
@@ -237,6 +245,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         void Apply()
         {
             Metrics.SyncFrom(snapshot, m => m.Id);
+            MetricsTable.ApplySnapshot(snapshot);
 
             DedicatedGpuMetricId = dedicatedId;
             IntegratedGpuMetricId = integratedId;
@@ -264,7 +273,41 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (Dispatcher.UIThread.CheckAccess())
             Apply();
         else
-            Dispatcher.UIThread.Post(Apply);
+            QueueUiUpdate(Apply);
+    }
+
+    private void QueueUiUpdate(Action update)
+    {
+        lock (_uiUpdateGate)
+        {
+            _pendingUiUpdate = update;
+            if (_uiUpdateQueued)
+                return;
+
+            _uiUpdateQueued = true;
+        }
+
+        Dispatcher.UIThread.Post(DrainUiUpdates);
+    }
+
+    private void DrainUiUpdates()
+    {
+        while (true)
+        {
+            Action? update;
+            lock (_uiUpdateGate)
+            {
+                update = _pendingUiUpdate;
+                _pendingUiUpdate = null;
+                if (update is null)
+                {
+                    _uiUpdateQueued = false;
+                    return;
+                }
+            }
+
+            update();
+        }
     }
 
     public void UpdateResponsiveScale(
@@ -285,6 +328,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        if (_disposed)
+            return;
+
+        _disposed = true;
         _pollingCts.Cancel();
 
         _pollingThread?.Join(
@@ -292,6 +339,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         _pollingCts.Dispose();
 
+        MetricsTable.Dispose();
         _hardwareTree.Dispose();
 
         (_historyPersistence as IDisposable)?.Dispose();

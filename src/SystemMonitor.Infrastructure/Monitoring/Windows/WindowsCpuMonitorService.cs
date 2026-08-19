@@ -10,7 +10,7 @@ using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
-public class WindowsCpuMonitorService : ICpuMonitorService
+public class WindowsCpuMonitorService : ICpuMonitorService, IDisposable
 {
     private readonly PerformanceCounter _cpuCounter;
 
@@ -75,8 +75,6 @@ public class WindowsCpuMonitorService : ICpuMonitorService
             foreach (var hardware in _computer.Hardware)
             {
                 if (hardware.HardwareType != HardwareType.Cpu) continue;
-                hardware.Update();
-
                 var temperatureSensors = hardware.Sensors
                     .Where(s => s.SensorType == SensorType.Temperature)
                     .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
@@ -180,5 +178,11 @@ public class WindowsCpuMonitorService : ICpuMonitorService
             // fall through to the OS-level fallback
         }
         return (Environment.ProcessorCount, Environment.ProcessorCount);
+    }
+
+    public void Dispose()
+    {
+        _cpuCounter.Dispose();
+        _frequencyCounter?.Dispose();
     }
 }
