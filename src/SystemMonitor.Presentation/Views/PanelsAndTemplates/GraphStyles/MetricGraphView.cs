@@ -84,6 +84,7 @@ public class MetricGraphView : Control
         AvaloniaProperty.Register<MetricGraphView, Theming.GraphRole?>(nameof(GraphRole));
 
     private INotifyCollectionChanged? _subscribedCollection;
+    private readonly LineGraphRenderer _defaultLineRenderer = new();
 
     public Theming.GraphRole? GraphRole
     {
@@ -404,7 +405,9 @@ public class MetricGraphView : Control
         context.DrawRectangle(new Pen(AxisBrush, 1), new Rect(plotOrigin, new Size(plotWidth, plotHeight)));
 
         var plotRect = new Rect(plotOrigin, new Size(plotWidth, plotHeight));
-        var activeRenderer = ContentRenderer ?? new LineGraphRenderer { LineBrush = LineBrush, LineThickness = LineThickness };
+        _defaultLineRenderer.LineBrush = LineBrush;
+        _defaultLineRenderer.LineThickness = LineThickness;
+        var activeRenderer = ContentRenderer ?? _defaultLineRenderer;
 
         using (context.PushClip(plotRect))
         {
@@ -518,7 +521,9 @@ public class MetricGraphView : Control
         context.DrawRectangle(new Pen(AxisBrush, 1), topRect);
         context.DrawRectangle(new Pen(AxisBrush, 1), bottomRect);
 
-        var primaryRenderer = ContentRenderer ?? new LineGraphRenderer { LineBrush = LineBrush, LineThickness = LineThickness };
+        _defaultLineRenderer.LineBrush = LineBrush;
+        _defaultLineRenderer.LineThickness = LineThickness;
+        var primaryRenderer = ContentRenderer ?? _defaultLineRenderer;
         var secondaryRenderer = SecondaryContentRenderer ?? primaryRenderer;
 
         using (context.PushClip(topRect))

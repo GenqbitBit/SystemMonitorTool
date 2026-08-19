@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
+using SystemMonitor.Presentation.Common;
 
 namespace SystemMonitor.Presentation.ViewModels;
 
@@ -38,8 +39,8 @@ public partial class LogsPanelViewModel : ObservableObject
     {
         var results = await _eventLog.GetEventsAsync(type: SelectedTypeFilter);
 
-        Entries.Clear();
-        foreach (var entry in results)
-            Entries.Add(entry);
+        Entries.SyncFrom(
+            results,
+            entry => (entry.Timestamp, entry.Type, entry.Message, entry.Metadata));
     }
 }

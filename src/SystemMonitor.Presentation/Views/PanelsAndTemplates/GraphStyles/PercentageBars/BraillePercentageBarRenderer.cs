@@ -38,6 +38,9 @@ public class BraillePercentageBarRenderer : IGraphContentRenderer, IThemeableGra
     // All 8 braille dots lit — reuses BrailleGraphMath.ToBrailleChar to get a
     // solid-looking cell, same conventions as the area renderer's dot cells.
     private const byte FullCellMask = 0xFF;
+    private FormattedText? _fullCellText;
+    private FontFamily? _cachedFontFamily;
+    private double _cachedFontSize;
 
     public void ApplyPalette(Color primary, Color secondary)
     {
@@ -61,10 +64,16 @@ public class BraillePercentageBarRenderer : IGraphContentRenderer, IThemeableGra
         var currentValuePct = range > 0 ? (currentValue - MinValue) / range * 100 : 0;
 
         var typeface = new Typeface(FontFamily);
+        if (!Equals(_cachedFontFamily, FontFamily) || _cachedFontSize != FontSize)
+        {
+            _fullCellText = null;
+            _cachedFontFamily = FontFamily;
+            _cachedFontSize = FontSize;
+        }
 
         var columnCount = (int)(plotRect.Width / CellWidth);
         var rowCount = (int)(plotRect.Height / CellHeight);
-        var fullCellChar = BrailleGraphMath.ToBrailleChar(FullCellMask).ToString();
+        var fullCellChar = BrailleGraphMath.ToBrailleChar(FullCellMask);
 
         for (int row = 0; row < rowCount; row++)
         {
@@ -89,9 +98,10 @@ public class BraillePercentageBarRenderer : IGraphContentRenderer, IThemeableGra
                 var drawColor = isFilled ? color : WithOpacity(color, UnfilledOpacity);
                 var brush = GetBrush(drawColor);
 
-                var text = new FormattedText(fullCellChar, CultureInfo.InvariantCulture,
+                _fullCellText ??= new FormattedText(fullCellChar.ToString(), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, typeface, FontSize, brush);
-                context.DrawText(text, new Point(plotRect.X + cellX, plotRect.Y + cellY));
+                _fullCellText.SetForegroundBrush(brush);
+                context.DrawText(_fullCellText, new Point(plotRect.X + cellX, plotRect.Y + cellY));
             }
         }
 

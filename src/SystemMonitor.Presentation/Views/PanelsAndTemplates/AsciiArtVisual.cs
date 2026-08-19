@@ -74,6 +74,9 @@ public sealed class AsciiArtVisual : Control
 
     private void StartFlicker()
     {
+        if (_flickerTimer is not null)
+            return;
+
         _flickerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(FlickerIntervalMs) };
         _flickerTimer.Tick += (_, _) => Flicker();
         _flickerTimer.Start();

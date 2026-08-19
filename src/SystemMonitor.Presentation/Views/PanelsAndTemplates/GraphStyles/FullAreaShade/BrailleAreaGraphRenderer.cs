@@ -21,6 +21,9 @@ public class BrailleAreaGraphRenderer : IGraphContentRenderer, IThemeableGraphRe
     public Color AreaBottomColor { get; set; } = Colors.Indigo;
     public int BandCount { get; set; } = 8;
     private readonly Dictionary<Color, SolidColorBrush> _brushes = new();
+    private readonly Dictionary<char, FormattedText> _textCache = new();
+    private FontFamily? _cachedFontFamily;
+    private double _cachedFontSize;
 
     public void ApplyPalette(Color primary, Color secondary)
     {
@@ -40,6 +43,12 @@ public class BrailleAreaGraphRenderer : IGraphContentRenderer, IThemeableGraphRe
             return;
 
         var typeface = new Typeface(FontFamily);
+        if (!Equals(_cachedFontFamily, FontFamily) || _cachedFontSize != FontSize)
+        {
+            _textCache.Clear();
+            _cachedFontFamily = FontFamily;
+            _cachedFontSize = FontSize;
+        }
 
         foreach (var (cellX, cellY, mask) in BrailleGraphMath.ComputeBrailleAreaCells(
                      points, plotRect.Width, plotRect.Height, CellWidth, CellHeight, baselineAtTop))
@@ -60,8 +69,7 @@ public class BrailleAreaGraphRenderer : IGraphContentRenderer, IThemeableGraphRe
             }
 
             var rowBrush = GetBrush(GraphColorMath.Band(AreaTopColor, AreaBottomColor, t, BandCount));
-            var text = new FormattedText(BrailleGraphMath.ToBrailleChar(mask).ToString(), CultureInfo.InvariantCulture,
-                FlowDirection.LeftToRight, typeface, FontSize, rowBrush);
+            var text = GetText(BrailleGraphMath.ToBrailleChar(mask), typeface, rowBrush);
             context.DrawText(text, new Point(plotRect.X + cellX, plotRect.Y + cellY));
         }
 
@@ -70,10 +78,25 @@ public class BrailleAreaGraphRenderer : IGraphContentRenderer, IThemeableGraphRe
         {
             var t = cellY / plotRect.Height;
             var rowBrush = GetBrush(GraphColorMath.Lerp(CurveTopColor, CurveBottomColor, t));
-            var text = new FormattedText(BrailleGraphMath.ToBrailleChar(mask).ToString(), CultureInfo.InvariantCulture,
-                FlowDirection.LeftToRight, typeface, FontSize, rowBrush);
+            var text = GetText(BrailleGraphMath.ToBrailleChar(mask), typeface, rowBrush);
             context.DrawText(text, new Point(plotRect.X + cellX, plotRect.Y + cellY));
         }
+    }
+
+    private FormattedText GetText(char glyph, Typeface typeface, IBrush brush)
+    {
+        if (!_textCache.TryGetValue(glyph, out var text))
+        {
+            text = new FormattedText(glyph.ToString(), CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight, typeface, FontSize, brush);
+            _textCache[glyph] = text;
+        }
+        else
+        {
+            text.SetForegroundBrush(brush);
+        }
+
+        return text;
     }
 
     private SolidColorBrush GetBrush(Color color)

@@ -49,6 +49,9 @@ public partial class AsciiArtPanel : UserControl
         if (ArtVisual.RenderTransform is not ScaleTransform)
             return;
 
+        if (_spinTimer is not null)
+            return;
+
         _spinTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
         _spinTimer.Tick += (_, _) =>
         {

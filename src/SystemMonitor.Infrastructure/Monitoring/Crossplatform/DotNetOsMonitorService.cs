@@ -47,6 +47,9 @@ public class DotNetOsMonitorService : IOsMonitorService
             {
                 var sampled = new List<ProcessInfo>(processes.Length);
                 var nextCpuTimes = new Dictionary<int, TimeSpan>(processes.Length);
+                var topProcesses = new List<ProcessInfo>(TopProcessCount);
+                var topProcessesByCpu = new List<ProcessInfo>(TopProcessCount);
+                var topProcessesByMemory = new List<ProcessInfo>(TopProcessCount);
                 var threadTotal = 0;
                 long? handleTotal = OperatingSystem.IsWindows() ? 0 : null;
 
@@ -85,6 +88,9 @@ public class DotNetOsMonitorService : IOsMonitorService
                         }
 
                         sampled.Add(sample);
+                        AddTopProcess(topProcesses, sample, CompareCombined);
+                        AddTopProcess(topProcessesByCpu, sample, CompareCpu);
+                        AddTopProcess(topProcessesByMemory, sample, CompareMemory);
                     }
                     catch
                     {
@@ -102,21 +108,9 @@ public class DotNetOsMonitorService : IOsMonitorService
                     ThreadCount = threadTotal,
                     HandleCount = handleTotal,
                     // Combined view: CPU-led ranking, memory as tiebreaker (unchanged).
-                    TopProcesses = sampled
-                        .OrderByDescending(p => p.CpuPercent)
-                        .ThenByDescending(p => p.WorkingSetMB)
-                        .Take(TopProcessCount)
-                        .ToList(),
-                    // Dedicated single-metric rankings — sorted purely on their own metric,
-                    // no cross-metric tiebreak, so each panel is an honest ranking of its metric.
-                    TopProcessesByCpu = sampled
-                        .OrderByDescending(p => p.CpuPercent)
-                        .Take(TopProcessCount)
-                        .ToList(),
-                    TopProcessesByMemory = sampled
-                        .OrderByDescending(p => p.WorkingSetMB)
-                        .Take(TopProcessCount)
-                        .ToList()
+                    TopProcesses = topProcesses,
+                    TopProcessesByCpu = topProcessesByCpu,
+                    TopProcessesByMemory = topProcessesByMemory
                 };
 
                 // This tick becomes next tick's memory.
@@ -131,6 +125,35 @@ public class DotNetOsMonitorService : IOsMonitorService
             }
         }
     }
+
+    private static void AddTopProcess(
+        List<ProcessInfo> top,
+        ProcessInfo candidate,
+        Comparison<ProcessInfo> comparison)
+    {
+        var insertIndex = 0;
+        while (insertIndex < top.Count && comparison(top[insertIndex], candidate) <= 0)
+            insertIndex++;
+
+        if (insertIndex >= TopProcessCount)
+            return;
+
+        top.Insert(insertIndex, candidate);
+        if (top.Count > TopProcessCount)
+            top.RemoveAt(TopProcessCount);
+    }
+
+    private static int CompareCombined(ProcessInfo left, ProcessInfo right)
+    {
+        var cpu = right.CpuPercent.CompareTo(left.CpuPercent);
+        return cpu != 0 ? cpu : right.WorkingSetMB.CompareTo(left.WorkingSetMB);
+    }
+
+    private static int CompareCpu(ProcessInfo left, ProcessInfo right) =>
+        right.CpuPercent.CompareTo(left.CpuPercent);
+
+    private static int CompareMemory(ProcessInfo left, ProcessInfo right) =>
+        right.WorkingSetMB.CompareTo(left.WorkingSetMB);
 
     private static OperatingSystemPlatform DetectPlatform()
     {

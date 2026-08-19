@@ -18,6 +18,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private readonly IMetricHistoryStore _historyStore;
     private readonly IHardwareRefreshService? _hardwareRefresh;
     private readonly Dictionary<string, Queue<double>> _smoothingWindows = new();
+    private readonly Dictionary<string, (int Index, bool Integrated, string Name, string Suffix)> _gpuLabels = new();
     private const int SmoothingWindow = 4;
     private const int DecimalPlaces = 2;
 
@@ -128,18 +129,22 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         // stable DeviceId (not enumeration Index) so identity survives even if
         // WMI's device order ever shifts between runs.
         var gpuInfos = _gpu.GetCurrentUsage();
+        var activeGpuIds = new HashSet<string>();
         foreach (var gpuInfo in gpuInfos)
         {
             if (!gpuInfo.IsAvailable) continue;
+            activeGpuIds.Add(gpuInfo.DeviceId);
             var gpuUsedGB = gpuInfo.DedicatedMemoryUsedMb / 1024.0;
             var gpuTotalGB = gpuInfo.DedicatedMemoryTotalMb / 1024.0;
-            var deviceTag = gpuInfo.IsIntegrated ? "Integrated" : "Dedicated";
-            var gpuLabelSuffix = $" (GPU {gpuInfo.Index} - {deviceTag}: {gpuInfo.Name})";
+            var gpuLabelSuffix = GetGpuLabelSuffix(gpuInfo);
             readings.Add(BuildGpuReading(MetricCatalog.GpuUsage, gpuInfo, gpuInfo.UsagePercent, smooth: true, gpuLabelSuffix));
             readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryUsed, gpuInfo, gpuUsedGB, smooth: false, gpuLabelSuffix));
             readings.Add(BuildGpuReading(MetricCatalog.GpuMemoryTotal, gpuInfo, gpuTotalGB, smooth: false, gpuLabelSuffix));
             readings.Add(BuildGpuTextReading(MetricCatalog.GpuModel, gpuInfo, gpuInfo.Name, gpuLabelSuffix));
         }
+
+        foreach (var deviceId in _gpuLabels.Keys.Where(id => !activeGpuIds.Contains(id)).ToList())
+            _gpuLabels.Remove(deviceId);
 
 
         PruneSmoothingWindows(readings);
@@ -157,8 +162,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         foreach (var gpuInfo in gpuInfos)
         {
             if (!gpuInfo.IsAvailable) continue;
-            var deviceTag = gpuInfo.IsIntegrated ? "Integrated" : "Dedicated";
-            var gpuLabelSuffix = $" (GPU {gpuInfo.Index} - {deviceTag}: {gpuInfo.Name})";
+            var gpuLabelSuffix = GetGpuLabelSuffix(gpuInfo);
             foreach (var reading in gpuInfo.Temperatures)
             {
                 readings.Add(BuildTemperatureMetric(
@@ -183,6 +187,22 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         {
             _smoothingWindows.Remove(metricId);
         }
+    }
+
+    private string GetGpuLabelSuffix(GpuInfo gpuInfo)
+    {
+        if (_gpuLabels.TryGetValue(gpuInfo.DeviceId, out var cached)
+            && cached.Index == gpuInfo.Index
+            && cached.Integrated == gpuInfo.IsIntegrated
+            && cached.Name == gpuInfo.Name)
+        {
+            return cached.Suffix;
+        }
+
+        var deviceTag = gpuInfo.IsIntegrated ? "Integrated" : "Dedicated";
+        var suffix = $" (GPU {gpuInfo.Index} - {deviceTag}: {gpuInfo.Name})";
+        _gpuLabels[gpuInfo.DeviceId] = (gpuInfo.Index, gpuInfo.IsIntegrated, gpuInfo.Name, suffix);
+        return suffix;
     }
 
     private MetricReading BuildReading(
