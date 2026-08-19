@@ -216,20 +216,23 @@ public class WindowsDiskMonitorService : IDiskMonitorService
             return new List<TemperatureReading>();
         }
 
-        _libreHardware.Update();
+        lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
+        {
+            _libreHardware.Update();
 
-        var temperatureSensors = _libreHardware.Sensors
-            .Where(s => s.SensorType == SensorType.Temperature)
-            .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
-                     && !s.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)
-                     && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase));
+            var temperatureSensors = _libreHardware.Sensors
+                .Where(s => s.SensorType == SensorType.Temperature)
+                .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
+                         && !s.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)
+                         && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase));
 
-        var readings = temperatureSensors
-            .Select(sensor => BuildTemperatureReading(sensor, isPrimary: true))
-            .ToList();
+            var readings = temperatureSensors
+                .Select(sensor => BuildTemperatureReading(sensor, isPrimary: true))
+                .ToList();
 
-        DisambiguateDuplicateLabels(readings);
-        return readings;
+            DisambiguateDuplicateLabels(readings);
+            return readings;
+        }
     }
 
     private TemperatureReading BuildTemperatureReading(ISensor sensor, bool isPrimary)

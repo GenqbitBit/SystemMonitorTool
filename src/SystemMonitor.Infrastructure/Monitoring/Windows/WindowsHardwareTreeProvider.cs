@@ -20,24 +20,30 @@ public sealed class WindowsHardwareTreeProvider : IHardwareTreeProvider
 
     public IReadOnlyList<HardwareTreeNode> DiscoverTree()
     {
-        var roots = new List<HardwareTreeNode>();
-        foreach (var hardware in _computer.Hardware)
+        lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
         {
-            roots.Add(BuildHardwareNode(hardware));
+            var roots = new List<HardwareTreeNode>();
+            foreach (var hardware in _computer.Hardware)
+            {
+                roots.Add(BuildHardwareNode(hardware));
+            }
+            return roots;
         }
-        return roots;
     }
 
     public void RefreshValues(IReadOnlyList<HardwareTreeNode> roots)
     {
-        foreach (var hardware in _computer.Hardware)
+        lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
         {
-            UpdateRecursive(hardware);
-        }
+            foreach (var hardware in _computer.Hardware)
+            {
+                UpdateRecursive(hardware);
+            }
 
-        foreach (var root in roots)
-        {
-            ApplyValues(root, BuildSensorLookup());
+            foreach (var root in roots)
+            {
+                ApplyValues(root, BuildSensorLookup());
+            }
         }
     }
 

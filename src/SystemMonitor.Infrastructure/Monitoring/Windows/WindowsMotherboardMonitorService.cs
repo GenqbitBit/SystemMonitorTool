@@ -20,25 +20,28 @@ public sealed class WindowsMotherboardMonitorService : IMotherboardMonitorServic
 
     public MotherboardInfo? GetCurrentInfo()
     {
-        var board = _computer.Hardware
-            .FirstOrDefault(h => h.HardwareType == HardwareType.Motherboard);
+        lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
+        {
+            var board = _computer.Hardware
+                .FirstOrDefault(h => h.HardwareType == HardwareType.Motherboard);
 
-        if (board is null)
-            return null; // detection failed; the UI will hide the card
+            if (board is null)
+                return null; // detection failed; the UI will hide the card
 
-        // Refresh this hardware's sensors before reading them.
-        board.Update();
+            // Refresh this hardware's sensors before reading them.
+            board.Update();
 
-        // Policy: first temperature sensor found on the board.
-        double? temperature = board.Sensors
-            .Where(s => s.SensorType == SensorType.Temperature)
-            .Select(s => (double?)s.Value)
-            .FirstOrDefault();
+            // Policy: first temperature sensor found on the board.
+            double? temperature = board.Sensors
+                .Where(s => s.SensorType == SensorType.Temperature)
+                .Select(s => (double?)s.Value)
+                .FirstOrDefault();
 
-                return new MotherboardInfo(
-            Model: board.Name,
-            Chipset: ChipsetGuess.FromModelName(board.Name) ?? "Unknown",
-            TemperatureCelsius: temperature);
+            return new MotherboardInfo(
+                Model: board.Name,
+                Chipset: ChipsetGuess.FromModelName(board.Name) ?? "Unknown",
+                TemperatureCelsius: temperature);
+        }
     }
 
     /// <summary>

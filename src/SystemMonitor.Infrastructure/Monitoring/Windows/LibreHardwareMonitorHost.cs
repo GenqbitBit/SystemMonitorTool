@@ -19,6 +19,13 @@ public sealed class LibreHardwareMonitorHost
     /// <summary>The one and only instance, created on first use.</summary>
     public static LibreHardwareMonitorHost Instance { get; } = new();
 
+    /// <summary>
+    /// All hardware updates must flow through this single gate so multiple
+    /// monitor services do not call Update() concurrently against the same
+    /// LibreHardwareMonitor Computer instance.
+    /// </summary>
+    public object UpdateSyncRoot { get; } = new();
+
     /// <summary>The shared hardware view every service reads from.</summary>
     public Computer Computer { get; }
 
@@ -35,11 +42,14 @@ public sealed class LibreHardwareMonitorHost
         Computer.Open();
 
         // Warm-up pass so the very first real read already has data behind it.
-        foreach (var hardware in Computer.Hardware)
+        lock (UpdateSyncRoot)
         {
-            hardware.Update();
-            foreach (var subHardware in hardware.SubHardware)
-                subHardware.Update();
+            foreach (var hardware in Computer.Hardware)
+            {
+                hardware.Update();
+                foreach (var subHardware in hardware.SubHardware)
+                    subHardware.Update();
+            }
         }
     }
 
@@ -50,19 +60,22 @@ public sealed class LibreHardwareMonitorHost
     /// </summary>
     public double? GetPackagePowerWatts(HardwareType type)
     {
-        foreach (var hardware in Computer.Hardware)
+        lock (UpdateSyncRoot)
         {
-            if (hardware.HardwareType != type) continue;
-            hardware.Update();
-
-            foreach (var sensor in hardware.Sensors)
+            foreach (var hardware in Computer.Hardware)
             {
-                if (sensor.SensorType == SensorType.Power &&
-                    sensor.Name.Contains("Package"))
-                    return PositiveOrNull(sensor.Value);
+                if (hardware.HardwareType != type) continue;
+                hardware.Update();
+
+                foreach (var sensor in hardware.Sensors)
+                {
+                    if (sensor.SensorType == SensorType.Power &&
+                        sensor.Name.Contains("Package"))
+                        return PositiveOrNull(sensor.Value);
+                }
             }
+            return null;
         }
-        return null;
     }
 
     /// <summary>
@@ -72,19 +85,22 @@ public sealed class LibreHardwareMonitorHost
     /// </summary>
     public double? GetCpuClockMhz()
     {
-        foreach (var hardware in Computer.Hardware)
+        lock (UpdateSyncRoot)
         {
-            if (hardware.HardwareType != HardwareType.Cpu) continue;
-            hardware.Update();
-
-            foreach (var sensor in hardware.Sensors)
+            foreach (var hardware in Computer.Hardware)
             {
-                if (sensor.SensorType == SensorType.Clock &&
-                    sensor.Name == "Cores (Average)")
-                    return PositiveOrNull(sensor.Value);
+                if (hardware.HardwareType != HardwareType.Cpu) continue;
+                hardware.Update();
+
+                foreach (var sensor in hardware.Sensors)
+                {
+                    if (sensor.SensorType == SensorType.Clock &&
+                        sensor.Name == "Cores (Average)")
+                        return PositiveOrNull(sensor.Value);
+                }
             }
+            return null;
         }
-        return null;
     }
 
     private static double? PositiveOrNull(float? value) =>

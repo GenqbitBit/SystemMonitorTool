@@ -70,22 +70,25 @@ public class WindowsCpuMonitorService : ICpuMonitorService
     {
         var readings = new List<TemperatureReading>();
 
-        foreach (var hardware in _computer.Hardware)
+        lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
         {
-            if (hardware.HardwareType != HardwareType.Cpu) continue;
-            hardware.Update();
+            foreach (var hardware in _computer.Hardware)
+            {
+                if (hardware.HardwareType != HardwareType.Cpu) continue;
+                hardware.Update();
 
-            var temperatureSensors = hardware.Sensors
-                .Where(s => s.SensorType == SensorType.Temperature)
-                .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
-                         && !s.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)
-                         && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase)
-                         && !s.Name.Contains("Distance to TjMax", StringComparison.OrdinalIgnoreCase));
+                var temperatureSensors = hardware.Sensors
+                    .Where(s => s.SensorType == SensorType.Temperature)
+                    .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
+                             && !s.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)
+                             && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase)
+                             && !s.Name.Contains("Distance to TjMax", StringComparison.OrdinalIgnoreCase));
 
-            // CPU has no "primary vs sub-reading" distinction like GPU does —
-            // every CPU temp sensor (Package, per-core, per-CCD) is reported
-            // as primary, matching the old service's behavior for category != GPU.
-            readings.AddRange(temperatureSensors.Select(sensor => BuildTemperatureReading(sensor, isPrimary: true)));
+                // CPU has no "primary vs sub-reading" distinction like GPU does —
+                // every CPU temp sensor (Package, per-core, per-CCD) is reported
+                // as primary, matching the old service's behavior for category != GPU.
+                readings.AddRange(temperatureSensors.Select(sensor => BuildTemperatureReading(sensor, isPrimary: true)));
+            }
         }
 
         DisambiguateDuplicateLabels(readings);

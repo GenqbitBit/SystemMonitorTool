@@ -16,17 +16,15 @@ namespace SystemMonitor.Infrastructure.Persistence;
 /// metric history, backing the read-only in-app Logs viewer.
 ///
 /// Design notes:
-///  - Same connection is opened once and reused for the lifetime of this
-///    service, instead of opening a new SqliteConnection per batch — this
-///    is the fix identified for the metric persistence service, applied
-///    here from the start.
-///  - Writes go through a background Channel; LogEvent() just enqueues and
-///    returns immediately.
-///  - Events use a 10-day retention window. Cleanup is checked every
-///    15 minutes after a successful write batch, keeping the incident log
-///    useful without allowing the events table to grow indefinitely.
+///  - Reads use per-operation connections (safe for concurrency).
+///  - Writes go through a background Channel; LogEvent() just enqueues and returns immediately.
+///  - Events use a 10-day retention window. Cleanup is checked every 15 minutes.
+///  - Implements IAsyncDisposable for graceful shutdown: the writer channel is completed
+///    first and the background loop is allowed to drain naturally; cancellation is only
+///    used as a timeout fallback, not the primary shutdown signal, so pending events are
+///    not silently dropped on normal shutdown.
 /// </summary>
-public sealed class SqliteEventLogService : IEventLogService, IDisposable
+public sealed class SqliteEventLogService : IEventLogService, IAsyncDisposable, IDisposable
 {
     private readonly string _connectionString;
     private readonly SqliteConnection _connection;
@@ -36,18 +34,11 @@ public sealed class SqliteEventLogService : IEventLogService, IDisposable
 
     private static readonly TimeSpan RetentionWindow = TimeSpan.FromDays(10);
     private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan DrainTimeout = TimeSpan.FromSeconds(5);
+
     private DateTime _lastCleanup = DateTime.MinValue;
-
-    public async Task DeleteAllEventsAsync()
-    {
-        using var delete = _connection.CreateCommand();
-        delete.CommandText = "DELETE FROM events;";
-        await delete.ExecuteNonQueryAsync().ConfigureAwait(false);
-
-        using var reset = _connection.CreateCommand();
-        reset.CommandText = "DELETE FROM sqlite_sequence WHERE name = 'events';";
-        await reset.ExecuteNonQueryAsync().ConfigureAwait(false);
-    }
+    private bool _disposed;
+    private long _droppedEventCount;
 
     public SqliteEventLogService()
     {
@@ -58,14 +49,23 @@ public sealed class SqliteEventLogService : IEventLogService, IDisposable
         Directory.CreateDirectory(appDataFolder);
 
         var dbPath = Path.Combine(appDataFolder, "history.db");
-        _connectionString = $"Data Source={dbPath}";
+        _connectionString = $"Data Source={dbPath};Pooling=True;";
 
+        // Open once and reuse for the lifetime of the service.
         _connection = new SqliteConnection(_connectionString);
         _connection.Open();
 
         InitializeDatabase();
 
-        _writeQueue = Channel.CreateUnbounded<(string, DateTime, string, string?)>();
+        // Bounded channel to prevent unbounded memory growth if writes outpace SQLite.
+        // Uses DropOldest to shed oldest events when the buffer is full, keeping logging
+        // non-blocking. Dropped events are counted via DroppedEventCount.
+        _writeQueue = Channel.CreateBounded<(string, DateTime, string, string?)>(
+            new BoundedChannelOptions(10_000)
+            {
+                FullMode = BoundedChannelFullMode.DropOldest
+            });
+
         _backgroundWriterTask = Task.Run(BackgroundWriteLoopAsync);
     }
 
@@ -84,69 +84,102 @@ public sealed class SqliteEventLogService : IEventLogService, IDisposable
                 message TEXT NOT NULL,
                 metadata TEXT
             );
+            """;
+        create.ExecuteNonQuery();
+
+        using var indexLookup = _connection.CreateCommand();
+        indexLookup.CommandText = """
             CREATE INDEX IF NOT EXISTS idx_events_lookup
                 ON events (type, timestamp);
             """;
+        indexLookup.ExecuteNonQuery();
 
-        create.ExecuteNonQuery();
+        using var indexTimestamp = _connection.CreateCommand();
+        indexTimestamp.CommandText = """
+            CREATE INDEX IF NOT EXISTS idx_events_timestamp
+                ON events (timestamp);
+            """;
+        indexTimestamp.ExecuteNonQuery();
     }
 
-    public void LogEvent(
-        string type,
-        string message,
-        string? metadata = null)
+    public void LogEvent(string type, string message, string? metadata = null)
     {
-        _writeQueue.Writer.TryWrite(
-            (type, DateTime.UtcNow, message, metadata));
+        if (_disposed)
+            return;
+
+        // Guard against null/empty type to avoid database constraint violations.
+        if (string.IsNullOrEmpty(type))
+            type = "Unknown";
+
+        if (!_writeQueue.Writer.TryWrite((type, DateTime.UtcNow, message, metadata)))
+        {
+            Interlocked.Increment(ref _droppedEventCount);
+        }
     }
+
+    /// <summary>
+    /// Number of events dropped because the write buffer was full.
+    /// </summary>
+    public long DroppedEventCount => Interlocked.Read(ref _droppedEventCount);
 
     private async Task BackgroundWriteLoopAsync()
     {
-        var reader = _writeQueue.Reader;
-
-        while (await reader
-            .WaitToReadAsync(_cts.Token)
-            .ConfigureAwait(false))
+        try
         {
-            using var transaction = _connection.BeginTransaction();
+            var reader = _writeQueue.Reader;
 
-            using var insert = _connection.CreateCommand();
-            insert.Transaction = transaction;
-            insert.CommandText = """
-                INSERT INTO events (timestamp, type, message, metadata)
-                VALUES ($ts, $type, $msg, $meta);
-                """;
-
-            var tsParam = insert.Parameters.Add(
-                "$ts",
-                SqliteType.Integer);
-
-            var typeParam = insert.Parameters.Add(
-                "$type",
-                SqliteType.Text);
-
-            var msgParam = insert.Parameters.Add(
-                "$msg",
-                SqliteType.Text);
-
-            var metaParam = insert.Parameters.Add(
-                "$meta",
-                SqliteType.Text);
-
-            while (reader.TryRead(out var entry))
+            while (await reader.WaitToReadAsync(_cts.Token).ConfigureAwait(false))
             {
-                tsParam.Value = entry.Timestamp.Ticks;
-                typeParam.Value = entry.Type;
-                msgParam.Value = entry.Message;
-                metaParam.Value =
-                    (object?)entry.Metadata ?? DBNull.Value;
+                try
+                {
+                    using var transaction = _connection.BeginTransaction();
 
-                insert.ExecuteNonQuery();
+                    using var insert = _connection.CreateCommand();
+                    insert.Transaction = transaction;
+                    insert.CommandText = """
+                        INSERT INTO events (timestamp, type, message, metadata)
+                        VALUES ($ts, $type, $msg, $meta);
+                        """;
+
+                    var tsParam = insert.Parameters.Add("$ts", SqliteType.Integer);
+                    var typeParam = insert.Parameters.Add("$type", SqliteType.Text);
+                    var msgParam = insert.Parameters.Add("$msg", SqliteType.Text);
+                    var metaParam = insert.Parameters.Add("$meta", SqliteType.Text);
+
+                    // Explicitly prepare the statement once per batch for better performance.
+                    insert.Prepare();
+
+                    while (reader.TryRead(out var entry))
+                    {
+                        tsParam.Value = entry.Timestamp.Ticks;
+                        typeParam.Value = entry.Type;
+                        msgParam.Value = entry.Message;
+                        metaParam.Value = (object?)entry.Metadata ?? DBNull.Value;
+
+                        insert.ExecuteNonQuery();
+                    }
+
+                    transaction.Commit();
+
+                    MaybeCleanup();
+
+                    // Reset the counter after the batch has been processed.
+                    Interlocked.Exchange(ref _droppedEventCount, 0);
+                }
+                catch (Exception)
+                {
+                    // Keep the writer alive for future events.
+                    // The transaction is rolled back automatically when disposed.
+                }
             }
-
-            transaction.Commit();
-
-            MaybeCleanup();
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected only when the shutdown timeout forces cancellation.
+        }
+        catch (Exception)
+        {
+            // Background writer failed unexpectedly.
         }
     }
 
@@ -162,12 +195,8 @@ public sealed class SqliteEventLogService : IEventLogService, IDisposable
         var cutoff = now - RetentionWindow;
 
         using var delete = _connection.CreateCommand();
-        delete.CommandText =
-            "DELETE FROM events WHERE timestamp < $cutoff;";
-
-        delete.Parameters.AddWithValue(
-            "$cutoff",
-            cutoff.Ticks);
+        delete.CommandText = "DELETE FROM events WHERE timestamp < $cutoff;";
+        delete.Parameters.AddWithValue("$cutoff", cutoff.Ticks);
 
         delete.ExecuteNonQuery();
     }
@@ -177,7 +206,10 @@ public sealed class SqliteEventLogService : IEventLogService, IDisposable
         DateTime? since = null,
         int limit = 200)
     {
-        using var select = _connection.CreateCommand();
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync().ConfigureAwait(false);
+
+        using var select = connection.CreateCommand();
 
         select.CommandText = """
             SELECT timestamp, type, message, metadata FROM events
@@ -187,27 +219,18 @@ public sealed class SqliteEventLogService : IEventLogService, IDisposable
             LIMIT $limit;
             """;
 
-        select.Parameters.AddWithValue(
-            "$type",
-            (object?)type ?? DBNull.Value);
+        // Convert 'since' to UTC ticks because the database stores UTC ticks.
+        var sinceUtcTicks = since?.ToUniversalTime().Ticks;
 
-        select.Parameters.AddWithValue(
-            "$since",
-            (object?)since?.Ticks ?? DBNull.Value);
-
-        select.Parameters.AddWithValue(
-            "$limit",
-            limit);
+        select.Parameters.AddWithValue("$type", (object?)type ?? DBNull.Value);
+        select.Parameters.AddWithValue("$since", (object?)sinceUtcTicks ?? DBNull.Value);
+        select.Parameters.AddWithValue("$limit", limit);
 
         var results = new List<EventLogEntry>();
 
-        using var readerResult =
-            await select.ExecuteReaderAsync()
-                .ConfigureAwait(false);
+        using var readerResult = await select.ExecuteReaderAsync().ConfigureAwait(false);
 
-        while (await readerResult
-            .ReadAsync()
-            .ConfigureAwait(false))
+        while (await readerResult.ReadAsync().ConfigureAwait(false))
         {
             var timestamp = new DateTime(
                 readerResult.GetInt64(0),
@@ -215,39 +238,90 @@ public sealed class SqliteEventLogService : IEventLogService, IDisposable
 
             var type_ = readerResult.GetString(1);
             var message = readerResult.GetString(2);
-
             var metadata = readerResult.IsDBNull(3)
                 ? null
                 : readerResult.GetString(3);
 
-            results.Add(
-                new EventLogEntry(
-                    timestamp,
-                    type_,
-                    message,
-                    metadata));
+            results.Add(new EventLogEntry(
+                timestamp,
+                type_,
+                message,
+                metadata));
         }
 
         return results;
     }
 
+    public async Task DeleteAllEventsAsync()
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync().ConfigureAwait(false);
+
+        using var delete = connection.CreateCommand();
+        delete.CommandText = "DELETE FROM events;";
+        await delete.ExecuteNonQueryAsync().ConfigureAwait(false);
+
+        using var reset = connection.CreateCommand();
+        reset.CommandText = "DELETE FROM sqlite_sequence WHERE name = 'events';";
+        await reset.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    #region IDisposable & IAsyncDisposable
+
+    /// <summary>
+    /// Synchronous dispose. Blocks on the async path so both share one shutdown
+    /// implementation instead of drifting out of sync.
+    /// </summary>
     public void Dispose()
     {
+        if (_disposed)
+            return;
+
+        DisposeAsync().AsTask().GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Gracefully disposes the service. Completes the write channel and lets the
+    /// background writer drain naturally so pending events are flushed; only falls
+    /// back to cancellation if draining doesn't finish within <see cref="DrainTimeout"/>.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+
         _writeQueue.Writer.TryComplete();
 
-        _cts.Cancel();
+        var drainTask = _backgroundWriterTask;
+        var timeoutTask = Task.Delay(DrainTimeout);
 
-        try
+        var completed = await Task.WhenAny(
+            drainTask,
+            timeoutTask).ConfigureAwait(false);
+
+        if (completed != drainTask)
         {
-            _backgroundWriterTask.Wait(
-                TimeSpan.FromSeconds(2));
-        }
-        catch
-        {
-            // Best-effort shutdown.
+            _cts.Cancel();
+
+            try
+            {
+                await drainTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected once cancellation is requested.
+            }
+            catch (Exception)
+            {
+                // Background writer failed while shutting down.
+            }
         }
 
         _cts.Dispose();
-        _connection.Dispose();
+        await _connection.DisposeAsync().ConfigureAwait(false);
     }
+
+    #endregion
 }

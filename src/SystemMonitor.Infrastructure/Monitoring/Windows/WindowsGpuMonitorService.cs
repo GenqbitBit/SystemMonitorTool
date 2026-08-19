@@ -179,15 +179,18 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         if (hardware is null)
             return 0;
 
-        hardware.Update();
-
-        foreach (var sensor in hardware.Sensors)
+        lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
         {
-            if (sensor.SensorType == SensorType.SmallData
-                && sensor.Name == "GPU Memory Total"
-                && sensor.Value is float value)
+            hardware.Update();
+
+            foreach (var sensor in hardware.Sensors)
             {
-                return Math.Round(value, 2);
+                if (sensor.SensorType == SensorType.SmallData
+                    && sensor.Name == "GPU Memory Total"
+                    && sensor.Value is float value)
+                {
+                    return Math.Round(value, 2);
+                }
             }
         }
 
@@ -238,29 +241,32 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
             return (0, 0);
         }
 
-        device.LibreHardware.Update();
-
-        double totalMb = 0;
-        double usedMb = 0;
-
-        foreach (var sensor in device.LibreHardware.Sensors)
+        lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
         {
-            if (sensor.SensorType != SensorType.SmallData || sensor.Value is not float value)
+            device.LibreHardware.Update();
+
+            double totalMb = 0;
+            double usedMb = 0;
+
+            foreach (var sensor in device.LibreHardware.Sensors)
             {
-                continue;
+                if (sensor.SensorType != SensorType.SmallData || sensor.Value is not float value)
+                {
+                    continue;
+                }
+
+                if (sensor.Name == "GPU Memory Total")
+                {
+                    totalMb = Math.Round(value, 2);
+                }
+                else if (sensor.Name == "GPU Memory Used")
+                {
+                    usedMb = Math.Round(value, 2);
+                }
             }
 
-            if (sensor.Name == "GPU Memory Total")
-            {
-                totalMb = Math.Round(value, 2);
-            }
-            else if (sensor.Name == "GPU Memory Used")
-            {
-                usedMb = Math.Round(value, 2);
-            }
+            return (totalMb, usedMb);
         }
-
-        return (totalMb, usedMb);
     }
 
     private List<TemperatureReading> GetGpuTemperatures(GpuDevice device)
@@ -270,31 +276,34 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
             return new List<TemperatureReading>();
         }
 
-        device.LibreHardware.Update();
-
-        var temperatureSensors = device.LibreHardware.Sensors
-            .Where(s => s.SensorType == SensorType.Temperature)
-            .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
-                     && !s.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)
-                     && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase)
-                     && !s.Name.Contains("Distance to TjMax", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        if (temperatureSensors.Count == 0)
+        lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
         {
-            return new List<TemperatureReading>();
+            device.LibreHardware.Update();
+
+            var temperatureSensors = device.LibreHardware.Sensors
+                .Where(s => s.SensorType == SensorType.Temperature)
+                .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
+                         && !s.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)
+                         && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase)
+                         && !s.Name.Contains("Distance to TjMax", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (temperatureSensors.Count == 0)
+            {
+                return new List<TemperatureReading>();
+            }
+
+            var primarySensorName = DeterminePrimaryGpuSensorName(temperatureSensors, device.Name);
+
+            var readings = temperatureSensors
+                .Select(sensor => BuildTemperatureReading(
+                    sensor,
+                    isPrimary: string.Equals(sensor.Name?.Trim(), primarySensorName, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            DisambiguateDuplicateLabels(readings);
+            return readings;
         }
-
-        var primarySensorName = DeterminePrimaryGpuSensorName(temperatureSensors, device.Name);
-
-        var readings = temperatureSensors
-            .Select(sensor => BuildTemperatureReading(
-                sensor,
-                isPrimary: string.Equals(sensor.Name?.Trim(), primarySensorName, StringComparison.OrdinalIgnoreCase)))
-            .ToList();
-
-        DisambiguateDuplicateLabels(readings);
-        return readings;
     }
 
     private TemperatureReading BuildTemperatureReading(ISensor sensor, bool isPrimary)
