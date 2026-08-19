@@ -20,6 +20,7 @@ public class BrailleAreaGraphRenderer : IGraphContentRenderer, IThemeableGraphRe
     public Color AreaTopColor { get; set; } = Colors.MediumPurple;
     public Color AreaBottomColor { get; set; } = Colors.Indigo;
     public int BandCount { get; set; } = 8;
+    private readonly Dictionary<Color, SolidColorBrush> _brushes = new();
 
     public void ApplyPalette(Color primary, Color secondary)
     {
@@ -27,6 +28,7 @@ public class BrailleAreaGraphRenderer : IGraphContentRenderer, IThemeableGraphRe
         AreaBottomColor = secondary;
         CurveTopColor = primary;
         CurveBottomColor = secondary;
+        _brushes.Clear();
     }
 
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
@@ -57,7 +59,7 @@ public class BrailleAreaGraphRenderer : IGraphContentRenderer, IThemeableGraphRe
                 t = localSpan > 0.0001 ? (cellY - curveY) / localSpan : 1.0;
             }
 
-            var rowBrush = new SolidColorBrush(GraphColorMath.Band(AreaTopColor, AreaBottomColor, t, BandCount));
+            var rowBrush = GetBrush(GraphColorMath.Band(AreaTopColor, AreaBottomColor, t, BandCount));
             var text = new FormattedText(BrailleGraphMath.ToBrailleChar(mask).ToString(), CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, typeface, FontSize, rowBrush);
             context.DrawText(text, new Point(plotRect.X + cellX, plotRect.Y + cellY));
@@ -67,10 +69,20 @@ public class BrailleAreaGraphRenderer : IGraphContentRenderer, IThemeableGraphRe
                      points, plotRect.Width, plotRect.Height, CellWidth, CellHeight))
         {
             var t = cellY / plotRect.Height;
-            var rowBrush = new SolidColorBrush(GraphColorMath.Lerp(CurveTopColor, CurveBottomColor, t));
+            var rowBrush = GetBrush(GraphColorMath.Lerp(CurveTopColor, CurveBottomColor, t));
             var text = new FormattedText(BrailleGraphMath.ToBrailleChar(mask).ToString(), CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, typeface, FontSize, rowBrush);
             context.DrawText(text, new Point(plotRect.X + cellX, plotRect.Y + cellY));
         }
+    }
+
+    private SolidColorBrush GetBrush(Color color)
+    {
+        if (_brushes.TryGetValue(color, out var brush))
+            return brush;
+
+        brush = new SolidColorBrush(color);
+        _brushes[color] = brush;
+        return brush;
     }
 }

@@ -31,6 +31,7 @@ public class BraillePercentageBarRenderer : IGraphContentRenderer, IThemeableGra
     public double MarkerLineThickness { get; set; } = 1.7;
 
     public bool MarkerFlapAtTop { get; set; } = true;
+    private readonly Dictionary<Color, SolidColorBrush> _brushes = new();
 
     public bool SuppressDefaultCurrentValueMarker => true;
 
@@ -42,6 +43,7 @@ public class BraillePercentageBarRenderer : IGraphContentRenderer, IThemeableGra
     {
         StartColor = primary;
         EndColor = secondary;
+        _brushes.Clear();
     }
     
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
@@ -85,7 +87,7 @@ public class BraillePercentageBarRenderer : IGraphContentRenderer, IThemeableGra
                 // Alpha baked directly into the Color (not Brush.Opacity) so
                 // dimming is guaranteed regardless of other compositing state.
                 var drawColor = isFilled ? color : WithOpacity(color, UnfilledOpacity);
-                var brush = new SolidColorBrush(drawColor);
+                var brush = GetBrush(drawColor);
 
                 var text = new FormattedText(fullCellChar, CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, typeface, FontSize, brush);
@@ -119,5 +121,15 @@ public class BraillePercentageBarRenderer : IGraphContentRenderer, IThemeableGra
     {
         var alpha = (byte)(color.A * Math.Clamp(opacity, 0, 1));
         return Color.FromArgb(alpha, color.R, color.G, color.B);
+    }
+
+    private SolidColorBrush GetBrush(Color color)
+    {
+        if (_brushes.TryGetValue(color, out var brush))
+            return brush;
+
+        brush = new SolidColorBrush(color);
+        _brushes[color] = brush;
+        return brush;
     }
 }

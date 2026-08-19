@@ -102,7 +102,8 @@ public sealed class MetricHistoryStore : IMetricHistoryStore
         lock (_lock)
         {
             var now = DateTime.UtcNow;
-            var frozen = new List<MetricHistoryPoint>();
+            var frozen = new List<MetricHistoryPoint>(
+                (_history.TryGetValue(metricId, out var existingQueue) ? existingQueue.Count : 0) + 1);
             if (_history.TryGetValue(metricId, out var queue))
             {
                 while (queue.Count > 0 && now - queue.Peek().Timestamp > _window)

@@ -449,6 +449,9 @@ public class MetricGraphView : Control
 
         var valueTickCount = halfHeight < 80 ? 3 : 5;
         var timeTickCount = plotWidth < 120 ? 3 : 4;
+        var timeTicks = ShowGrid
+            ? MetricGraphMath.ComputeTimeAxisTicks(windowStart, windowEnd, timeTickCount)
+            : Array.Empty<(double NormalizedX, string Label)>();
 
         if (ShowGrid)
         {
@@ -469,14 +472,14 @@ public class MetricGraphView : Control
             // opposite directions (ToRight / SecondaryToRight) — a single
             // shared set of tick positions would only be time-correct for
             // whichever half's direction it was computed against.
-            foreach (var (normalizedX, _) in MetricGraphMath.ComputeTimeAxisTicks(windowStart, windowEnd, timeTickCount))
+            foreach (var (normalizedX, _) in timeTicks)
             {
                 var effectiveX = ToRight ? normalizedX : 1 - normalizedX;
                 var x = plotOrigin.X + effectiveX * plotWidth;
                 context.DrawLine(new Pen(GridBrush, 1), new Point(x, topRect.Y), new Point(x, topRect.Y + topRect.Height));
             }
 
-            foreach (var (normalizedX, label) in MetricGraphMath.ComputeTimeAxisTicks(windowStart, windowEnd, timeTickCount))
+            foreach (var (normalizedX, label) in timeTicks)
             {
                 var effectiveX = ToRight ? normalizedX : 1 - normalizedX;
                 var x = plotOrigin.X + effectiveX * plotWidth;
@@ -489,14 +492,14 @@ public class MetricGraphView : Control
                 context.DrawText(text, new Point(textX, textY));
             }
 
-            foreach (var (normalizedX, _) in MetricGraphMath.ComputeTimeAxisTicks(windowStart, windowEnd, timeTickCount))
+            foreach (var (normalizedX, _) in timeTicks)
             {
                 var effectiveX = SecondaryToRight ? normalizedX : 1 - normalizedX;
                 var x = plotOrigin.X + effectiveX * plotWidth;
                 context.DrawLine(new Pen(GridBrush, 1), new Point(x, bottomRect.Y), new Point(x, bottomRect.Y + bottomRect.Height));
             }
 
-            foreach (var (normalizedX, label) in MetricGraphMath.ComputeTimeAxisTicks(windowStart, windowEnd, timeTickCount))
+            foreach (var (normalizedX, label) in timeTicks)
             {
                 var effectiveX = SecondaryToRight ? normalizedX : 1 - normalizedX;
                 var x = plotOrigin.X + effectiveX * plotWidth;

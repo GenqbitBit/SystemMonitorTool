@@ -28,6 +28,7 @@ public class BlockPercentageBarRenderer : IGraphContentRenderer, IThemeableGraph
     public double MarkerLineThickness { get; set; } = 1.7;
 
     public bool MarkerFlapAtTop { get; set; } = true;
+    private readonly Dictionary<Color, SolidColorBrush> _brushes = new();
 
 
     public bool SuppressDefaultCurrentValueMarker => true;
@@ -36,6 +37,7 @@ public class BlockPercentageBarRenderer : IGraphContentRenderer, IThemeableGraph
     {
         StartColor = primary;
         EndColor = secondary;
+        _brushes.Clear();
     }
     
     public void Draw(DrawingContext context, Rect plotRect, IReadOnlyList<MetricHistoryPoint> history,
@@ -69,7 +71,7 @@ public class BlockPercentageBarRenderer : IGraphContentRenderer, IThemeableGraph
             var isFilled = colPct <= currentValuePct;
             var drawColor = isFilled ? color : WithOpacity(color, UnfilledOpacity);
 
-            context.FillRectangle(new SolidColorBrush(drawColor), new Rect(plotRect.X + x, plotRect.Y, BlockWidth, plotRect.Height));
+            context.FillRectangle(GetBrush(drawColor), new Rect(plotRect.X + x, plotRect.Y, BlockWidth, plotRect.Height));
         }
 
         DrawTipMarker(context, plotRect, currentValuePct, toRight);
@@ -93,5 +95,15 @@ public class BlockPercentageBarRenderer : IGraphContentRenderer, IThemeableGraph
     {
         var alpha = (byte)(color.A * Math.Clamp(opacity, 0, 1));
         return Color.FromArgb(alpha, color.R, color.G, color.B);
+    }
+
+    private SolidColorBrush GetBrush(Color color)
+    {
+        if (_brushes.TryGetValue(color, out var brush))
+            return brush;
+
+        brush = new SolidColorBrush(color);
+        _brushes[color] = brush;
+        return brush;
     }
 }

@@ -58,12 +58,12 @@ public sealed class SqliteEventLogService : IEventLogService, IAsyncDisposable, 
         InitializeDatabase();
 
         // Bounded channel to prevent unbounded memory growth if writes outpace SQLite.
-        // Uses DropOldest to shed oldest events when the buffer is full, keeping logging
-        // non-blocking. Dropped events are counted via DroppedEventCount.
+        // Rejects new events when the buffer is full, keeping logging non-blocking
+        // while making dropped events observable via DroppedEventCount.
         _writeQueue = Channel.CreateBounded<(string, DateTime, string, string?)>(
             new BoundedChannelOptions(10_000)
             {
-                FullMode = BoundedChannelFullMode.DropOldest
+            FullMode = BoundedChannelFullMode.Wait
             });
 
         _backgroundWriterTask = Task.Run(BackgroundWriteLoopAsync);
@@ -163,8 +163,6 @@ public sealed class SqliteEventLogService : IEventLogService, IAsyncDisposable, 
 
                     MaybeCleanup();
 
-                    // Reset the counter after the batch has been processed.
-                    Interlocked.Exchange(ref _droppedEventCount, 0);
                 }
                 catch (Exception)
                 {
