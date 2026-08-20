@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using System;
+using System.IO;
 using SystemMonitor.Presentation.ViewModels;
 using SystemMonitor.Presentation.Views;
 
@@ -8,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Infrastructure.Monitoring;
 using SystemMonitor.Infrastructure;
+using SystemMonitor.Infrastructure.Persistence;
 using SystemMonitor.Domain.AsciiArt;
 using SystemMonitor.Presentation.Views.PanelsAndTemplates;
 using SystemMonitor.Application.AsciiArt;
@@ -26,6 +29,8 @@ public partial class App : Avalonia.Application
         var services = new ServiceCollection();
         services.AddPlatformMonitoringServices();
         services.AddThemingServices();              
+        services.AddSingleton<ISettingsService>(_ => new JsonSettingsService(
+            Path.Combine(AppContext.BaseDirectory, "settings.json")));
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<MetricsTableViewModel>();
         services.AddSingleton<IAsciiArtConverter, AsciiArtConverter>();
@@ -36,6 +41,8 @@ public partial class App : Avalonia.Application
         SystemMonitor.Presentation.Theming.ThemeResourceApplier.Apply(themeService.CurrentTheme); 
         themeService.ThemeChanged += (_, theme) =>
             SystemMonitor.Presentation.Theming.ThemeResourceApplier.Apply(theme); 
+        SystemMonitor.Presentation.Common.SettingsRuntime.Initialize(
+            provider.GetRequiredService<ISettingsService>());
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {

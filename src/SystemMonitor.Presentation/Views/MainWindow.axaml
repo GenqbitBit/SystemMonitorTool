@@ -522,19 +522,13 @@
                                                 HistoryStore="{Binding HistoryStore}"
                                                 MetricId="cpu.usage"
                                                 GraphRole="CpuBar"
+                                                GraphKind="Bar"
                                                 FixedMinValue="0"
                                                 FixedMaxValue="100"
                                                 MinWidth="20"
                                                 MinHeight="20"
                                                 HorizontalAlignment="Stretch"
-                                                VerticalAlignment="Stretch">
-
-                                                <panels:MetricGraphView.ContentRenderer>
-                                                    <panels:BlockPercentageBarRenderer
-                                                        UnfilledOpacity="0.4"/>
-                                                </panels:MetricGraphView.ContentRenderer>
-
-                                            </panels:MetricGraphView>
+                                                VerticalAlignment="Stretch"/>
                                         </Grid>
 
                                         <Border Grid.Row="1"
@@ -561,19 +555,13 @@
                                                 HistoryStore="{Binding HistoryStore}"
                                                 MetricId="cpu.usage"
                                                 GraphRole="CpuArea"
+                                                GraphKind="Area"
                                                 FixedMinValue="0"
                                                 FixedMaxValue="100"
                                                 MinWidth="20"
                                                 MinHeight="20"
                                                 HorizontalAlignment="Stretch"
-                                                VerticalAlignment="Stretch">
-
-                                                <panels:MetricGraphView.ContentRenderer>
-                                                    <panels:BlockAreaGraphRenderer
-                                                        BandCount="4"/>
-                                                </panels:MetricGraphView.ContentRenderer>
-
-                                            </panels:MetricGraphView>
+                                                VerticalAlignment="Stretch"/>
 
                                         </Grid>
 
@@ -720,20 +708,13 @@
                                                 HistoryStore="{Binding HistoryStore}"
                                                 MetricId="memory.usage"
                                                 GraphRole="MemoryBar"
+                                                GraphKind="Bar"
                                                 FixedMinValue="0"
                                                 FixedMaxValue="100"
                                                 MinWidth="20"
                                                 MinHeight="20"
                                                 HorizontalAlignment="Stretch"
-                                                VerticalAlignment="Stretch">
-
-                                                <panels:MetricGraphView.ContentRenderer>
-                                                    <panels:BlockPercentageBarRenderer
-                                                        UnfilledOpacity="0.5"
-                                                        MarkerBrush="White"/>
-                                                </panels:MetricGraphView.ContentRenderer>
-
-                                            </panels:MetricGraphView>
+                                                VerticalAlignment="Stretch"/>
                                         </Grid>
 
                                         <Border Grid.Row="1"
@@ -760,19 +741,13 @@
                                                 HistoryStore="{Binding HistoryStore}"
                                                 MetricId="memory.usage"
                                                 GraphRole="MemoryArea"
+                                                GraphKind="Area"
                                                 FixedMinValue="0"
                                                 FixedMaxValue="100"
                                                 MinWidth="20"
                                                 MinHeight="20"
                                                 HorizontalAlignment="Stretch"
-                                                VerticalAlignment="Stretch">
-
-                                                <panels:MetricGraphView.ContentRenderer>
-                                                    <panels:BlockAreaGraphRenderer
-                                                        BandCount="5"/>
-                                                </panels:MetricGraphView.ContentRenderer>
-
-                                            </panels:MetricGraphView>
+                                                VerticalAlignment="Stretch"/>
 
                                         </Grid>
 
@@ -884,25 +859,14 @@
                                             HistoryStore="{Binding HistoryStore}"
                                             MetricId="{Binding DedicatedGpuMetricId}"
                                             GraphRole="GpuArea"
+                                            GraphKind="Area"
                                             SecondaryMetricId="{Binding IntegratedGpuMetricId}"
                                             FixedMinValue="0"
                                             FixedMaxValue="100"
                                             MinWidth="20"
                                             MinHeight="20"
                                             HorizontalAlignment="Stretch"
-                                            VerticalAlignment="Stretch">
-
-                                            <panels:MetricGraphView.ContentRenderer>
-                                                <panels:BlockAreaGraphRenderer
-                                                    BandCount="8"/>
-                                            </panels:MetricGraphView.ContentRenderer>
-
-                                            <panels:MetricGraphView.SecondaryContentRenderer>
-                                                <panels:BlockAreaGraphRenderer
-                                                    BandCount="8"/>
-                                            </panels:MetricGraphView.SecondaryContentRenderer>
-
-                                        </panels:MetricGraphView>
+                                            VerticalAlignment="Stretch"/>
 
                                     </Grid>
 
@@ -1024,19 +988,13 @@
                                                 HistoryStore="{Binding HistoryStore}"
                                                 MetricId="disk.usage"
                                                 GraphRole="DiskBar"
+                                                GraphKind="Area"
                                                 FixedMinValue="0"
                                                 FixedMaxValue="100"
                                                 MinWidth="20"
                                                 MinHeight="20"
                                                 HorizontalAlignment="Stretch"
-                                                VerticalAlignment="Stretch">
-
-                                                <panels:MetricGraphView.ContentRenderer>
-                                                    <panels:BlockAreaGraphRenderer
-                                                        BandCount="10"/>
-                                                </panels:MetricGraphView.ContentRenderer>
-
-                                            </panels:MetricGraphView>
+                                                VerticalAlignment="Stretch"/>
 
                                         </Grid>
 
@@ -1113,20 +1071,11 @@
                                                         HistoryStore="{Binding HistoryStore}"
                                                         MetricId="disk.read"
                                                         GraphRole="DiskRead"
+                                                        GraphKind="Bar"
                                                         MinWidth="2"
                                                         MinHeight="2"
                                                         HorizontalAlignment="Stretch"
-                                                        VerticalAlignment="Stretch">
-
-                                                        <panels:MetricGraphView.ContentRenderer>
-                                                            <panels:BlockPercentageBarRenderer
-                                                                MinValue="0"
-                                                                MaxValue="1"
-                                                                UnfilledOpacity="0.5"
-                                                                MarkerBrush="White"/>
-                                                        </panels:MetricGraphView.ContentRenderer>
-
-                                                    </panels:MetricGraphView>
+                                                        VerticalAlignment="Stretch"/>
 
                                                     <panels:MetricGraphView
                                                         Grid.Row="1"
@@ -1136,24 +1085,13 @@
                                                         HistoryStore="{Binding HistoryStore}"
                                                         MetricId="disk.read"
                                                         GraphRole="DiskRead"
+                                                        GraphKind="Area"
                                                         SecondaryMetricId="disk.write"
                                                         ToRight="False"
                                                         MinWidth="2"
                                                         MinHeight="2"
                                                         HorizontalAlignment="Left"
-                                                        VerticalAlignment="Stretch">
-
-                                                        <panels:MetricGraphView.ContentRenderer>
-                                                            <panels:BlockAreaGraphRenderer
-                                                                BandCount="8"/>
-                                                        </panels:MetricGraphView.ContentRenderer>
-
-                                                        <panels:MetricGraphView.SecondaryContentRenderer>
-                                                            <panels:BlockAreaGraphRenderer
-                                                                BandCount="8"/>
-                                                        </panels:MetricGraphView.SecondaryContentRenderer>
-
-                                                    </panels:MetricGraphView>
+                                                        VerticalAlignment="Stretch"/>
 
                                                     <panels:MetricGraphView
                                                         Grid.Row="2"
@@ -1162,21 +1100,11 @@
                                                         HistoryStore="{Binding HistoryStore}"
                                                         MetricId="disk.write"
                                                         GraphRole="DiskWrite"
+                                                        GraphKind="Bar"
                                                         MinWidth="2"
                                                         MinHeight="2"
                                                         HorizontalAlignment="Stretch"
-                                                        VerticalAlignment="Stretch">
-
-                                                        <panels:MetricGraphView.ContentRenderer>
-                                                            <panels:BlockPercentageBarRenderer
-                                                                MinValue="0"
-                                                                MaxValue="1"
-                                                                MarkerFlapAtTop="False"
-                                                                UnfilledOpacity="0.5"
-                                                                MarkerBrush="White"/>
-                                                        </panels:MetricGraphView.ContentRenderer>
-
-                                                    </panels:MetricGraphView>
+                                                        VerticalAlignment="Stretch"/>
 
                                                 </Grid>
                                             </Border>
@@ -1208,20 +1136,13 @@
                                                 HistoryStore="{Binding HistoryStore}"
                                                 MetricId="network.download"
                                                 GraphRole="NetworkDownloadBar"
+                                                GraphKind="Bar"
                                                 FixedMinValue="0"
                                                 FixedMaxValue="1000"
                                                 MinWidth="20"
                                                 MinHeight="20"
                                                 HorizontalAlignment="Stretch"
-                                                VerticalAlignment="Stretch">
-
-                                                <panels:MetricGraphView.ContentRenderer>
-                                                    <panels:BlockPercentageBarRenderer
-                                                        UnfilledOpacity="0.5"
-                                                        MarkerBrush="White"/>
-                                                </panels:MetricGraphView.ContentRenderer>
-
-                                            </panels:MetricGraphView>
+                                                VerticalAlignment="Stretch"/>
                                         </Grid>
 
                                         <Border BorderBrush="{DynamicResource Accent2Brush}"
@@ -1358,20 +1279,13 @@
                                                 HistoryStore="{Binding HistoryStore}"
                                                 MetricId="network.upload"
                                                 GraphRole="NetworkUploadBar"
+                                                GraphKind="Bar"
                                                 FixedMinValue="0"
                                                 FixedMaxValue="100"
                                                 MinWidth="20"
                                                 MinHeight="20"
                                                 HorizontalAlignment="Stretch"
-                                                VerticalAlignment="Stretch">
-
-                                                <panels:MetricGraphView.ContentRenderer>
-                                                    <panels:BlockPercentageBarRenderer
-                                                        UnfilledOpacity="0.5"
-                                                        MarkerBrush="White"/>
-                                                </panels:MetricGraphView.ContentRenderer>
-
-                                            </panels:MetricGraphView>
+                                                VerticalAlignment="Stretch"/>
                                         </Grid>
 
                                     </Grid>
@@ -1391,23 +1305,12 @@
                                         HistoryStore="{Binding HistoryStore}"
                                         MetricId="network.download"
                                         GraphRole="NetworkArea"
+                                        GraphKind="Area"
                                         SecondaryMetricId="network.upload"
                                         MinWidth="2"
                                         MinHeight="2"
                                         HorizontalAlignment="Stretch"
-                                        VerticalAlignment="Stretch">
-
-                                        <panels:MetricGraphView.ContentRenderer>
-                                            <panels:BlockAreaGraphRenderer
-                                                BandCount="8"/>
-                                        </panels:MetricGraphView.ContentRenderer>
-
-                                        <panels:MetricGraphView.SecondaryContentRenderer>
-                                            <panels:BlockAreaGraphRenderer
-                                                BandCount="8"/>
-                                        </panels:MetricGraphView.SecondaryContentRenderer>
-
-                                    </panels:MetricGraphView>
+                                        VerticalAlignment="Stretch"/>
 
                                 </Grid>
 
@@ -1436,10 +1339,10 @@
                            Text="Currently on Development | https://github.com/GenqbitBit/SystemMonitorTool"/>
 
                 <TextBlock Grid.Column="1"
-                           FontSize="12"
-                           HorizontalAlignment="Right"
-                           VerticalAlignment="Center"
-                           Text="Tick: 700ms"/>
+                            FontSize="12"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Text="{Binding TickIntervalMs, StringFormat='Tick: {0}ms'}"/>
 
             </Grid>
 

@@ -32,7 +32,7 @@ public static class GraphRoleMap
             GraphRole.NetworkDownloadBar => (c(r.Accent3), c(r.Accent4)),
             GraphRole.NetworkUploadBar => (c(r.Accent3), c(r.Accent4)),
             GraphRole.NetworkArea => (c(r.Accent1), c(r.Accent3)),
-            GraphRole.GpuArea => (c(r.Accent1), c(r.Warning)),
+            GraphRole.GpuArea => (c(r.Positive), c(r.Positive)),
             _ => (c(r.Accent1), c(r.Accent2)),
         };
     }

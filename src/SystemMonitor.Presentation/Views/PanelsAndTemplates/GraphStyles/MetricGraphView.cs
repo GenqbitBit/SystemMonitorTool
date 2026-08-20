@@ -7,6 +7,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
@@ -16,6 +17,9 @@ namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 
 public class MetricGraphView : Control
 {
+    public static readonly StyledProperty<GraphKind?> GraphKindProperty =
+        AvaloniaProperty.Register<MetricGraphView, GraphKind?>(nameof(GraphKind));
+
     public static readonly StyledProperty<IGraphContentRenderer?> ContentRendererProperty =
         AvaloniaProperty.Register<MetricGraphView, IGraphContentRenderer?>(nameof(ContentRenderer));
 
@@ -85,6 +89,12 @@ public class MetricGraphView : Control
 
     private INotifyCollectionChanged? _subscribedCollection;
     private readonly LineGraphRenderer _defaultLineRenderer = new();
+
+    public GraphKind? GraphKind
+    {
+        get => GetValue(GraphKindProperty);
+        set => SetValue(GraphKindProperty, value);
+    }
 
     public Theming.GraphRole? GraphRole
     {
@@ -220,6 +230,7 @@ public class MetricGraphView : Control
             GridBrushProperty,
             AxisBrushProperty,
             AxisFontFamilyProperty,
+            ContentRendererProperty,
             SecondaryMetricIdProperty,
             SecondaryContentRendererProperty,
             SecondaryLineBrushProperty,
@@ -258,8 +269,11 @@ public class MetricGraphView : Control
         base.OnAttachedToVisualTree(e);
         SubscribeToMetricsCollection();
 
+        ApplyGraphSettings();
         ApplyThemeColors();
         Theming.ThemeRuntime.Service.ThemeChanged += OnThemeChanged;
+
+        Common.SettingsRuntime.Service.SettingsApplied += OnSettingsApplied;
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -267,12 +281,38 @@ public class MetricGraphView : Control
         base.OnDetachedFromVisualTree(e);
         UnsubscribeFromMetricsCollection();
         Theming.ThemeRuntime.Service.ThemeChanged -= OnThemeChanged;
+        Common.SettingsRuntime.Service.SettingsApplied -= OnSettingsApplied;
     }
 
     private void OnThemeChanged(object? sender, Domain.Models.Theming.ThemeDefinition theme)
     {
         ApplyThemeColors();
         InvalidateVisual();
+    }
+
+    private void OnSettingsApplied(AppSettings settings)
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => OnSettingsApplied(settings));
+            return;
+        }
+
+        ApplyGraphSettings(settings);
+        ApplyThemeColors();
+        InvalidateVisual();
+    }
+
+    private void ApplyGraphSettings(AppSettings? settings = null)
+    {
+        if (GraphKind is not { } kind)
+            return;
+
+        var current = settings ?? SettingsRuntime.Service.Current;
+        ContentRenderer = GraphRendererFactory.Create(kind, current);
+
+        if (!string.IsNullOrEmpty(SecondaryMetricId))
+            SecondaryContentRenderer = GraphRendererFactory.Create(kind, current);
     }
 
     private void ApplyThemeColors()
@@ -325,9 +365,7 @@ public class MetricGraphView : Control
         if (HistoryStore is null || string.IsNullOrEmpty(MetricId))
             return;
 
-        // Margins only exist to reserve space for grid/axis labels. When the
-        // grid is off, the plot area fills the full control bounds so the
-        // border IS the graph area — no leftover reserved space.
+
         double leftMargin, bottomMargin, topMargin, rightMargin;
         if (ShowGrid)
         {

@@ -106,7 +106,12 @@ public class PanelWindowService : IPanelWindowService
 
         return label switch
         {
-            PanelLabels.Settings => new SettingsWindow(),
+            PanelLabels.Settings => vm is not null
+                ? new SettingsWindow
+                {
+                    DataContext = new SettingsPanelViewModel(vm.Settings)
+                }
+                : null,
             PanelLabels.Themes => new ThemesWindow
                 {
                     DataContext = new ThemesPanelViewModel(ThemeRuntime.Service)

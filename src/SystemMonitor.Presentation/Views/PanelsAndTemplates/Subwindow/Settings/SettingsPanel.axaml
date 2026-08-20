@@ -3,6 +3,95 @@
              xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
              x:Class="SystemMonitor.Presentation.Views.Subwindows.Settings.SettingsPanel"
              x:DataType="vm:SettingsPanelViewModel">
-    <!-- actual settings controls go here -->
-    <TextBlock Text="Settings go here" />
+
+    <ScrollViewer Padding="16">
+        <StackPanel Spacing="18">
+
+            <Button Content="Reset to Defaults"
+                    Command="{Binding ResetToDefaultsCommand}"
+                    HorizontalAlignment="Left"/>
+
+            <!-- Tick rate -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="Update interval" FontWeight="Bold"/>
+                <Slider Minimum="500" Maximum="5000"
+                        Value="{Binding TickIntervalMs}"
+                        TickFrequency="100"/>
+                <TextBlock Text="{Binding TickIntervalMs, StringFormat='{}{0} ms'}"
+                           FontSize="11" Opacity="0.7"/>
+            </StackPanel>
+
+            <!-- Graph style -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="Graph style" FontWeight="Bold"/>
+                <ComboBox ItemsSource="{Binding GraphStyleOptions}"
+                          SelectedItem="{Binding GraphStyle}"
+                          HorizontalAlignment="Left"
+                          MinWidth="140"/>
+            </StackPanel>
+
+            <!-- Band count (shared by both styles' area graphs) -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="Graph band count" FontWeight="Bold"/>
+                <Slider Minimum="2" Maximum="20"
+                        Value="{Binding BandCount}"
+                        TickFrequency="1"/>
+                <TextBlock Text="{Binding BandCount}" FontSize="11" Opacity="0.7"/>
+            </StackPanel>
+
+            <!-- Block-specific knobs -->
+            <StackPanel Spacing="8" IsVisible="{Binding IsBlockStyle}">
+                <TextBlock Text="Block settings" FontWeight="Bold"/>
+
+                <StackPanel Spacing="2">
+                    <TextBlock Text="Area block width" FontSize="11"/>
+                    <Slider Minimum="1" Maximum="20" Value="{Binding AreaBlockWidth}"/>
+                </StackPanel>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="Area block gap" FontSize="11"/>
+                    <Slider Minimum="0" Maximum="10" Value="{Binding AreaBlockGap}"/>
+                </StackPanel>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="Bar block width" FontSize="11"/>
+                    <Slider Minimum="1" Maximum="20" Value="{Binding BarBlockWidth}"/>
+                </StackPanel>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="Bar block gap" FontSize="11"/>
+                    <Slider Minimum="0" Maximum="10" Value="{Binding BarBlockGap}"/>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Braille-specific knobs -->
+            <StackPanel Spacing="8" IsVisible="{Binding IsBrailleStyle}">
+                <TextBlock Text="Braille settings" FontWeight="Bold"/>
+
+                <StackPanel Spacing="2">
+                    <TextBlock Text="Area cell width" FontSize="11"/>
+                    <Slider Minimum="5" Maximum="40" Value="{Binding AreaCellWidth}"/>
+                </StackPanel>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="Area cell height" FontSize="11"/>
+                    <Slider Minimum="5" Maximum="30" Value="{Binding AreaCellHeight}"/>
+                </StackPanel>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="Area font size" FontSize="11"/>
+                    <Slider Minimum="8" Maximum="36" Value="{Binding AreaFontSize}"/>
+                </StackPanel>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="Bar cell width" FontSize="11"/>
+                    <Slider Minimum="5" Maximum="40" Value="{Binding BarCellWidth}"/>
+                </StackPanel>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="Bar cell height" FontSize="11"/>
+                    <Slider Minimum="5" Maximum="30" Value="{Binding BarCellHeight}"/>
+                </StackPanel>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="Bar font size" FontSize="11"/>
+                    <Slider Minimum="8" Maximum="36" Value="{Binding BarFontSize}"/>
+                </StackPanel>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+
 </UserControl>

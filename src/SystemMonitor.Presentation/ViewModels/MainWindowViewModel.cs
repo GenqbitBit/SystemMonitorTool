@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using System.Collections.ObjectModel;
 using System.Threading;
 using Avalonia.Threading;
@@ -26,6 +27,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         public IEventLogService EventLog { get; } = new SqliteEventLogService();
         public MetricsTableViewModel MetricsTable { get; } = new MetricsTableViewModel();
         public IHardwareTreeProvider HardwareTreeProvider { get; } = new DesignTimeHardwareTreeProvider();
+        public ISettingsService Settings { get; } = new JsonSettingsService(
+            Path.Combine(AppContext.BaseDirectory, "settings.json"));
     }
 
     private readonly IMetricsSnapshotProvider _metricsProvider;
@@ -40,12 +43,17 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private Action? _pendingUiUpdate;
     private bool _uiUpdateQueued;
     private bool _disposed;
+    private readonly ISettingsService _settings;
+    private volatile int _tickIntervalMs;
 
     private readonly Thread? _pollingThread;
     private readonly CancellationTokenSource _pollingCts = new();
 
     [ObservableProperty]
     private ObservableCollection<MetricReading> metrics = new();
+
+    [ObservableProperty]
+    private int tickIntervalMs;
 
     [ObservableProperty]
     private string? dedicatedGpuMetricId;
@@ -76,6 +84,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     public IMetricHistoryStore HistoryStore => _historyStore;
 
+    public ISettingsService Settings => _settings;
+
     public HardwareTreeViewModel HardwareTree => _hardwareTree;
 
     public IReadOnlyList<MetricReading> LatestSnapshot => _latestSnapshot;
@@ -104,7 +114,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             dependencies.EventLog,
             new ThresholdMonitorService(dependencies.EventLog, Array.Empty<MetricThreshold>()),
             dependencies.MetricsTable,
-            dependencies.HardwareTreeProvider)
+            dependencies.HardwareTreeProvider,
+            dependencies.Settings)
     {
     }
 
@@ -116,7 +127,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         IEventLogService eventLog,
         IThresholdMonitorService thresholdMonitor,
         MetricsTableViewModel metricsTable,
-        IHardwareTreeProvider hardwareTreeProvider)
+        IHardwareTreeProvider hardwareTreeProvider,
+        ISettingsService settings)
     {
         _metricsProvider = metricsProvider;
         _historyStore = historyStore;
@@ -124,6 +136,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _historyPersistence = historyPersistence;
         _eventLog = eventLog;
         _thresholdMonitor = thresholdMonitor;
+        _settings = settings;
+
+        _tickIntervalMs = _settings.Current.TickIntervalMs;
+        TickIntervalMs = _tickIntervalMs;
+        _settings.SettingsApplied += OnSettingsApplied;
 
         MetricsTable = metricsTable;
         LogsPanel = new LogsPanelViewModel(eventLog);
@@ -178,7 +195,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private void PollLoop()
     {
         var stopwatch = new System.Diagnostics.Stopwatch();
-        var interval = TimeSpan.FromMilliseconds(900);
 
         while (!_pollingCts.IsCancellationRequested)
         {
@@ -193,11 +209,22 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 _eventLog.LogEvent(EventType.Error, ex.Message);
             }
 
+            var interval = TimeSpan.FromMilliseconds(_tickIntervalMs);
             var remaining = interval - stopwatch.Elapsed;
 
             if (remaining > TimeSpan.Zero)
                 Thread.Sleep(remaining);
         }
+    }
+
+    private void OnSettingsApplied(AppSettings settings)
+    {
+        _tickIntervalMs = settings.TickIntervalMs;
+
+        if (Dispatcher.UIThread.CheckAccess())
+            TickIntervalMs = settings.TickIntervalMs;
+        else
+            Dispatcher.UIThread.Post(() => TickIntervalMs = settings.TickIntervalMs);
     }
 
     private void AcquireAndApply()
@@ -355,6 +382,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             return;
 
         _disposed = true;
+        _settings.SettingsApplied -= OnSettingsApplied;
         lock (_uiUpdateGate)
             _pendingUiUpdate = null;
         _pollingCts.Cancel();

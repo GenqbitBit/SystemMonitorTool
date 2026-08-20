@@ -19,7 +19,7 @@ namespace SystemMonitor.Infrastructure.Persistence;
 /// Design notes:
 ///  - Writes go through a background Channel, never directly on the
 ///    caller's thread. Record() just enqueues and returns immediately —
-///    safe to call every 900ms from the UI's monitoring cycle without
+///    safe to call every 500ms from the UI's monitoring cycle without
 ///    causing jank from disk I/O.
 ///  - A single background loop drains the channel and writes in batches
 ///    inside one transaction per tick, which is far cheaper than one
