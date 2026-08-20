@@ -9,20 +9,17 @@
         <vm:MetricsTableViewModel />
     </Design.DataContext>
 
-    <!-- This table: one Grid per row; identical star
-         columns keep header and rows aligned without a DataGrid.
-         Long labels wrap instead of clipping. -->
     <Border BorderBrush="{DynamicResource PanelAccentBorderBrush}"
             BorderThickness="1"
             CornerRadius="6"
             Margin="10"
             Padding="14,12"
-            MinWidth="420"
-            VerticalAlignment="Top">
+            MinWidth="420">
 
-        <StackPanel Spacing="4">
+        <Grid RowDefinitions="Auto,Auto,Auto">
 
-            <TextBlock Text="Data Table"
+            <TextBlock Grid.Row="0"
+                       Text="Data Table"
                        FontSize="12"
                        FontWeight="Bold"
                        Foreground="{DynamicResource MetricValueBrush}"
@@ -30,7 +27,8 @@
                        Margin="0,0,0,10" />
 
             <!-- header row -->
-            <Border BorderBrush="{DynamicResource PanelAccentBorderBrush}"
+            <Border Grid.Row="1"
+                    BorderBrush="{DynamicResource PanelAccentBorderBrush}"
                     BorderThickness="0,0,0,1"
                     Padding="0,0,0,6"
                     Margin="0,0,0,4">
@@ -43,14 +41,16 @@
             </Border>
 
             <!-- body rows -->
-            <ItemsControl ItemsSource="{Binding Rows}">
+            <ItemsControl Grid.Row="2" ItemsSource="{Binding Rows}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:MetricTableRow">
                         <Border BorderBrush="{DynamicResource SeparatorBrush}"
                                 BorderThickness="0,0,0,1"
                                 Padding="0,4">
                             <Grid ColumnDefinitions="0.6*,1.8*,1.8*,0.5*">
-                                <TextBlock Grid.Column="0" Text="{Binding Category}" FontSize="10" />
+                                <TextBlock Grid.Column="0" Text="{Binding Category}"
+                                           FontSize="10"
+                                           TextTrimming="CharacterEllipsis" />
                                 <TextBlock Grid.Column="1" Text="{Binding Metric}"
                                            FontSize="10"
                                            TextWrapping="Wrap" />
@@ -62,6 +62,7 @@
                                 <TextBlock Grid.Column="3" Text="{Binding Unit}"
                                            FontSize="10"
                                            HorizontalAlignment="Right"
+                                           TextTrimming="CharacterEllipsis"
                                            Foreground="{DynamicResource MetricValueBrush}" />
                             </Grid>
                         </Border>
@@ -69,6 +70,6 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-        </StackPanel>
+        </Grid>
     </Border>
 </UserControl>
