@@ -2,7 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
              x:Class="SystemMonitor.Presentation.Views.MetricsTableView"
-             x:DataType="vm:MetricsTableViewModel">
+             x:DataType="vm:MetricsTableViewModel"
+             Background="Transparent">
 
     <Design.DataContext>
         <vm:MetricsTableViewModel />
@@ -11,41 +12,59 @@
     <!-- This table: one Grid per row; identical star
          columns keep header and rows aligned without a DataGrid.
          Long labels wrap instead of clipping. -->
-    <Border BorderBrush="Gray" BorderThickness="1" Padding="8" MinWidth="420"
+    <Border BorderBrush="{DynamicResource PanelAccentBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="6"
+            Margin="10"
+            Padding="14,12"
+            MinWidth="420"
             VerticalAlignment="Top">
+
         <StackPanel Spacing="4">
 
-            <TextBlock Text="Data Table" FontSize="11" HorizontalAlignment="Center" Margin="0,0,0,4" />
+            <TextBlock Text="Data Table"
+                       FontSize="12"
+                       FontWeight="Bold"
+                       Foreground="{DynamicResource MetricValueBrush}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,10" />
 
             <!-- header row -->
-            <Grid ColumnDefinitions="0.6*,1.8*,1.8*,0.5*" Opacity="0.6">
-                <TextBlock Grid.Column="0" Text="CATEGORY" FontSize="9" FontWeight="SemiBold" />
-                <TextBlock Grid.Column="1" Text="METRIC" FontSize="9" FontWeight="SemiBold" />
-                <TextBlock Grid.Column="2" Text="VALUE" FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Right" />
-                <TextBlock Grid.Column="3" Text="UNIT"  FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Right" />
-            </Grid>
-
-            <Rectangle Height="1" Fill="Gray" Opacity="0.25" Margin="0,0,0,2" />
+            <Border BorderBrush="{DynamicResource PanelAccentBorderBrush}"
+                    BorderThickness="0,0,0,1"
+                    Padding="0,0,0,6"
+                    Margin="0,0,0,4">
+                <Grid ColumnDefinitions="0.6*,1.8*,1.8*,0.5*" Opacity="0.6">
+                    <TextBlock Grid.Column="0" Text="CATEGORY" FontSize="9" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="1" Text="METRIC" FontSize="9" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="2" Text="VALUE" FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                    <TextBlock Grid.Column="3" Text="UNIT"  FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                </Grid>
+            </Border>
 
             <!-- body rows -->
             <ItemsControl ItemsSource="{Binding Rows}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:MetricTableRow">
-                        <Grid ColumnDefinitions="0.6*,1.8*,1.8*,0.5*" Margin="0,1">
-                            <TextBlock Grid.Column="0" Text="{Binding Category}" FontSize="10" />
-                            <TextBlock Grid.Column="1" Text="{Binding Metric}"
-                                       FontSize="10"
-                                       TextWrapping="Wrap" />
-                            <TextBlock Grid.Column="2" Text="{Binding Value}"
-                                       FontSize="10"
-                                       HorizontalAlignment="Right"
-                                       TextWrapping="Wrap"
-                                       Foreground="{DynamicResource MetricValueBrush}" />
-                            <TextBlock Grid.Column="3" Text="{Binding Unit}"
-                                       FontSize="10"
-                                       HorizontalAlignment="Right"
-                                       Foreground="{DynamicResource MetricValueBrush}" />
-                        </Grid>
+                        <Border BorderBrush="{DynamicResource SeparatorBrush}"
+                                BorderThickness="0,0,0,1"
+                                Padding="0,4">
+                            <Grid ColumnDefinitions="0.6*,1.8*,1.8*,0.5*">
+                                <TextBlock Grid.Column="0" Text="{Binding Category}" FontSize="10" />
+                                <TextBlock Grid.Column="1" Text="{Binding Metric}"
+                                           FontSize="10"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Grid.Column="2" Text="{Binding Value}"
+                                           FontSize="10"
+                                           HorizontalAlignment="Right"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource MetricValueBrush}" />
+                                <TextBlock Grid.Column="3" Text="{Binding Unit}"
+                                           FontSize="10"
+                                           HorizontalAlignment="Right"
+                                           Foreground="{DynamicResource MetricValueBrush}" />
+                            </Grid>
+                        </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>

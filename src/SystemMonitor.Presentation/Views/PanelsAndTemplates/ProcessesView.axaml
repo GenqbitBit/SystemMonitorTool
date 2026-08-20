@@ -5,52 +5,65 @@
              xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
              x:Class="SystemMonitor.Presentation.Views.PanelsAndTemplates.ProcessesView">
 
-    <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Top" Spacing="4">
+    <Border BorderBrush="{DynamicResource PanelAccentBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="6"
+            Padding="12,10">
 
-        <TextBlock Text="{Binding Title, RelativeSource={RelativeSource AncestorType=views:ProcessesView}}"
-                FontSize="11"
-                Opacity="0.6"
-                HorizontalAlignment="Center" />
+        <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Top" Spacing="6">
 
-        <Grid ColumnDefinitions="*,Auto,Auto" Margin="2,0,2,2">
-            <TextBlock Grid.Column="0" Text="PROCESS" FontSize="9" FontWeight="SemiBold" Opacity="0.5" />
-            <TextBlock Grid.Column="1" Text="CPU"     FontSize="9" FontWeight="SemiBold" Opacity="0.5" HorizontalAlignment="Right" Margin="0,0,10,0" />
-            <TextBlock Grid.Column="2" Text="MEMORY"  FontSize="9" FontWeight="SemiBold" Opacity="0.5" HorizontalAlignment="Right" />
-        </Grid>
+            <TextBlock Text="{Binding Title, RelativeSource={RelativeSource AncestorType=views:ProcessesView}}"
+                    FontSize="12"
+                    FontWeight="Bold"
+                    Foreground="{DynamicResource MetricValueBrush}"
+                    HorizontalAlignment="Center" />
 
-        <Rectangle Height="1" Fill="Gray" Opacity="0.25" Margin="2,0,2,2" />
+            <Border BorderBrush="{DynamicResource SeparatorBrush}"
+                    BorderThickness="0,0,0,1"
+                    Padding="2,0,2,6">
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                    <TextBlock Grid.Column="0" Text="PROCESS" FontSize="9" FontWeight="SemiBold" Opacity="0.6" />
+                    <TextBlock Grid.Column="1" Text="CPU"     FontSize="9" FontWeight="SemiBold" Opacity="0.6" HorizontalAlignment="Right" Margin="0,0,10,0" />
+                    <TextBlock Grid.Column="2" Text="MEMORY"  FontSize="9" FontWeight="SemiBold" Opacity="0.6" HorizontalAlignment="Right" />
+                </Grid>
+            </Border>
 
-        <ItemsControl ItemsSource="{Binding Processes, RelativeSource={RelativeSource AncestorType=views:ProcessesView}}">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="models:ProcessInfo">
-                    <Grid ColumnDefinitions="*,Auto,Auto" Margin="2,1">
-                        <TextBlock Grid.Column="0"
-                                Text="{Binding Name}"
-                                FontWeight="SemiBold"
-                                FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=10}"
-                                TextTrimming="CharacterEllipsis"
-                                ToolTip.Tip="{Binding Name}" />
+            <ItemsControl ItemsSource="{Binding Processes, RelativeSource={RelativeSource AncestorType=views:ProcessesView}}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="models:ProcessInfo">
+                        <Border BorderBrush="{DynamicResource SeparatorBrush}"
+                                BorderThickness="0,0,0,1"
+                                Padding="2,5">
+                            <Grid ColumnDefinitions="*,Auto,Auto">
+                                <TextBlock Grid.Column="0"
+                                        Text="{Binding Name}"
+                                        FontWeight="SemiBold"
+                                        FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=10}"
+                                        TextTrimming="CharacterEllipsis"
+                                        ToolTip.Tip="{Binding Name}" />
 
-                        <TextBlock Grid.Column="1"
-                                FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=11}"
-                                Margin="8,0,10,0"
-                                HorizontalAlignment="Right">
-                            <Run Text="{Binding CpuPercent}" Foreground="{DynamicResource MetricValueBrush}" />
-                            <Run Text="%" Foreground="{DynamicResource MetricValueBrush}" />
-                        </TextBlock>
+                                <TextBlock Grid.Column="1"
+                                        FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=11}"
+                                        Margin="8,0,10,0"
+                                        HorizontalAlignment="Right">
+                                    <Run Text="{Binding CpuPercent}" Foreground="{DynamicResource MetricValueBrush}" />
+                                    <Run Text="%" Foreground="{DynamicResource MetricValueBrush}" />
+                                </TextBlock>
 
-                        <TextBlock Grid.Column="2"
-                                FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=10}"
-                                Margin="8,0,0,0"
-                                HorizontalAlignment="Right">
-                            <Run Text="{Binding WorkingSetMB}" Foreground="{DynamicResource MetricValueBrush}" />
-                            <Run Text=" MB" Foreground="{DynamicResource MetricValueBrush}" />
-                        </TextBlock>
-                    </Grid>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+                                <TextBlock Grid.Column="2"
+                                        FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=10}"
+                                        Margin="8,0,0,0"
+                                        HorizontalAlignment="Right">
+                                    <Run Text="{Binding WorkingSetMB}" Foreground="{DynamicResource MetricValueBrush}" />
+                                    <Run Text=" MB" Foreground="{DynamicResource MetricValueBrush}" />
+                                </TextBlock>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
-    </StackPanel>
+        </StackPanel>
+    </Border>
 
 </UserControl>
