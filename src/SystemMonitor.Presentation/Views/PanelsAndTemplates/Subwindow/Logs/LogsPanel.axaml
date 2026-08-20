@@ -5,80 +5,110 @@
              x:DataType="vm:LogsPanelViewModel"
              Background="Transparent">
 
-    <DockPanel Margin="10">
+    <UserControl.Styles>
+        <Style Selector="Button">
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource SeparatorBrush}"/>
+        </Style>
+        <Style Selector="Button:pointerover /template/ ContentPresenter">
+            <Setter Property="Opacity" Value="0.85"/>
+        </Style>
+    </UserControl.Styles>
 
-        <!-- Toolbar -->
-        <StackPanel DockPanel.Dock="Top"
-                    Orientation="Horizontal"
-                    Spacing="8"
-                    Margin="0,0,0,10">
+    <Border BorderBrush="{DynamicResource PanelAccentBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="6"
+            Margin="10"
+            Padding="14,12">
 
-            <Button Content="⟳ Refresh"
-                    Command="{Binding RefreshCommand}"
-                    FontSize="10"
-                    Foreground="{DynamicResource MetricValueBrush}"/>
+        <DockPanel>
 
-            <Button Content="Delete Logs"
-                    Command="{Binding DeleteLogsCommand}"
-                    FontSize="10"
-                    Foreground="{DynamicResource MetricValueBrush}"
-                    Background="{DynamicResource CriticalBrush}"/>
-        </StackPanel>
+            <!-- Toolbar -->
+            <StackPanel DockPanel.Dock="Top"
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        Margin="0,0,0,12">
 
-        <!-- Column headers -->
-        <StackPanel DockPanel.Dock="Top"
-                    Orientation="Horizontal"
-                    Spacing="5"
+                <Button Content="⟳ Refresh"
+                        Command="{Binding RefreshCommand}"
+                        FontSize="10"
+                        Foreground="{DynamicResource MetricValueBrush}"/>
+
+                <Button Content="🗑 Delete Logs"
+                        Command="{Binding DeleteLogsCommand}"
+                        FontSize="10"
+                        Foreground="White"
+                        Background="{DynamicResource CriticalBrush}"
+                        BorderThickness="0"/>
+            </StackPanel>
+
+            <!-- Column headers -->
+            <Border DockPanel.Dock="Top"
+                    BorderBrush="{DynamicResource PanelAccentBorderBrush}"
+                    BorderThickness="0,0,0,1"
+                    Padding="6,0,6,8"
                     Margin="0,0,0,4">
+                <Grid ColumnDefinitions="150,120,*">
+                    <TextBlock Grid.Column="0" Text="TIMESTAMP" FontSize="10" FontWeight="Bold" Opacity="0.6"/>
+                    <TextBlock Grid.Column="1" Text="TYPE"      FontSize="10" FontWeight="Bold" Opacity="0.6"/>
+                    <TextBlock Grid.Column="2" Text="MESSAGE"   FontSize="10" FontWeight="Bold" Opacity="0.6"/>
+                </Grid>
+            </Border>
 
-            <TextBlock Text="Timestamp"
-                       Width="150"
-                       FontSize="10"
-                       FontWeight="Bold"
-                       Foreground="{DynamicResource SeparatorLineBrush}"/>
+            <ListBox ItemsSource="{Binding Entries}"
+                     Background="Transparent"
+                     BorderThickness="0">
 
-            <TextBlock Text="Type"
-                       Width="120"
-                       FontSize="10"
-                       FontWeight="Bold"
-                       Foreground="{DynamicResource SeparatorLineBrush}"/>
+                <ListBox.Styles>
+                    <Style Selector="ListBoxItem">
+                        <Setter Property="Padding" Value="6,7"/>
+                        <Setter Property="CornerRadius" Value="4"/>
+                    </Style>
+                    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+                        <Setter Property="Background" Value="{DynamicResource PanelAccentBorderBrush}"/>
+                        <Setter Property="Opacity" Value="0.15"/>
+                    </Style>
+                </ListBox.Styles>
 
-            <TextBlock Text="Message"
-                       FontSize="10"
-                       FontWeight="Bold"
-                       Foreground="{DynamicResource SeparatorLineBrush}"/>
-        </StackPanel>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Border BorderBrush="{DynamicResource SeparatorBrush}"
+                                BorderThickness="0,0,0,1">
+                            <Grid ColumnDefinitions="150,120,*" Margin="0,0,0,6">
 
-        <ListBox ItemsSource="{Binding Entries}"
-                 Background="Transparent">
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding Timestamp, StringFormat='{}{0:M/d/yyyy h:mm tt}'}"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource MetricValueBrush}"/>
 
-            <ListBox.ItemTemplate>
-                <DataTemplate>
+                                <Border Grid.Column="1"
+                                        Background="{DynamicResource PanelAccentBorderBrush}"
+                                        Opacity="0.85"
+                                        CornerRadius="10"
+                                        Padding="8,2"
+                                        HorizontalAlignment="Left">
+                                    <TextBlock Text="{Binding Type}"
+                                               FontSize="9"
+                                               FontWeight="SemiBold"
+                                               Foreground="White"/>
+                                </Border>
 
-                    <StackPanel Orientation="Horizontal"
-                                Spacing="5">
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding Message}"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource MetricValueBrush}"
+                                           TextWrapping="Wrap"/>
 
-                        <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:M/d/yyyy h:mm tt}'}"
-                                   Width="150"
-                                   FontSize="10"
-                                   Foreground="{DynamicResource MetricValueBrush}"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
 
-                        <TextBlock Text="{Binding Type}"
-                                   Width="120"
-                                   FontSize="10"
-                                   Foreground="{DynamicResource MetricValueBrush}"/>
+            </ListBox>
 
-                        <TextBlock Text="{Binding Message}"
-                                   FontSize="10"
-                                   Foreground="{DynamicResource MetricValueBrush}"/>
-
-                    </StackPanel>
-
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-
-        </ListBox>
-
-    </DockPanel>
+        </DockPanel>
+    </Border>
 
 </UserControl>
