@@ -5,17 +5,17 @@ namespace SystemMonitor.Infrastructure.Theming;
 
 public static class BuiltInThemes
 {
-    public static readonly ThemeDefinition NeonDark = new()
+    public static readonly ThemeDefinition AmethystDark = new()
     {
-        Id = "neon-dark",
-        DisplayName = "Neon Dark",
+        Id = "amethyst-dark",
+        DisplayName = "Amethyst Dark",
         Chrome = new ThemeChromeColors
         {
-            WindowBorder = ThemeColor.FromHex("#FFFFFF"),
-            SeparatorLine = ThemeColor.FromHex("#F6F6F6"),
+            WindowBorder = ThemeColor.FromHex("#5B21B6"),
+            SeparatorLine = ThemeColor.FromHex("#2E1065"),
             LabelBackground = ThemeColor.FromHex("#000000"),
             MetricValue = ThemeColor.FromHex("#C084FC"),
-            NavTabBackground = ThemeColor.FromHex("#000000"),
+            NavTabBackground = ThemeColor.FromHex("#321a36"),
             NavTabHoverBackground = ThemeColor.FromHex("#4C1D95"),
             NavTabActiveBackground = ThemeColor.FromHex("#6D28D9"),
             PanelAccentBorder = ThemeColor.FromHex("#A855F7"),
@@ -38,8 +38,8 @@ public static class BuiltInThemes
         DisplayName = "Ocean Light",
         Chrome = new ThemeChromeColors
         {
-            WindowBorder = ThemeColor.FromHex("#3A4A5C"),
-            SeparatorLine = ThemeColor.FromHex("#D8E3EA"),
+            WindowBorder = ThemeColor.FromHex("#146C94"),
+            SeparatorLine = ThemeColor.FromHex("#043A54"),
             LabelBackground = ThemeColor.FromHex("#1B2A38"),
             MetricValue = ThemeColor.FromHex("#0FA3B1"),
             NavTabBackground = ThemeColor.FromHex("#1B2A38"),
@@ -65,11 +65,11 @@ public static class BuiltInThemes
         DisplayName = "Brown Coffee",
         Chrome = new ThemeChromeColors
         {
-            WindowBorder = ThemeColor.FromHex("#D7C4B7"),
-            SeparatorLine = ThemeColor.FromHex("#3D2E2B"),
+            WindowBorder = ThemeColor.FromHex("#3D2E2B"),
+            SeparatorLine = ThemeColor.FromHex("#6B4423"),
             LabelBackground = ThemeColor.FromHex("#120C0A"),
             MetricValue = ThemeColor.FromHex("#E2A76F"),
-            NavTabBackground = ThemeColor.FromHex("#120C0A"),
+            NavTabBackground = ThemeColor.FromHex("#3D2A24"),
             NavTabHoverBackground = ThemeColor.FromHex("#3D2A24"),
             NavTabActiveBackground = ThemeColor.FromHex("#5C3A21"),
             PanelAccentBorder = ThemeColor.FromHex("#A0522D"),
@@ -88,7 +88,7 @@ public static class BuiltInThemes
 
     public static readonly IReadOnlyList<ThemeDefinition> All = new[]
     {
-        NeonDark,
+        AmethystDark,
         OceanLight,
         BrownCoffee,
     };

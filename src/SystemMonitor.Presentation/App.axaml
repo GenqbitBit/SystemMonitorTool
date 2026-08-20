@@ -14,28 +14,28 @@
                 <ResourceInclude Source="avares://SystemMonitor.Presentation/Resources/AppIcons.axaml"/>
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- Fallback theme resources (Neon Dark).
+                        <!-- Fallback theme resources (Amethyst Dark).
                  ThemeResourceApplier.Apply replaces these with the active theme. -->
 
             <SolidColorBrush x:Key="MetricValueBrush" Color="#C084FC" />
-            <SolidColorBrush x:Key="WindowBorderBrush" Color="White" />
-            <SolidColorBrush x:Key="SeparatorBrush" Color="#F6F6F6" />
-            <SolidColorBrush x:Key="LabelBackgroundBrush" Color="Black" />
+            <SolidColorBrush x:Key="WindowBorderBrush" Color="#5B21B6" />
+            <SolidColorBrush x:Key="SeparatorBrush" Color="#2E1065" />
+            <SolidColorBrush x:Key="LabelBackgroundBrush" Color="#000000" />
 
-            <SolidColorBrush x:Key="NavTabBackground" Color="Black" />
-            <SolidColorBrush x:Key="NavTabHoverBackground" Color="#2A4FB0" />
-            <SolidColorBrush x:Key="NavTabActiveBackground" Color="#1F1F1F" />
+            <SolidColorBrush x:Key="NavTabBackground" Color="#321a36" />
+            <SolidColorBrush x:Key="NavTabHoverBackground" Color="#4C1D95" />
+            <SolidColorBrush x:Key="NavTabActiveBackground" Color="#6D28D9" />
 
             <SolidColorBrush x:Key="PanelAccentBorderBrush" Color="#A855F7" />
 
-            <SolidColorBrush x:Key="Accent1Brush" Color="#C084FC" />
-            <SolidColorBrush x:Key="Accent2Brush" Color="#A855F7" />
-            <SolidColorBrush x:Key="Accent3Brush" Color="#7C3AED" />
-            <SolidColorBrush x:Key="Accent4Brush" Color="#5B21B6" />
+            <SolidColorBrush x:Key="Accent1Brush" Color="#B366F0" />
+            <SolidColorBrush x:Key="Accent2Brush" Color="#9333EA" />
+            <SolidColorBrush x:Key="Accent3Brush" Color="#6D28D9" />
+            <SolidColorBrush x:Key="Accent4Brush" Color="#4C1D95" />
 
-            <SolidColorBrush x:Key="PositiveBrush" Color="#C084FC" />
-            <SolidColorBrush x:Key="WarningBrush" Color="#9333EA" />
-            <SolidColorBrush x:Key="CriticalBrush" Color="#4C1D95" />
+            <SolidColorBrush x:Key="PositiveBrush" Color="#C4A0FF" />
+            <SolidColorBrush x:Key="WarningBrush" Color="#5B21B6" />
+            <SolidColorBrush x:Key="CriticalBrush" Color="#2E1065" />
 
             <converters:ScaleFontSizeConverter x:Key="ScaleFontSize" />
             <converters:NetworkRateConverter x:Key="NetworkRate" />
