@@ -36,7 +36,7 @@
                         FontSize="10"
                         Foreground="{DynamicResource MetricValueBrush}"/>
 
-                <Button Content="🗑 Delete Logs"
+                <Button Content="Delete Logs"
                         Command="{Binding DeleteLogsCommand}"
                         FontSize="10"
                         Foreground="White"

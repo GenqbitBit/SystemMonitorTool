@@ -39,7 +39,7 @@ public static class BuiltInThemes
         Chrome = new ThemeChromeColors
         {
             WindowBorder = ThemeColor.FromHex("#8C2E86"),
-            SeparatorLine = ThemeColor.FromHex("#2B9BA8"),
+            SeparatorLine = ThemeColor.FromHex("#1e6d75"),
             LabelBackground = ThemeColor.FromHex("#0C0A14"),
             MetricValue = ThemeColor.FromHex("#3ECBDA"),
             NavTabBackground = ThemeColor.FromHex("#0C0A14"),
@@ -66,7 +66,7 @@ public static class BuiltInThemes
         Chrome = new ThemeChromeColors
         {
             WindowBorder = ThemeColor.FromHex("#4C566A"),
-            SeparatorLine = ThemeColor.FromHex("#4C566A"),
+            SeparatorLine = ThemeColor.FromHex("#3e4757"),
             LabelBackground = ThemeColor.FromHex("#2E3440"),
             MetricValue = ThemeColor.FromHex("#88C0D0"),
             NavTabBackground = ThemeColor.FromHex("#2E3440"),
@@ -147,7 +147,7 @@ public static class BuiltInThemes
         Chrome = new ThemeChromeColors
         {
             WindowBorder = ThemeColor.FromHex("#F9A8D4"),
-            SeparatorLine = ThemeColor.FromHex("#FBCFE8"),
+            SeparatorLine = ThemeColor.FromHex("#831843"),
             LabelBackground = ThemeColor.FromHex("#3B1028"),
             MetricValue = ThemeColor.FromHex("#F472B6"),
             NavTabBackground = ThemeColor.FromHex("#3B1028"),
