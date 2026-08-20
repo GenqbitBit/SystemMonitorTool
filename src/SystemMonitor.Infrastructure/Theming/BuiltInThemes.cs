@@ -32,6 +32,60 @@ public static class BuiltInThemes
         },
     };
 
+    public static readonly ThemeDefinition CyberSlate = new()
+    {
+        Id = "cyber-slate",
+        DisplayName = "Cyber Slate",
+        Chrome = new ThemeChromeColors
+        {
+            WindowBorder = ThemeColor.FromHex("#8C2E86"),
+            SeparatorLine = ThemeColor.FromHex("#2B9BA8"),
+            LabelBackground = ThemeColor.FromHex("#0C0A14"),
+            MetricValue = ThemeColor.FromHex("#3ECBDA"),
+            NavTabBackground = ThemeColor.FromHex("#0C0A14"),
+            NavTabHoverBackground = ThemeColor.FromHex("#211B38"),
+            NavTabActiveBackground = ThemeColor.FromHex("#3D2C7A"),
+            PanelAccentBorder = ThemeColor.FromHex("#7A4FB8"),
+        },
+        Roles = new ThemeRolePalette
+        {
+            Accent1 = ThemeColor.FromHex("#3ECBDA"),
+            Accent2 = ThemeColor.FromHex("#7A4FB8"),
+            Accent3 = ThemeColor.FromHex("#8C2E86"),
+            Accent4 = ThemeColor.FromHex("#3D2C7A"),
+            Positive = ThemeColor.FromHex("#3FCFA0"),
+            Warning = ThemeColor.FromHex("#D9B23C"),
+            Critical = ThemeColor.FromHex("#8C2E86"),
+        },
+    };
+
+    public static readonly ThemeDefinition Nordic = new()
+    {
+        Id = "nordic",
+        DisplayName = "Nordic",
+        Chrome = new ThemeChromeColors
+        {
+            WindowBorder = ThemeColor.FromHex("#4C566A"),
+            SeparatorLine = ThemeColor.FromHex("#4C566A"),
+            LabelBackground = ThemeColor.FromHex("#2E3440"),
+            MetricValue = ThemeColor.FromHex("#88C0D0"),
+            NavTabBackground = ThemeColor.FromHex("#2E3440"),
+            NavTabHoverBackground = ThemeColor.FromHex("#3B4252"),
+            NavTabActiveBackground = ThemeColor.FromHex("#434C5E"),
+            PanelAccentBorder = ThemeColor.FromHex("#5E81AC"),
+        },
+        Roles = new ThemeRolePalette
+        {
+            Accent1 = ThemeColor.FromHex("#88C0D0"),
+            Accent2 = ThemeColor.FromHex("#81A1C1"),
+            Accent3 = ThemeColor.FromHex("#5E81AC"),
+            Accent4 = ThemeColor.FromHex("#B48EAD"),
+            Positive = ThemeColor.FromHex("#A3BE8C"),
+            Warning = ThemeColor.FromHex("#EBCB8B"),
+            Critical = ThemeColor.FromHex("#BF616A"),
+        },
+    };
+
     public static readonly ThemeDefinition OceanLight = new()
     {
         Id = "ocean-light",
@@ -86,10 +140,40 @@ public static class BuiltInThemes
         },
     };
 
+    public static readonly ThemeDefinition RoseQuartz = new()
+    {
+        Id = "rose-quartz",
+        DisplayName = "The Ferdy Special",
+        Chrome = new ThemeChromeColors
+        {
+            WindowBorder = ThemeColor.FromHex("#F9A8D4"),
+            SeparatorLine = ThemeColor.FromHex("#FBCFE8"),
+            LabelBackground = ThemeColor.FromHex("#3B1028"),
+            MetricValue = ThemeColor.FromHex("#F472B6"),
+            NavTabBackground = ThemeColor.FromHex("#3B1028"),
+            NavTabHoverBackground = ThemeColor.FromHex("#831843"),
+            NavTabActiveBackground = ThemeColor.FromHex("#BE185D"),
+            PanelAccentBorder = ThemeColor.FromHex("#EC4899"),
+        },
+        Roles = new ThemeRolePalette
+        {
+            Accent1 = ThemeColor.FromHex("#F472B6"),
+            Accent2 = ThemeColor.FromHex("#EC4899"),
+            Accent3 = ThemeColor.FromHex("#BE185D"),
+            Accent4 = ThemeColor.FromHex("#831843"),
+            Positive = ThemeColor.FromHex("#86EFAC"),
+            Warning = ThemeColor.FromHex("#FDE047"),
+            Critical = ThemeColor.FromHex("#9F1239"),
+        },
+    };
+
     public static readonly IReadOnlyList<ThemeDefinition> All = new[]
     {
         AmethystDark,
         OceanLight,
         BrownCoffee,
+        CyberSlate,
+        Nordic,
+        RoseQuartz,
     };
 }
