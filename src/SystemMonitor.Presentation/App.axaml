@@ -37,7 +37,6 @@
             <SolidColorBrush x:Key="WarningBrush" Color="#5B21B6" />
             <SolidColorBrush x:Key="CriticalBrush" Color="#2E1065" />
 
-            <converters:ScaleFontSizeConverter x:Key="ScaleFontSize" />
             <converters:NetworkRateConverter x:Key="NetworkRate" />
         </ResourceDictionary>
     </Application.Resources>

@@ -15,47 +15,54 @@
         Height="550"
         MinWidth="850"
         MinHeight="550"
-        CanResize="False">
+        CanResize="True">
 
     <Design.DataContext>
         <vm:MainWindowViewModel />
     </Design.DataContext>
 
     <!-- Root -->
-    <Grid RowDefinitions="96*,4*"
+    <Grid RowDefinitions="98*,2*"
           RowSpacing="2"
-          Margin="5,10,5,5">
+          Margin="5,10,5,5"
+          ClipToBounds="True">
 
         <!-- Navigation -->
-        <ItemsControl Grid.Row="0"
-                      ItemsSource="{Binding NavItems}"
-                      HorizontalAlignment="Left"
+        <ScrollViewer Grid.Row="0"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Hidden"
+                      HorizontalAlignment="Stretch"
                       VerticalAlignment="Top"
-                      Margin="6,-8,0,0"
+                      Margin="6,2,0,6"
                       ZIndex="10">
+            <ItemsControl ItemsSource="{Binding NavItems}"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Top">
 
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal"
-                                Spacing="6"/>
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="6"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
 
-            <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:NavItemViewModel">
-                    <ToggleButton Content="{Binding Label}"
-                                  Command="{Binding SelectCommand}"
-                                  IsChecked="{Binding IsActive}"
-                                  Classes="nav-tab"/>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:NavItemViewModel">
+                        <ToggleButton Content="{Binding Label}"
+                                      Command="{Binding SelectCommand}"
+                                      IsChecked="{Binding IsActive}"
+                                      Classes="nav-tab"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
 
         <!-- Grid0 -->
         <Border Grid.Row="0"
                 BorderBrush="{DynamicResource WindowBorderBrush}"
                 BorderThickness="1"
-                CornerRadius="1">
+            CornerRadius="1"
+            Margin="0,6,0,0">
 
             <Grid Margin="0">
 
@@ -427,7 +434,7 @@
                                                 <TextBlock Text="[ Cpu"
                                                            FontSize="11"
                                                            VerticalAlignment="Center"
-                                                           Width="40"/>
+                                                           MinWidth="40"/>
 
                                                 <panels:CategoryMetricsView
                                                     MetricId="cpu.usage"
@@ -438,17 +445,17 @@
                                                     ValueFontWeight="Bold"
                                                     ValueForeground="{DynamicResource MetricValueBrush}"
                                                     VerticalAlignment="Center"
-                                                    Width="40"/>
+                                                    MinWidth="40"/>
 
                                                 <TextBlock Text="]"
                                                            FontSize="11"
                                                            VerticalAlignment="Center"
-                                                           Width="5"/>
+                                                           MinWidth="5"/>
 
                                                 <TextBlock Text="Available:"
                                                            FontSize="11"
                                                            VerticalAlignment="Center"
-                                                           Width="65"/>
+                                                           MinWidth="65"/>
 
                                                 <panels:CategoryMetricsView
                                                     MetricId="cpu.available"
@@ -459,7 +466,7 @@
                                                     ValueFontWeight="Bold"
                                                     ValueForeground="{DynamicResource MetricValueBrush}"
                                                     VerticalAlignment="Center"
-                                                    Width="40"/>
+                                                    MinWidth="40"/>
 
                                                 <TextBlock Text="Cores:"
                                                            FontSize="9"
@@ -637,7 +644,7 @@
                                                 <TextBlock Text="[ Mem"
                                                            FontSize="11"
                                                            VerticalAlignment="Center"
-                                                           Width="40"/>
+                                                           MinWidth="40"/>
 
                                                 <panels:CategoryMetricsView
                                                     MetricId="memory.usage"
@@ -648,17 +655,17 @@
                                                     ValueFontWeight="Bold"
                                                     ValueForeground="{DynamicResource MetricValueBrush}"
                                                     VerticalAlignment="Center"
-                                                    Width="40"/>
+                                                    MinWidth="40"/>
 
                                                 <TextBlock Text="]"
                                                            FontSize="12"
                                                            VerticalAlignment="Center"
-                                                           Width="5"/>
+                                                           MinWidth="5"/>
 
                                                 <TextBlock Text="Available:"
                                                            FontSize="11"
                                                            VerticalAlignment="Center"
-                                                           Width="65"/>
+                                                           MinWidth="65"/>
 
                                                 <panels:CategoryMetricsView
                                                     MetricId="memory.free"
@@ -669,7 +676,7 @@
                                                     ValueFontWeight="Bold"
                                                     ValueForeground="{DynamicResource MetricValueBrush}"
                                                     VerticalAlignment="Center"
-                                                    Width="60"/>
+                                                    MinWidth="60"/>
 
                                                 <TextBlock Text="Total:"
                                                            FontSize="9"
@@ -1336,7 +1343,8 @@
                            FontSize="12"
                            HorizontalAlignment="Left"
                            VerticalAlignment="Center"
-                           Text="Currently on Development | https://github.com/GenqbitBit/SystemMonitorTool"/>
+                           Text="Currently on Development | https://github.com/GenqbitBit/SystemMonitorTool"
+                           TextTrimming="CharacterEllipsis"/>
 
                 <TextBlock Grid.Column="1"
                             FontSize="12"

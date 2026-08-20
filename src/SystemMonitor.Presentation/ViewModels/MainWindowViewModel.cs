@@ -68,9 +68,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private string? integratedGpuModelId;
 
     [ObservableProperty]
-    private double _responsiveScale = 1.0;
-
-    [ObservableProperty]
     private ObservableCollection<GpuDeviceDisplayInfo> detectedGpus = new();
 
     [ObservableProperty]
@@ -358,22 +355,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
             update();
         }
-    }
-
-    public void UpdateResponsiveScale(
-        double windowWidth,
-        double windowHeight)
-    {
-        const double designWidth = 850;
-
-        double raw = windowWidth / designWidth;
-
-        double dampened = 1.0 + (raw - 1.0) * 0.25;
-
-        ResponsiveScale = Math.Clamp(
-            dampened,
-            0.9,
-            1.2);
     }
 
     public void Dispose()

@@ -2,7 +2,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:models="using:SystemMonitor.Domain.Models"
              xmlns:views="using:SystemMonitor.Presentation.Views.PanelsAndTemplates"
-             xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
              x:Class="SystemMonitor.Presentation.Views.PanelsAndTemplates.MemoryProcessesView">
 
     <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Top" Spacing="4">
@@ -25,12 +24,12 @@
                     <Grid ColumnDefinitions="*,Auto" Margin="2,1">
                         <TextBlock Grid.Column="0"
                                 Text="{Binding Name}"
-                                FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=10}"
+                                FontSize="10"
                                 TextTrimming="CharacterEllipsis"
                                 ToolTip.Tip="{Binding Name}" />
 
                         <TextBlock Grid.Column="1"
-                                FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=10}"
+                                FontSize="10"
                                 Margin="8,0,0,0"
                                 HorizontalAlignment="Right">
                             <Run Text="{Binding WorkingSetMB}" Foreground="{DynamicResource MetricValueBrush}" />

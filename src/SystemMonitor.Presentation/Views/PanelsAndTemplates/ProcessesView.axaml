@@ -2,7 +2,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:models="using:SystemMonitor.Domain.Models"
              xmlns:views="using:SystemMonitor.Presentation.Views.PanelsAndTemplates"
-             xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
              x:Class="SystemMonitor.Presentation.Views.PanelsAndTemplates.ProcessesView">
 
     <Border BorderBrush="{DynamicResource PanelAccentBorderBrush}"
@@ -38,12 +37,12 @@
                                 <TextBlock Grid.Column="0"
                                         Text="{Binding Name}"
                                         FontWeight="SemiBold"
-                                        FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=10}"
+                                        FontSize="10"
                                         TextTrimming="CharacterEllipsis"
                                         ToolTip.Tip="{Binding Name}" />
 
                                 <TextBlock Grid.Column="1"
-                                        FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=11}"
+                                        FontSize="11"
                                         Margin="8,0,10,0"
                                         HorizontalAlignment="Right">
                                     <Run Text="{Binding CpuPercent}" Foreground="{DynamicResource MetricValueBrush}" />
@@ -51,7 +50,7 @@
                                 </TextBlock>
 
                                 <TextBlock Grid.Column="2"
-                                        FontSize="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ResponsiveScale, Converter={StaticResource ScaleFontSize}, ConverterParameter=10}"
+                                        FontSize="10"
                                         Margin="8,0,0,0"
                                         HorizontalAlignment="Right">
                                     <Run Text="{Binding WorkingSetMB}" Foreground="{DynamicResource MetricValueBrush}" />
