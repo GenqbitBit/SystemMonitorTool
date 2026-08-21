@@ -21,7 +21,7 @@ namespace SystemMonitor.Presentation.Theming;
 
 public sealed class AnimatedBackgroundControl : UserControl, IDisposable
 {
-    private const int CacheCapacity = 3;
+    private const int CacheCapacity = 1;
     private const int MaxBackgroundWidth = 800;
     private const int MaxBackgroundHeight = 500;
     private const int MinimumFrameDelayMilliseconds = 80;
@@ -30,10 +30,15 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
     private readonly AvaloniaImage _image = new();
     private readonly DispatcherTimer _timer = new(DispatcherPriority.Render);
     private readonly Dictionary<string, FrameSet> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _loadTasksLock = new();
+    private readonly List<Task> _loadTasks = new();
+    private readonly SemaphoreSlim _loadGate = new(1, 1);
     private FrameSet? _currentFrameSet;
     private string? _currentAssetName;
     private CancellationTokenSource? _loadCancellation;
+    private Task? _loadTask;
     private int _frameIndex;
+    private bool _disposed;
 
     public static readonly StyledProperty<string?> AssetNameProperty =
         AvaloniaProperty.Register<AnimatedBackgroundControl, string?>(nameof(AssetName));
@@ -62,13 +67,23 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
 
     public void SetAsset(string assetName)
     {
+        if (_disposed)
+            return;
+
         var cancellation = new CancellationTokenSource();
         var previousCancellation = Interlocked.Exchange(ref _loadCancellation, cancellation);
-        previousCancellation?.Cancel();
+        try
+        {
+            previousCancellation?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
 
         // 1. Instant cache hit check
         if (_cache.TryGetValue(assetName, out var cached))
         {
+            DisposeCancellationSource(cancellation);
             ApplyFrameSet(cached, assetName);
             return;
         }
@@ -79,7 +94,20 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
         ApplyFrameSet(newFrameSet, assetName);
 
         // 3. Stream frames progressively in background thread
-        _ = StreamFramesAsync(assetName, newFrameSet, cancellation.Token);
+        var loadTask = StreamFramesAsync(assetName, newFrameSet, cancellation);
+        lock (_loadTasksLock)
+            _loadTasks.Add(loadTask);
+
+        _loadTask = loadTask;
+        _ = loadTask.ContinueWith(
+            completedTask =>
+            {
+                lock (_loadTasksLock)
+                    _loadTasks.Remove(completedTask);
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
 
         TrimCache();
     }
@@ -87,10 +115,16 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
     private async Task StreamFramesAsync(
         string assetName,
         FrameSet frameSet,
-        CancellationToken cancellation)
+        CancellationTokenSource cancellationSource)
     {
+        var cancellation = cancellationSource.Token;
+        var enteredLoadGate = false;
+
         try
         {
+            await _loadGate.WaitAsync(cancellation).ConfigureAwait(false);
+            enteredLoadGate = true;
+
             await Task.Run(() =>
             {
                 var uri = new Uri($"avares://SystemMonitor.Presentation/Assets/{Uri.EscapeDataString(assetName)}");
@@ -106,6 +140,7 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
                 var targetHeight = (int)Math.Max(1, source.Height * scale);
 
                 using var canvas = new SixLabors.ImageSharp.Image<Bgra32>(targetWidth, targetHeight);
+                var pixels = new byte[targetWidth * targetHeight * 4];
 
                 for (var index = 0; index < source.Frames.Count; index++)
                 {
@@ -125,41 +160,53 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
                         PixelFormat.Bgra8888,
                         AlphaFormat.Premul);
 
-                    using (var buffer = writeableBitmap.Lock())
+                    var ownsBitmap = true;
+                    try
                     {
-                        var pixels = new byte[canvas.Width * canvas.Height * 4];
-                        canvas.CopyPixelDataTo(pixels);
-                        Marshal.Copy(pixels, 0, buffer.Address, pixels.Length);
-                    }
-
-                    var delayMs = Math.Clamp(
-                        isGif && delay > 0 ? delay * 10 : 100,
-                        MinimumFrameDelayMilliseconds,
-                        MaximumFrameDelayMilliseconds);
-
-                    // Append frame to current live animation set
-                    frameSet.AddFrame(writeableBitmap, TimeSpan.FromMilliseconds(delayMs));
-
-                    // Immediately push frame 0 to screen & kickstart timer on UI thread
-                    if (index == 0)
-                    {
-                        Dispatcher.UIThread.Post(() =>
+                        using (var buffer = writeableBitmap.Lock())
                         {
-                            if (ReferenceEquals(_currentFrameSet, frameSet))
+                            canvas.CopyPixelDataTo(pixels);
+                            Marshal.Copy(pixels, 0, buffer.Address, pixels.Length);
+                        }
+
+                        var delayMs = Math.Clamp(
+                            isGif && delay > 0 ? delay * 10 : 100,
+                            MinimumFrameDelayMilliseconds,
+                            MaximumFrameDelayMilliseconds);
+
+                        if (!frameSet.TryAddFrame(writeableBitmap, TimeSpan.FromMilliseconds(delayMs), cancellation))
+                        {
+                            cancellation.ThrowIfCancellationRequested();
+                            continue;
+                        }
+
+                        ownsBitmap = false;
+
+                        if (index == 0)
+                        {
+                            Dispatcher.UIThread.Post(() =>
                             {
-                                _image.Source = writeableBitmap;
-                                if (!_timer.IsEnabled)
+                                if (!_disposed && ReferenceEquals(_currentFrameSet, frameSet))
                                 {
-                                    _timer.Interval = TimeSpan.FromMilliseconds(delayMs);
-                                    _timer.Start();
+                                    _image.Source = frameSet.GetFrame(0);
+                                    if (!_timer.IsEnabled)
+                                    {
+                                        _timer.Interval = TimeSpan.FromMilliseconds(delayMs);
+                                        _timer.Start();
+                                    }
                                 }
-                            }
-                        });
+                            });
+                        }
+                    }
+                    finally
+                    {
+                        if (ownsBitmap)
+                            writeableBitmap.Dispose();
                     }
                 }
 
                 frameSet.IsFullyLoaded = true;
-            }, cancellation);
+            }, cancellation).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -168,6 +215,20 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
         {
             Trace.WriteLine($"Background theme '{assetName}' streaming failed: {ex}");
         }
+        finally
+        {
+            if (enteredLoadGate)
+                _loadGate.Release();
+
+            frameSet.DisposeIfIncomplete();
+            DisposeCancellationSource(cancellationSource);
+        }
+    }
+
+    private void DisposeCancellationSource(CancellationTokenSource cancellationSource)
+    {
+        Interlocked.CompareExchange(ref _loadCancellation, null, cancellationSource);
+        cancellationSource.Dispose();
     }
 
     private void ApplyFrameSet(FrameSet frameSet, string assetName)
@@ -233,8 +294,24 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
+        _image.Source = null;
         _loadCancellation?.Cancel();
         _timer.Stop();
+
+        try
+        {
+            _loadTask?.GetAwaiter().GetResult();
+
+            Task[] remainingTasks;
+            lock (_loadTasksLock)
+                remainingTasks = _loadTasks.ToArray();
+
+            Task.WaitAll(remainingTasks);
+        }
+        catch (OperationCanceledException)
+        {
+        }
 
         foreach (var frameSet in _cache.Values)
             frameSet.Dispose();
@@ -242,7 +319,9 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
         _cache.Clear();
         _currentFrameSet = null;
         _currentAssetName = null;
-        _image.Source = null;
+        _loadCancellation = null;
+        _loadTask = null;
+        _loadGate.Dispose();
     }
 
     private sealed class FrameSet : IDisposable
@@ -253,12 +332,24 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
 
         public bool IsFullyLoaded { get; set; }
 
-        public void AddFrame(Bitmap frame, TimeSpan delay)
+        public bool TryAddFrame(Bitmap frame, TimeSpan delay, CancellationToken cancellation)
         {
             lock (_lock)
             {
+                if (_disposed || cancellation.IsCancellationRequested)
+                    return false;
+
                 _frames.Add(frame);
                 _delays.Add(delay);
+                return true;
+            }
+        }
+
+        public Bitmap GetFrame(int index)
+        {
+            lock (_lock)
+            {
+                return _frames[index];
             }
         }
 
@@ -285,6 +376,10 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
         {
             lock (_lock)
             {
+                if (_disposed)
+                    return;
+
+                _disposed = true;
                 foreach (var frame in _frames)
                     frame.Dispose();
 
@@ -292,5 +387,13 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
                 _delays.Clear();
             }
         }
+
+        public void DisposeIfIncomplete()
+        {
+            if (!IsFullyLoaded)
+                Dispose();
+        }
+
+        private bool _disposed;
     }
 }
