@@ -9,8 +9,10 @@ public static class BuiltInThemes
     {
         Id = "amethyst-dark",
         DisplayName = "Amethyst Dark",
+        BackgroundAsset = "purple background.gif",
         Chrome = new ThemeChromeColors
         {
+            Background = ThemeColor.FromHex("#321a36"),
             WindowBorder = ThemeColor.FromHex("#5B21B6"),
             SeparatorLine = ThemeColor.FromHex("#2E1065"),
             LabelBackground = ThemeColor.FromHex("#000000"),
@@ -36,8 +38,10 @@ public static class BuiltInThemes
     {
         Id = "cyber-slate",
         DisplayName = "Cyber Slate",
+        BackgroundAsset = "Cyber.gif",
         Chrome = new ThemeChromeColors
         {
+            Background = ThemeColor.FromHex("#0C0A14"),
             WindowBorder = ThemeColor.FromHex("#8C2E86"),
             SeparatorLine = ThemeColor.FromHex("#1e6d75"),
             LabelBackground = ThemeColor.FromHex("#0C0A14"),
@@ -63,8 +67,10 @@ public static class BuiltInThemes
     {
         Id = "nordic",
         DisplayName = "Nordic",
+        BackgroundAsset = "nordic.gif",
         Chrome = new ThemeChromeColors
         {
+            Background = ThemeColor.FromHex("#2E3440"),
             WindowBorder = ThemeColor.FromHex("#4C566A"),
             SeparatorLine = ThemeColor.FromHex("#3e4757"),
             LabelBackground = ThemeColor.FromHex("#2E3440"),
@@ -90,8 +96,10 @@ public static class BuiltInThemes
     {
         Id = "ocean-light",
         DisplayName = "Ocean Light",
+        BackgroundAsset = "ocean background.gif",
         Chrome = new ThemeChromeColors
         {
+            Background = ThemeColor.FromHex("#1B2A38"),
             WindowBorder = ThemeColor.FromHex("#146C94"),
             SeparatorLine = ThemeColor.FromHex("#043A54"),
             LabelBackground = ThemeColor.FromHex("#1B2A38"),
@@ -117,8 +125,10 @@ public static class BuiltInThemes
     {
         Id = "brown-coffee",
         DisplayName = "Brown Coffee",
+        BackgroundAsset = "coffee brown.gif",
         Chrome = new ThemeChromeColors
         {
+            Background = ThemeColor.FromHex("#3D2A24"),
             WindowBorder = ThemeColor.FromHex("#3D2E2B"),
             SeparatorLine = ThemeColor.FromHex("#6B4423"),
             LabelBackground = ThemeColor.FromHex("#120C0A"),
@@ -144,8 +154,10 @@ public static class BuiltInThemes
     {
         Id = "rose-quartz",
         DisplayName = "The Ferdy Special",
+        BackgroundAsset = "pink.gif",
         Chrome = new ThemeChromeColors
         {
+            Background = ThemeColor.FromHex("#3B1028"),
             WindowBorder = ThemeColor.FromHex("#F9A8D4"),
             SeparatorLine = ThemeColor.FromHex("#831843"),
             LabelBackground = ThemeColor.FromHex("#3B1028"),

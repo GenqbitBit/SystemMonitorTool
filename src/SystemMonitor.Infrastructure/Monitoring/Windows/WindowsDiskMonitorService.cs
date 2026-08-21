@@ -13,8 +13,8 @@ namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
 {
     private readonly string _driveName;
-    private readonly PerformanceCounter _readCounter;
-    private readonly PerformanceCounter _writeCounter;
+    private readonly PerformanceCounter? _readCounter;
+    private readonly PerformanceCounter? _writeCounter;
 
     private readonly string _model;
     private readonly string _diskType;
@@ -30,10 +30,20 @@ public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
     {
         _driveName = driveName;
 
-        _readCounter = new PerformanceCounter("PhysicalDisk", "Disk Read Bytes/sec", "_Total");
-        _writeCounter = new PerformanceCounter("PhysicalDisk", "Disk Write Bytes/sec", "_Total");
-        _readCounter.NextValue();  // warm-up, same reasoning as CpuMonitorService
-        _writeCounter.NextValue();
+        try
+        {
+            _readCounter = new PerformanceCounter("PhysicalDisk", "Disk Read Bytes/sec", "_Total");
+            _writeCounter = new PerformanceCounter("PhysicalDisk", "Disk Write Bytes/sec", "_Total");
+            _readCounter.NextValue();  // warm-up, same reasoning as CpuMonitorService
+            _writeCounter.NextValue();
+        }
+        catch
+        {
+            _readCounter?.Dispose();
+            _writeCounter?.Dispose();
+            _readCounter = null;
+            _writeCounter = null;
+        }
 
         try
         {
@@ -197,8 +207,8 @@ public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
             FreeGB = freeGB,
             UsedGB = usedGB,
             UsagePercent = usagePercent,
-            ReadMBPerSec = _readCounter.NextValue() / bytesPerMB,
-            WriteMBPerSec = _writeCounter.NextValue() / bytesPerMB,
+            ReadMBPerSec = (_readCounter?.NextValue() ?? 0) / bytesPerMB,
+            WriteMBPerSec = (_writeCounter?.NextValue() ?? 0) / bytesPerMB,
             Model = _model,
             DiskType = _diskType,
             BusType = _busType,
@@ -285,7 +295,7 @@ public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
 
     public void Dispose()
     {
-        _readCounter.Dispose();
-        _writeCounter.Dispose();
+        _readCounter?.Dispose();
+        _writeCounter?.Dispose();
     }
 }

@@ -3,6 +3,7 @@ namespace SystemMonitor.Domain.Models.Theming;
 
 public sealed class ThemeChromeColors
 {
+    public required ThemeColor Background { get; init; }
     public required ThemeColor WindowBorder { get; init; }
     public required ThemeColor SeparatorLine { get; init; }
     public required ThemeColor LabelBackground { get; init; }
