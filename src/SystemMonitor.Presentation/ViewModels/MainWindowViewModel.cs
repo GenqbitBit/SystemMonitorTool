@@ -197,6 +197,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         IOsMonitorService Os,
         IHardwareTreeProvider HardwareTreeProvider);
 
+    private sealed record CoreBackendServices(
+        IMetricsSnapshotProvider MetricsProvider,
+        IOsMonitorService Os);
+
     public static BackendServices ResolveBackendServices(IServiceProvider provider) =>
         new(
             provider.GetRequiredService<IMetricsSnapshotProvider>(),
@@ -205,6 +209,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             provider.GetRequiredService<IThresholdMonitorService>(),
             provider.GetRequiredService<IOsMonitorService>(),
             provider.GetRequiredService<IHardwareTreeProvider>());
+
+    private static CoreBackendServices ResolveCoreBackendServices(IServiceProvider provider) =>
+        new(
+            provider.GetRequiredService<IMetricsSnapshotProvider>(),
+            provider.GetRequiredService<IOsMonitorService>());
 
     public void AttachBackend(BackendServices backend)
     {
@@ -243,21 +252,63 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _pollingThread.Start();
     }
 
-    public async Task InitializeBackendAsync(IServiceProvider provider)
+    public async Task InitializeBackendAsync(
+        IServiceProvider provider,
+        CancellationToken cancellationToken)
     {
         try
         {
-            var backend = await Task.Run(() => ResolveBackendServices(provider))
+            cancellationToken.ThrowIfCancellationRequested();
+            var core = await Task.Run(
+                    () => ResolveCoreBackendServices(provider),
+                    cancellationToken)
                 .ConfigureAwait(false);
 
-            await Dispatcher.UIThread.InvokeAsync(() => AttachBackend(backend));
+            await Dispatcher.UIThread.InvokeAsync(
+                () => AttachCoreBackend(core),
+                DispatcherPriority.Normal,
+                cancellationToken);
+
+            var auxiliary = await Task.Run(
+                    () => ResolveBackendServices(provider),
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            await Dispatcher.UIThread.InvokeAsync(
+                () => AttachAuxiliaryBackend(auxiliary),
+                DispatcherPriority.Normal,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception ex)
         {
-            if (!_disposed)
-                Dispatcher.UIThread.Post(() =>
-                    _eventLog?.LogEvent(EventType.Error, $"Startup initialization failed: {ex.Message}"));
+            System.Diagnostics.Trace.WriteLine($"Startup initialization failed: {ex}");
         }
+    }
+
+    private void AttachCoreBackend(CoreBackendServices backend)
+    {
+        if (_disposed)
+            return;
+
+        _metricsProvider = backend.MetricsProvider;
+        _os = backend.Os;
+        StartMetricsPolling();
+    }
+
+    private void AttachAuxiliaryBackend(BackendServices backend)
+    {
+        if (_disposed)
+            return;
+
+        _historyPersistence = backend.HistoryPersistence;
+        _eventLog = backend.EventLog;
+        _thresholdMonitor = backend.ThresholdMonitor;
+
+        LogsPanel.Attach(backend.EventLog);
+        _hardwareTree.Start(backend.HardwareTreeProvider, backend.EventLog);
     }
 
     private void PollLoop()
@@ -301,15 +352,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         var historyPersistence = _historyPersistence;
         var thresholdMonitor = _thresholdMonitor;
         var os = _os;
-        if (metricsProvider is null || historyPersistence is null || thresholdMonitor is null || os is null)
+        if (metricsProvider is null || os is null)
             return;
 
         var snapshot = metricsProvider.GetSnapshot();
         _latestSnapshot = snapshot;
 
         _historyStore.Record(snapshot);
-        historyPersistence.Record(snapshot);
-        thresholdMonitor.Check(snapshot);
+        historyPersistence?.Record(snapshot);
+        thresholdMonitor?.Check(snapshot);
 
         var gpuUsageRows = snapshot
             .Where(m =>
@@ -446,12 +497,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             _pendingUiUpdate = null;
         _pollingCts.Cancel();
 
-        _pollingThread?.Join(
-            TimeSpan.FromSeconds(2));
+        _pollingThread?.Join();
 
         _pollingCts.Dispose();
 
         MetricsTable.Dispose();
+        LogsPanel.Dispose();
         _hardwareTree.Dispose();
 
         (_historyPersistence as IDisposable)?.Dispose();

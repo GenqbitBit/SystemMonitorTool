@@ -17,6 +17,7 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
     private Thread? _pollThread;
     private readonly ManualResetEventSlim _stopSignal = new();
     private volatile bool _running;
+    private volatile bool _disposed;
     private List<Domain.Models.HardwareTreeNode> _roots = new();
 
     private static readonly TimeSpan ValueRefreshInterval = TimeSpan.FromSeconds(2);
@@ -58,6 +59,9 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
+            if (_disposed || !_running)
+                return;
+
             Roots.Clear();
             foreach (var vm in vms) Roots.Add(vm);
         });
@@ -86,6 +90,9 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
                     _provider?.RefreshValues(_roots);
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     {
+                        if (_disposed || !_running)
+                            return;
+
                         foreach (var vm in Roots) vm.Refresh();
                     });
                 }
@@ -102,9 +109,13 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        if (_disposed)
+            return;
+
+        _disposed = true;
         _running = false;
         _stopSignal.Set();
-        _pollThread?.Join(TimeSpan.FromSeconds(2));
+        _pollThread?.Join();
         _stopSignal.Dispose();
     }
 }

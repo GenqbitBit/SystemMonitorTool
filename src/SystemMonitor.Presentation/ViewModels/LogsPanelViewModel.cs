@@ -9,9 +9,10 @@ using SystemMonitor.Presentation.Common;
 
 namespace SystemMonitor.Presentation.ViewModels;
 
-public partial class LogsPanelViewModel : ObservableObject
+public partial class LogsPanelViewModel : ObservableObject, IDisposable
 {
     private IEventLogService? _eventLog;
+    private bool _disposed;
 
     [ObservableProperty]
     private ObservableCollection<EventLogEntry> entries = new();
@@ -30,6 +31,9 @@ public partial class LogsPanelViewModel : ObservableObject
 
     public void Attach(IEventLogService eventLog)
     {
+        if (_disposed)
+            return;
+
         _eventLog = eventLog;
         _ = LoadAsync();
     }
@@ -40,7 +44,7 @@ public partial class LogsPanelViewModel : ObservableObject
     [RelayCommand]
     private async Task DeleteLogs()
     {
-        if (_eventLog is null)
+        if (_disposed || _eventLog is null)
             return;
 
         await _eventLog.DeleteAllEventsAsync();
@@ -50,13 +54,22 @@ public partial class LogsPanelViewModel : ObservableObject
     private async Task LoadAsync()
     {
         var eventLog = _eventLog;
-        if (eventLog is null)
+        if (_disposed || eventLog is null)
             return;
 
         var results = await eventLog.GetEventsAsync(type: SelectedTypeFilter);
 
+        if (_disposed)
+            return;
+
         Entries.SyncFrom(
             results,
             entry => (entry.Timestamp, entry.Type, entry.Message, entry.Metadata));
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _eventLog = null;
     }
 }

@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using SystemMonitor.Presentation.ViewModels;
 using SystemMonitor.Presentation.Views;
@@ -56,14 +57,15 @@ public partial class App : Avalonia.Application
 
             var mainViewModel = (MainWindowViewModel)mainWindow.DataContext;
             AsciiArtPanelViewModel? asciiArtViewModel = null;
-            var backendInitialization = mainViewModel.InitializeBackendAsync(provider);
+            var startupCancellation = new CancellationTokenSource();
+            var backendInitialization = mainViewModel.InitializeBackendAsync(provider, startupCancellation.Token);
 
-            desktop.ShutdownRequested += async (_, _) =>
+            desktop.ShutdownRequested += (_, _) =>
             {
+                startupCancellation.Cancel();
                 mainViewModel?.Dispose();
                 asciiArtViewModel?.Dispose();
-                await backendInitialization;
-                provider.Dispose();
+                _ = FinishShutdownAsync(backendInitialization, provider, startupCancellation);
             };
 
             var converter = provider.GetRequiredService<IAsciiArtConverter>();
@@ -72,6 +74,22 @@ public partial class App : Avalonia.Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static async Task FinishShutdownAsync(
+        Task backendInitialization,
+        ServiceProvider provider,
+        CancellationTokenSource startupCancellation)
+    {
+        try
+        {
+            await backendInitialization.ConfigureAwait(false);
+        }
+        finally
+        {
+            provider.Dispose();
+            startupCancellation.Dispose();
+        }
     }
 
 }
