@@ -380,8 +380,27 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 
     private double GetGpuUsagePercent(string? luidFilter)
     {
-        var category = new PerformanceCounterCategory("GPU Engine");
-        var allInstances = category.GetInstanceNames()
+        PerformanceCounterCategory category;
+        try
+        {
+            category = new PerformanceCounterCategory("GPU Engine");
+        }
+        catch
+        {
+            return 0;
+        }
+
+        string[] instanceNames;
+        try
+        {
+            instanceNames = category.GetInstanceNames();
+        }
+        catch
+        {
+            return 0;
+        }
+
+        var allInstances = instanceNames
             .Where(i => i.Contains("engtype_3D"))
             .ToHashSet();
 
@@ -395,12 +414,28 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         {
             if (!_engineCounters.TryGetValue(instance, out var counter))
             {
-                counter = new PerformanceCounter("GPU Engine", "Utilization Percentage", instance);
-                counter.NextValue();
-                _engineCounters[instance] = counter;
-                continue;
+                try
+                {
+                    counter = new PerformanceCounter("GPU Engine", "Utilization Percentage", instance);
+                    counter.NextValue();
+                    _engineCounters[instance] = counter;
+                    continue;
+                }
+                catch
+                {
+                    continue;
+                }
             }
-            total += counter.NextValue();
+
+            try
+            {
+                total += counter.NextValue();
+            }
+            catch
+            {
+                counter.Dispose();
+                _engineCounters.Remove(instance);
+            }
         }
         return Math.Round(total, 2);
     }

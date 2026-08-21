@@ -12,7 +12,7 @@ namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
 public class WindowsCpuMonitorService : ICpuMonitorService, IDisposable
 {
-    private readonly PerformanceCounter _cpuCounter;
+    private readonly PerformanceCounter? _cpuCounter;
 
     // OS-provided current frequency in MHz. Unlike the LibreHardwareMonitor
     // clock sensor, this needs no kernel driver — it always works.
@@ -32,8 +32,15 @@ public class WindowsCpuMonitorService : ICpuMonitorService, IDisposable
 
     public WindowsCpuMonitorService()
     {
-        _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
-        _cpuCounter.NextValue(); // first call always returns 0 — "warms up" the counter
+        try
+        {
+            _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+            _cpuCounter.NextValue(); // first call always returns 0 — "warms up" the counter
+        }
+        catch
+        {
+            _cpuCounter = null;
+        }
 
         try
         {
@@ -53,7 +60,7 @@ public class WindowsCpuMonitorService : ICpuMonitorService, IDisposable
     {
         return new CpuInfo
         {
-            UsagePercent = _cpuCounter.NextValue(),
+            UsagePercent = _cpuCounter?.NextValue() ?? 0,
             ModelName = _modelName,
             ClockMhz = _frequencyCounter?.NextValue(),
             CoreCount = _coreCount,
@@ -182,7 +189,7 @@ public class WindowsCpuMonitorService : ICpuMonitorService, IDisposable
 
     public void Dispose()
     {
-        _cpuCounter.Dispose();
+        _cpuCounter?.Dispose();
         _frequencyCounter?.Dispose();
     }
 }

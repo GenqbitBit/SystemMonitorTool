@@ -18,6 +18,8 @@
                  ThemeResourceApplier.Apply replaces these with the active theme. -->
 
             <SolidColorBrush x:Key="MetricValueBrush" Color="#C084FC" />
+            <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#80321a36" />
+            <x:Double x:Key="WindowBackgroundOpacity">0.2</x:Double>
             <SolidColorBrush x:Key="WindowBorderBrush" Color="#5B21B6" />
             <SolidColorBrush x:Key="SeparatorBrush" Color="#2E1065" />
             <SolidColorBrush x:Key="LabelBackgroundBrush" Color="#000000" />

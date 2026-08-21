@@ -152,8 +152,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             new("View Data Table", SelectNavItem),
         };
 
-        AcquireAndApply();
-
         if (!Avalonia.Controls.Design.IsDesignMode)
         {
             _pollingThread = new Thread(PollLoop)
@@ -192,6 +190,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private void PollLoop()
     {
         var stopwatch = new System.Diagnostics.Stopwatch();
+
+        if (_pollingCts.Token.WaitHandle.WaitOne(TimeSpan.FromMilliseconds(500)))
+            return;
 
         while (!_pollingCts.IsCancellationRequested)
         {

@@ -12,6 +12,9 @@ public static class ThemeResourceApplier
         var chrome = theme.Chrome;
         var roles = theme.Roles;
 
+        resources["WindowBackgroundBrush"] = ToBrush(chrome.Background, 0.7);
+        resources["WindowBackgroundAsset"] = theme.BackgroundAsset;
+        resources["WindowBackgroundOpacity"] = theme.Id == "rose-quartz" ? 0.12 : 0.15;
         resources["WindowBorderBrush"] = ToBrush(chrome.WindowBorder);
         resources["SeparatorBrush"] = ToBrush(chrome.SeparatorLine);
         resources["LabelBackgroundBrush"] = ToBrush(chrome.LabelBackground);
@@ -30,8 +33,8 @@ public static class ThemeResourceApplier
         resources["CriticalBrush"] = ToBrush(roles.Critical);
     }
 
-    private static SolidColorBrush ToBrush(ThemeColor c) =>
-        new(Color.FromArgb(c.A, c.R, c.G, c.B));
+    private static SolidColorBrush ToBrush(ThemeColor c, double opacity = 1) =>
+        new(Color.FromArgb((byte)(c.A * opacity), c.R, c.G, c.B));
 
     public static Color ToColor(ThemeColor c) =>
         Color.FromArgb(c.A, c.R, c.G, c.B);

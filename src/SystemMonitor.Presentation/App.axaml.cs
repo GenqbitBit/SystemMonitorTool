@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using SystemMonitor.Presentation.ViewModels;
 using SystemMonitor.Presentation.Views;
 
@@ -46,25 +48,52 @@ public partial class App : Avalonia.Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var mainViewModel = provider.GetRequiredService<MainWindowViewModel>();
             var mainWindow = new MainWindow
             {
-                DataContext = mainViewModel,
+                DataContext = null,
             };
-
-            var converter = provider.GetRequiredService<IAsciiArtConverter>();
-            var asciiArtViewModel = new AsciiArtPanelViewModel(converter, mainWindow.StorageProvider);
-            mainWindow.AsciiPanel.DataContext = asciiArtViewModel;
-
             desktop.MainWindow = mainWindow;
+
+            MainWindowViewModel? mainViewModel = null;
+            AsciiArtPanelViewModel? asciiArtViewModel = null;
             desktop.ShutdownRequested += (_, _) =>
             {
-                mainViewModel.Dispose();
-                asciiArtViewModel.Dispose();
+                mainViewModel?.Dispose();
+                asciiArtViewModel?.Dispose();
                 provider.Dispose();
             };
+
+            InitializeMainWindowAsync(mainWindow, provider, viewModel =>
+            {
+                mainViewModel = viewModel;
+                mainWindow.DataContext = viewModel;
+
+                var converter = provider.GetRequiredService<IAsciiArtConverter>();
+                asciiArtViewModel = new AsciiArtPanelViewModel(converter, mainWindow.StorageProvider);
+                mainWindow.AsciiPanel.DataContext = asciiArtViewModel;
+            });
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static async void InitializeMainWindowAsync(
+        MainWindow mainWindow,
+        ServiceProvider provider,
+        Action<MainWindowViewModel> applyViewModel)
+    {
+        try
+        {
+            var viewModel = await Task.Run(provider.GetRequiredService<MainWindowViewModel>);
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                applyViewModel(viewModel);
+            });
+        }
+        catch (Exception ex)
+        {
+            Dispatcher.UIThread.Post(() => mainWindow.Title = $"Startup failed: {ex.Message}");
+        }
     }
 }

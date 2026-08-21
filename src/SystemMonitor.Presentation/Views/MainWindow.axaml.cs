@@ -38,6 +38,8 @@ public partial class MainWindow : Window
 
         Closed += (_, _) =>
         {
+            BackgroundImage.Dispose();
+
             if (_subscribedViewModel is not null && _panelRequestHandler is not null)
                 _subscribedViewModel.OpenPanelRequested -= _panelRequestHandler;
 

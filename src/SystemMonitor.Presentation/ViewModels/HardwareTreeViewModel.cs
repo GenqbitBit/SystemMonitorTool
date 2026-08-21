@@ -27,7 +27,6 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
     {
         _provider = provider;
         _eventLog = eventLog;
-        Discover(); // initial shape scan on startup
 
         _pollThread = new Thread(PollLoop) { IsBackground = true };
         _pollThread.Start();
@@ -51,6 +50,16 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
     private void PollLoop()
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        try
+        {
+            Discover();
+        }
+        catch (Exception ex)
+        {
+            _eventLog.LogEvent(EventType.Error, ex.Message);
+        }
+
         while (_running)
         {
             try
