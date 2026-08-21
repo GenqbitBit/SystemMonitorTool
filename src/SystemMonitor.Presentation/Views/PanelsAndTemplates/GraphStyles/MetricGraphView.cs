@@ -50,9 +50,6 @@ public class MetricGraphView : Control
     public static readonly StyledProperty<double> LineThicknessProperty =
         AvaloniaProperty.Register<MetricGraphView, double>(nameof(LineThickness), 1.5);
 
-    public static readonly StyledProperty<IBrush> GraphBackgroundProperty =
-        AvaloniaProperty.Register<MetricGraphView, IBrush>(nameof(GraphBackground), Brushes.Black);
-
     public static readonly StyledProperty<double?> FixedMinValueProperty =
         AvaloniaProperty.Register<MetricGraphView, double?>(nameof(FixedMinValue));
 
@@ -144,11 +141,6 @@ public class MetricGraphView : Control
         set => SetValue(LineThicknessProperty, value);
     }
 
-    public IBrush GraphBackground
-    {
-        get => GetValue(GraphBackgroundProperty);
-        set => SetValue(GraphBackgroundProperty, value);
-    }
 
     public IBrush GridBrush
     {
@@ -224,7 +216,6 @@ public class MetricGraphView : Control
             MetricIdProperty,
             LineBrushProperty,
             LineThicknessProperty,
-            GraphBackgroundProperty,
             FixedMinValueProperty,
             FixedMaxValueProperty,
             GridBrushProperty,
@@ -357,7 +348,6 @@ public class MetricGraphView : Control
         base.Render(context);
 
         var bounds = Bounds;
-        context.FillRectangle(GraphBackground, new Rect(bounds.Size));
 
         if (bounds.Width <= 0 || bounds.Height <= 0)
             return;
