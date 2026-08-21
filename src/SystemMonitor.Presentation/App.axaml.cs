@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using Avalonia.Threading;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -33,7 +32,6 @@ public partial class App : Avalonia.Application
         services.AddThemingServices();              
         services.AddSingleton<ISettingsService>(_ => new JsonSettingsService(
             Path.Combine(AppContext.BaseDirectory, "settings.json")));
-        services.AddTransient<MainWindowViewModel>();
         services.AddTransient<MetricsTableViewModel>();
         services.AddSingleton<IAsciiArtConverter, AsciiArtConverter>();
         var provider = services.BuildServiceProvider();
@@ -50,50 +48,30 @@ public partial class App : Avalonia.Application
         {
             var mainWindow = new MainWindow
             {
-                DataContext = null,
+                DataContext = new MainWindowViewModel(
+                    provider.GetRequiredService<ISettingsService>(),
+                    provider.GetRequiredService<IMetricHistoryStore>()),
             };
             desktop.MainWindow = mainWindow;
 
-            MainWindowViewModel? mainViewModel = null;
+            var mainViewModel = (MainWindowViewModel)mainWindow.DataContext;
             AsciiArtPanelViewModel? asciiArtViewModel = null;
-            desktop.ShutdownRequested += (_, _) =>
+            var backendInitialization = mainViewModel.InitializeBackendAsync(provider);
+
+            desktop.ShutdownRequested += async (_, _) =>
             {
                 mainViewModel?.Dispose();
                 asciiArtViewModel?.Dispose();
+                await backendInitialization;
                 provider.Dispose();
             };
 
-            InitializeMainWindowAsync(mainWindow, provider, viewModel =>
-            {
-                mainViewModel = viewModel;
-                mainWindow.DataContext = viewModel;
-
-                var converter = provider.GetRequiredService<IAsciiArtConverter>();
-                asciiArtViewModel = new AsciiArtPanelViewModel(converter, mainWindow.StorageProvider);
-                mainWindow.AsciiPanel.DataContext = asciiArtViewModel;
-            });
+            var converter = provider.GetRequiredService<IAsciiArtConverter>();
+            asciiArtViewModel = new AsciiArtPanelViewModel(converter, mainWindow.StorageProvider);
+            mainWindow.AsciiPanel.DataContext = asciiArtViewModel;
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
-    private static async void InitializeMainWindowAsync(
-        MainWindow mainWindow,
-        ServiceProvider provider,
-        Action<MainWindowViewModel> applyViewModel)
-    {
-        try
-        {
-            var viewModel = await Task.Run(provider.GetRequiredService<MainWindowViewModel>);
-
-            Dispatcher.UIThread.Post(() =>
-            {
-                applyViewModel(viewModel);
-            });
-        }
-        catch (Exception ex)
-        {
-            Dispatcher.UIThread.Post(() => mainWindow.Title = $"Startup failed: {ex.Message}");
-        }
-    }
 }

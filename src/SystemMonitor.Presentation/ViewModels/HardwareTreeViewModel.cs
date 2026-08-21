@@ -12,22 +12,34 @@ namespace SystemMonitor.Presentation.ViewModels;
 
 public partial class HardwareTreeViewModel : ObservableObject, IDisposable
 {
-    private readonly IHardwareTreeProvider _provider;
-    private readonly IEventLogService _eventLog;
-    private readonly Thread _pollThread;
+    private IHardwareTreeProvider? _provider;
+    private IEventLogService? _eventLog;
+    private Thread? _pollThread;
     private readonly ManualResetEventSlim _stopSignal = new();
-    private volatile bool _running = true;
+    private volatile bool _running;
     private List<Domain.Models.HardwareTreeNode> _roots = new();
 
     private static readonly TimeSpan ValueRefreshInterval = TimeSpan.FromSeconds(2);
 
     public ObservableCollection<HardwareTreeNodeViewModel> Roots { get; } = new();
 
+    public HardwareTreeViewModel()
+    {
+    }
+
     public HardwareTreeViewModel(IHardwareTreeProvider provider, IEventLogService eventLog)
     {
+        Start(provider, eventLog);
+    }
+
+    public void Start(IHardwareTreeProvider provider, IEventLogService eventLog)
+    {
+        if (_pollThread is not null)
+            return;
+
         _provider = provider;
         _eventLog = eventLog;
-
+        _running = true;
         _pollThread = new Thread(PollLoop) { IsBackground = true };
         _pollThread.Start();
     }
@@ -37,7 +49,11 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
 
     private void Discover()
     {
-        _roots = _provider.DiscoverTree().ToList();
+        var provider = _provider;
+        if (provider is null)
+            return;
+
+        _roots = provider.DiscoverTree().ToList();
         var vms = _roots.Select(r => new HardwareTreeNodeViewModel(r)).ToList();
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -57,7 +73,7 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            _eventLog.LogEvent(EventType.Error, ex.Message);
+            _eventLog?.LogEvent(EventType.Error, ex.Message);
         }
 
         while (_running)
@@ -67,7 +83,7 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
                 if (sw.Elapsed >= ValueRefreshInterval)
                 {
                     sw.Restart();
-                    _provider.RefreshValues(_roots);
+                    _provider?.RefreshValues(_roots);
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     {
                         foreach (var vm in Roots) vm.Refresh();
@@ -76,7 +92,7 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
-                _eventLog.LogEvent(EventType.Error, ex.Message);
+                _eventLog?.LogEvent(EventType.Error, ex.Message);
             }
 
             if (_stopSignal.Wait(ValueRefreshInterval))
@@ -88,7 +104,7 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
     {
         _running = false;
         _stopSignal.Set();
-        _pollThread.Join(TimeSpan.FromSeconds(2));
+        _pollThread?.Join(TimeSpan.FromSeconds(2));
         _stopSignal.Dispose();
     }
 }

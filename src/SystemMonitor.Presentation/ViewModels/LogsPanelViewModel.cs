@@ -11,7 +11,7 @@ namespace SystemMonitor.Presentation.ViewModels;
 
 public partial class LogsPanelViewModel : ObservableObject
 {
-    private readonly IEventLogService _eventLog;
+    private IEventLogService? _eventLog;
 
     [ObservableProperty]
     private ObservableCollection<EventLogEntry> entries = new();
@@ -19,7 +19,16 @@ public partial class LogsPanelViewModel : ObservableObject
     [ObservableProperty]
     private string? selectedTypeFilter; // null = all types
 
+    public LogsPanelViewModel()
+    {
+    }
+
     public LogsPanelViewModel(IEventLogService eventLog)
+    {
+        Attach(eventLog);
+    }
+
+    public void Attach(IEventLogService eventLog)
     {
         _eventLog = eventLog;
         _ = LoadAsync();
@@ -31,13 +40,20 @@ public partial class LogsPanelViewModel : ObservableObject
     [RelayCommand]
     private async Task DeleteLogs()
     {
+        if (_eventLog is null)
+            return;
+
         await _eventLog.DeleteAllEventsAsync();
         await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
-        var results = await _eventLog.GetEventsAsync(type: SelectedTypeFilter);
+        var eventLog = _eventLog;
+        if (eventLog is null)
+            return;
+
+        var results = await eventLog.GetEventsAsync(type: SelectedTypeFilter);
 
         Entries.SyncFrom(
             results,

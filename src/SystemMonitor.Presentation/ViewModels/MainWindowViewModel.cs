@@ -4,6 +4,7 @@ using System.Linq;
 using System.IO;
 using System.Collections.ObjectModel;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SystemMonitor.Application.Interfaces;
@@ -13,6 +14,7 @@ using SystemMonitor.Infrastructure.Monitoring.CrossPlatform;
 using SystemMonitor.Infrastructure.Persistence;
 using SystemMonitor.Presentation.Common;
 using SystemMonitor.Presentation.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace SystemMonitor.Presentation.ViewModels;
 
@@ -31,13 +33,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             Path.Combine(AppContext.BaseDirectory, "settings.json"));
     }
 
-    private readonly IMetricsSnapshotProvider _metricsProvider;
+    private IMetricsSnapshotProvider? _metricsProvider;
     private readonly IMetricHistoryStore _historyStore;
     private readonly HardwareTreeViewModel _hardwareTree;
-    private readonly IMetricHistoryPersistenceService _historyPersistence;
-    private readonly IEventLogService _eventLog;
-    private readonly IThresholdMonitorService _thresholdMonitor;
-    private readonly IOsMonitorService _os;
+    private IMetricHistoryPersistenceService? _historyPersistence;
+    private IEventLogService? _eventLog;
+    private IThresholdMonitorService? _thresholdMonitor;
+    private IOsMonitorService? _os;
     private IReadOnlyList<MetricReading> _latestSnapshot = Array.Empty<MetricReading>();
     private readonly object _uiUpdateGate = new();
     private Action? _pendingUiUpdate;
@@ -46,7 +48,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly ISettingsService _settings;
     private volatile int _tickIntervalMs;
 
-    private readonly Thread? _pollingThread;
+    private Thread? _pollingThread;
     private readonly CancellationTokenSource _pollingCts = new();
 
     [ObservableProperty]
@@ -102,6 +104,16 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
     }
 
+    public MainWindowViewModel(ISettingsService settings, IMetricHistoryStore historyStore)
+    {
+        _settings = settings;
+        _historyStore = historyStore;
+        _hardwareTree = new HardwareTreeViewModel();
+        MetricsTable = new MetricsTableViewModel();
+        LogsPanel = new LogsPanelViewModel();
+        InitializePresentationState();
+    }
+
     private MainWindowViewModel(DesignTimeDependencies dependencies)
         : this(
             dependencies.MetricsProvider,
@@ -135,13 +147,20 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _thresholdMonitor = thresholdMonitor;
         _settings = settings;
 
-        _tickIntervalMs = _settings.Current.TickIntervalMs;
-        TickIntervalMs = _tickIntervalMs;
-        _settings.SettingsApplied += OnSettingsApplied;
-
+        InitializePresentationState();
         MetricsTable = metricsTable;
         LogsPanel = new LogsPanelViewModel(eventLog);
         _hardwareTree = new HardwareTreeViewModel(hardwareTreeProvider, eventLog);
+
+        StartMetricsPolling();
+    }
+
+    private void InitializePresentationState()
+    {
+
+        _tickIntervalMs = _settings.Current.TickIntervalMs;
+        TickIntervalMs = _tickIntervalMs;
+        _settings.SettingsApplied += OnSettingsApplied;
 
         NavItems = new ObservableCollection<NavItemViewModel>
         {
@@ -152,30 +171,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             new("View Data Table", SelectNavItem),
         };
 
-        if (!Avalonia.Controls.Design.IsDesignMode)
-        {
-            _pollingThread = new Thread(PollLoop)
-            {
-                IsBackground = true,
-                Name = "MetricsPolling"
-            };
-
-            if (OperatingSystem.IsWindows())
-                _pollingThread.SetApartmentState(ApartmentState.STA);
-
-            _eventLog.LogEvent(
-                EventType.SessionStart,
-                "Application session started");
-
-            _pollingThread.Start();
-        }
     }
 
-    public MetricsTableViewModel MetricsTable { get; }
+    public MetricsTableViewModel MetricsTable { get; private set; } = null!;
 
-    public LogsPanelViewModel LogsPanel { get; }
+    public LogsPanelViewModel LogsPanel { get; private set; } = null!;
 
-    public ObservableCollection<NavItemViewModel> NavItems { get; }
+    public ObservableCollection<NavItemViewModel> NavItems { get; private set; } = null!;
 
     private void SelectNavItem(NavItemViewModel selected)
     {
@@ -187,12 +189,80 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     public event Action<string>? OpenPanelRequested;
 
+    public sealed record BackendServices(
+        IMetricsSnapshotProvider MetricsProvider,
+        IMetricHistoryPersistenceService HistoryPersistence,
+        IEventLogService EventLog,
+        IThresholdMonitorService ThresholdMonitor,
+        IOsMonitorService Os,
+        IHardwareTreeProvider HardwareTreeProvider);
+
+    public static BackendServices ResolveBackendServices(IServiceProvider provider) =>
+        new(
+            provider.GetRequiredService<IMetricsSnapshotProvider>(),
+            provider.GetRequiredService<IMetricHistoryPersistenceService>(),
+            provider.GetRequiredService<IEventLogService>(),
+            provider.GetRequiredService<IThresholdMonitorService>(),
+            provider.GetRequiredService<IOsMonitorService>(),
+            provider.GetRequiredService<IHardwareTreeProvider>());
+
+    public void AttachBackend(BackendServices backend)
+    {
+        if (_disposed)
+            return;
+
+        _metricsProvider = backend.MetricsProvider;
+        _historyPersistence = backend.HistoryPersistence;
+        _eventLog = backend.EventLog;
+        _thresholdMonitor = backend.ThresholdMonitor;
+        _os = backend.Os;
+
+        LogsPanel.Attach(backend.EventLog);
+        _hardwareTree.Start(backend.HardwareTreeProvider, backend.EventLog);
+        StartMetricsPolling();
+    }
+
+    private void StartMetricsPolling()
+    {
+        if (_pollingThread is not null || Avalonia.Controls.Design.IsDesignMode)
+            return;
+
+        _pollingThread = new Thread(PollLoop)
+        {
+            IsBackground = true,
+            Name = "MetricsPolling"
+        };
+
+        if (OperatingSystem.IsWindows())
+            _pollingThread.SetApartmentState(ApartmentState.STA);
+
+        _eventLog?.LogEvent(
+            EventType.SessionStart,
+            "Application session started");
+
+        _pollingThread.Start();
+    }
+
+    public async Task InitializeBackendAsync(IServiceProvider provider)
+    {
+        try
+        {
+            var backend = await Task.Run(() => ResolveBackendServices(provider))
+                .ConfigureAwait(false);
+
+            await Dispatcher.UIThread.InvokeAsync(() => AttachBackend(backend));
+        }
+        catch (Exception ex)
+        {
+            if (!_disposed)
+                Dispatcher.UIThread.Post(() =>
+                    _eventLog?.LogEvent(EventType.Error, $"Startup initialization failed: {ex.Message}"));
+        }
+    }
+
     private void PollLoop()
     {
         var stopwatch = new System.Diagnostics.Stopwatch();
-
-        if (_pollingCts.Token.WaitHandle.WaitOne(TimeSpan.FromMilliseconds(500)))
-            return;
 
         while (!_pollingCts.IsCancellationRequested)
         {
@@ -204,7 +274,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             }
             catch (Exception ex)
             {
-                _eventLog.LogEvent(EventType.Error, ex.Message);
+                _eventLog?.LogEvent(EventType.Error, ex.Message);
             }
 
             var interval = TimeSpan.FromMilliseconds(_tickIntervalMs);
@@ -227,12 +297,19 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void AcquireAndApply()
     {
-        var snapshot = _metricsProvider.GetSnapshot();
+        var metricsProvider = _metricsProvider;
+        var historyPersistence = _historyPersistence;
+        var thresholdMonitor = _thresholdMonitor;
+        var os = _os;
+        if (metricsProvider is null || historyPersistence is null || thresholdMonitor is null || os is null)
+            return;
+
+        var snapshot = metricsProvider.GetSnapshot();
         _latestSnapshot = snapshot;
 
         _historyStore.Record(snapshot);
-        _historyPersistence.Record(snapshot);
-        _thresholdMonitor.Check(snapshot);
+        historyPersistence.Record(snapshot);
+        thresholdMonitor.Check(snapshot);
 
         var gpuUsageRows = snapshot
             .Where(m =>
@@ -274,7 +351,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             .OrderBy(g => g.Index)
             .ToList();
 
-        var osInfo = _os.LastInfo ?? _os.GetCurrentInfo();
+        var osInfo = os.LastInfo ?? os.GetCurrentInfo();
 
         var combinedProcesses = osInfo.TopProcesses;
         var cpuProcesses = osInfo.TopProcessesByCpu;
