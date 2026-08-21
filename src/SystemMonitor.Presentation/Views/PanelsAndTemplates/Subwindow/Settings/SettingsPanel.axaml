@@ -15,6 +15,15 @@
         </Style>
         <Style Selector="Button">
             <Setter Property="FontFamily" Value="Segoe UI, Helvetica Neue, Arial, sans-serif"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource PanelAccentBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource MetricValueBrush}"/>
+            <Setter Property="CornerRadius" Value="4"/>
+        </Style>
+        <Style Selector="Button:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource PanelAccentBorderBrush}"/>
+            <Setter Property="Opacity" Value="0.2"/>
         </Style>
 
         <!-- Labels -->
@@ -106,141 +115,148 @@
 
     </UserControl.Styles>
 
-    <ScrollViewer Padding="14,10">
-        <StackPanel Spacing="10">
+    <Border BorderBrush="{DynamicResource PanelAccentBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="6"
+            Margin="10">
 
-            <Button Content="Reset to Defaults"
-                    Command="{Binding ResetToDefaultsCommand}"
-                    HorizontalAlignment="Left"
-                    Padding="8,3"
-                    FontSize="11"/>
+        <ScrollViewer Padding="14,10">
+            <StackPanel Spacing="10">
 
-            <!-- Tick rate -->
-            <Grid ColumnDefinitions="88,*,Auto">
-                <TextBlock Grid.Column="0" Text="Update interval" Classes="settingLabel" VerticalAlignment="Center"/>
-                <Slider Grid.Column="1" Classes="modern"
-                        Minimum="500" Maximum="5000"
-                        Value="{Binding TickIntervalMs}"/>
-                <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding TickIntervalMs, StringFormat='{}{0} ms'}"/>
-                </Border>
-            </Grid>
+                <Button Content="Reset to Defaults"
+                        Command="{Binding ResetToDefaultsCommand}"
+                        HorizontalAlignment="Left"
+                        Padding="8,3"
+                        FontSize="11"/>
 
-            <!-- Graph style -->
-            <Grid ColumnDefinitions="88,*">
-                <TextBlock Grid.Column="0" Text="Graph style" Classes="settingLabel" VerticalAlignment="Center"/>
-                <ComboBox Grid.Column="1"
-                          ItemsSource="{Binding GraphStyleOptions}"
-                          SelectedItem="{Binding GraphStyle}"
-                          HorizontalAlignment="Stretch"
-                          FontSize="11"
-                          Padding="6,2"/>
-            </Grid>
-
-            <!-- Band count -->
-            <Grid ColumnDefinitions="88,*,Auto">
-                <TextBlock Grid.Column="0" Text="Graph band count" Classes="settingLabel" VerticalAlignment="Center"/>
-                <Slider Grid.Column="1" Classes="modern"
-                        Minimum="2" Maximum="20"
-                        Value="{Binding BandCount}"/>
-                <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding BandCount}"/>
-                </Border>
-            </Grid>
-
-            <Border Height="1" Background="{DynamicResource SeparatorBrush}" Opacity="0.5" Margin="0,2"/>
-
-            <!-- Block-specific knobs -->
-            <StackPanel Spacing="6" IsVisible="{Binding IsBlockStyle}">
-                <TextBlock Text="Block settings" Classes="sectionHeader"/>
-
-                <Grid ColumnDefinitions="92,*,Auto">
-                    <TextBlock Grid.Column="0" Text="Area block width" Classes="settingSubLabel" VerticalAlignment="Center"/>
-                    <Slider Grid.Column="1" Classes="modern" Minimum="1" Maximum="20" Value="{Binding AreaBlockWidth}"/>
+                <!-- Tick rate -->
+                <Grid ColumnDefinitions="88,*,Auto">
+                    <TextBlock Grid.Column="0" Text="Update interval" Classes="settingLabel" VerticalAlignment="Center"/>
+                    <Slider Grid.Column="1" Classes="modern"
+                            Minimum="500" Maximum="5000"
+                            Value="{Binding TickIntervalMs}"/>
                     <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding AreaBlockWidth, StringFormat='{}{0:0} px'}"/>
+                        <TextBlock Text="{Binding TickIntervalMs, StringFormat='{}{0} ms'}"/>
                     </Border>
                 </Grid>
 
-                <Grid ColumnDefinitions="92,*,Auto">
-                    <TextBlock Grid.Column="0" Text="Area block gap" Classes="settingSubLabel" VerticalAlignment="Center"/>
-                    <Slider Grid.Column="1" Classes="modern" Minimum="0" Maximum="10" Value="{Binding AreaBlockGap}"/>
+                <!-- Graph style -->
+                <Grid ColumnDefinitions="88,*">
+                    <TextBlock Grid.Column="0" Text="Graph style" Classes="settingLabel" VerticalAlignment="Center"/>
+                    <ComboBox Grid.Column="1"
+                              ItemsSource="{Binding GraphStyleOptions}"
+                              SelectedItem="{Binding GraphStyle}"
+                              HorizontalAlignment="Stretch"
+                              FontSize="11"
+                              Padding="6,2"/>
+                </Grid>
+
+                <!-- Band count -->
+                <Grid ColumnDefinitions="88,*,Auto">
+                    <TextBlock Grid.Column="0" Text="Graph band count" Classes="settingLabel" VerticalAlignment="Center"/>
+                    <Slider Grid.Column="1" Classes="modern"
+                            Minimum="2" Maximum="20"
+                            Value="{Binding BandCount}"/>
                     <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding AreaBlockGap, StringFormat='{}{0:0} px'}"/>
+                        <TextBlock Text="{Binding BandCount}"/>
                     </Border>
                 </Grid>
 
-                <Grid ColumnDefinitions="92,*,Auto">
-                    <TextBlock Grid.Column="0" Text="Bar block width" Classes="settingSubLabel" VerticalAlignment="Center"/>
-                    <Slider Grid.Column="1" Classes="modern" Minimum="1" Maximum="20" Value="{Binding BarBlockWidth}"/>
-                    <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding BarBlockWidth, StringFormat='{}{0:0} px'}"/>
-                    </Border>
-                </Grid>
+                <Border Height="1" Background="{DynamicResource SeparatorBrush}" Opacity="0.5" Margin="0,2"/>
 
-                <Grid ColumnDefinitions="92,*,Auto">
-                    <TextBlock Grid.Column="0" Text="Bar block gap" Classes="settingSubLabel" VerticalAlignment="Center"/>
-                    <Slider Grid.Column="1" Classes="modern" Minimum="0" Maximum="10" Value="{Binding BarBlockGap}"/>
-                    <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding BarBlockGap, StringFormat='{}{0:0} px'}"/>
-                    </Border>
-                </Grid>
+                <!-- Block-specific knobs -->
+                <StackPanel Spacing="6" IsVisible="{Binding IsBlockStyle}">
+                    <TextBlock Text="Block settings" Classes="sectionHeader"/>
+
+                    <Grid ColumnDefinitions="92,*,Auto">
+                        <TextBlock Grid.Column="0" Text="Area block width" Classes="settingSubLabel" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" Classes="modern" Minimum="1" Maximum="20" Value="{Binding AreaBlockWidth}"/>
+                        <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding AreaBlockWidth, StringFormat='{}{0:0} px'}"/>
+                        </Border>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="92,*,Auto">
+                        <TextBlock Grid.Column="0" Text="Area block gap" Classes="settingSubLabel" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" Classes="modern" Minimum="0" Maximum="10" Value="{Binding AreaBlockGap}"/>
+                        <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding AreaBlockGap, StringFormat='{}{0:0} px'}"/>
+                        </Border>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="92,*,Auto">
+                        <TextBlock Grid.Column="0" Text="Bar block width" Classes="settingSubLabel" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" Classes="modern" Minimum="1" Maximum="20" Value="{Binding BarBlockWidth}"/>
+                        <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding BarBlockWidth, StringFormat='{}{0:0} px'}"/>
+                        </Border>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="92,*,Auto">
+                        <TextBlock Grid.Column="0" Text="Bar block gap" Classes="settingSubLabel" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" Classes="modern" Minimum="0" Maximum="10" Value="{Binding BarBlockGap}"/>
+                        <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding BarBlockGap, StringFormat='{}{0:0} px'}"/>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+
+                <!-- Braille-specific knobs -->
+                <StackPanel Spacing="6" IsVisible="{Binding IsBrailleStyle}">
+                    <TextBlock Text="Braille settings" Classes="sectionHeader"/>
+
+                    <Grid ColumnDefinitions="92,*,Auto">
+                        <TextBlock Grid.Column="0" Text="Area cell width" Classes="settingSubLabel" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" Classes="modern" Minimum="5" Maximum="40" Value="{Binding AreaCellWidth}"/>
+                        <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding AreaCellWidth, StringFormat='{}{0:0} px'}"/>
+                        </Border>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="92,*,Auto">
+                        <TextBlock Grid.Column="0" Text="Area cell height" Classes="settingSubLabel" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" Classes="modern" Minimum="5" Maximum="30" Value="{Binding AreaCellHeight}"/>
+                        <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding AreaCellHeight, StringFormat='{}{0:0} px'}"/>
+                        </Border>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="92,*,Auto">
+                        <TextBlock Grid.Column="0" Text="Area font size" Classes="settingSubLabel" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" Classes="modern" Minimum="8" Maximum="36" Value="{Binding AreaFontSize}"/>
+                        <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding AreaFontSize, StringFormat='{}{0:0} pt'}"/>
+                        </Border>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="92,*,Auto">
+                        <TextBlock Grid.Column="0" Text="Bar cell width" Classes="settingSubLabel" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" Classes="modern" Minimum="5" Maximum="40" Value="{Binding BarCellWidth}"/>
+                        <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding BarCellWidth, StringFormat='{}{0:0} px'}"/>
+                        </Border>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="92,*,Auto">
+                        <TextBlock Grid.Column="0" Text="Bar cell height" Classes="settingSubLabel" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" Classes="modern" Minimum="5" Maximum="30" Value="{Binding BarCellHeight}"/>
+                        <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding BarCellHeight, StringFormat='{}{0:0} px'}"/>
+                        </Border>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="92,*,Auto">
+                        <TextBlock Grid.Column="0" Text="Bar font size" Classes="settingSubLabel" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" Classes="modern" Minimum="8" Maximum="36" Value="{Binding BarFontSize}"/>
+                        <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding BarFontSize, StringFormat='{}{0:0} pt'}"/>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+
             </StackPanel>
+        </ScrollViewer>
 
-            <!-- Braille-specific knobs -->
-            <StackPanel Spacing="6" IsVisible="{Binding IsBrailleStyle}">
-                <TextBlock Text="Braille settings" Classes="sectionHeader"/>
-
-                <Grid ColumnDefinitions="92,*,Auto">
-                    <TextBlock Grid.Column="0" Text="Area cell width" Classes="settingSubLabel" VerticalAlignment="Center"/>
-                    <Slider Grid.Column="1" Classes="modern" Minimum="5" Maximum="40" Value="{Binding AreaCellWidth}"/>
-                    <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding AreaCellWidth, StringFormat='{}{0:0} px'}"/>
-                    </Border>
-                </Grid>
-
-                <Grid ColumnDefinitions="92,*,Auto">
-                    <TextBlock Grid.Column="0" Text="Area cell height" Classes="settingSubLabel" VerticalAlignment="Center"/>
-                    <Slider Grid.Column="1" Classes="modern" Minimum="5" Maximum="30" Value="{Binding AreaCellHeight}"/>
-                    <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding AreaCellHeight, StringFormat='{}{0:0} px'}"/>
-                    </Border>
-                </Grid>
-
-                <Grid ColumnDefinitions="92,*,Auto">
-                    <TextBlock Grid.Column="0" Text="Area font size" Classes="settingSubLabel" VerticalAlignment="Center"/>
-                    <Slider Grid.Column="1" Classes="modern" Minimum="8" Maximum="36" Value="{Binding AreaFontSize}"/>
-                    <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding AreaFontSize, StringFormat='{}{0:0} pt'}"/>
-                    </Border>
-                </Grid>
-
-                <Grid ColumnDefinitions="92,*,Auto">
-                    <TextBlock Grid.Column="0" Text="Bar cell width" Classes="settingSubLabel" VerticalAlignment="Center"/>
-                    <Slider Grid.Column="1" Classes="modern" Minimum="5" Maximum="40" Value="{Binding BarCellWidth}"/>
-                    <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding BarCellWidth, StringFormat='{}{0:0} px'}"/>
-                    </Border>
-                </Grid>
-
-                <Grid ColumnDefinitions="92,*,Auto">
-                    <TextBlock Grid.Column="0" Text="Bar cell height" Classes="settingSubLabel" VerticalAlignment="Center"/>
-                    <Slider Grid.Column="1" Classes="modern" Minimum="5" Maximum="30" Value="{Binding BarCellHeight}"/>
-                    <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding BarCellHeight, StringFormat='{}{0:0} px'}"/>
-                    </Border>
-                </Grid>
-
-                <Grid ColumnDefinitions="92,*,Auto">
-                    <TextBlock Grid.Column="0" Text="Bar font size" Classes="settingSubLabel" VerticalAlignment="Center"/>
-                    <Slider Grid.Column="1" Classes="modern" Minimum="8" Maximum="36" Value="{Binding BarFontSize}"/>
-                    <Border Grid.Column="2" Classes="valuePill" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding BarFontSize, StringFormat='{}{0:0} pt'}"/>
-                    </Border>
-                </Grid>
-            </StackPanel>
-
-        </StackPanel>
-    </ScrollViewer>
+    </Border>
 
 </UserControl>
