@@ -70,6 +70,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private string? integratedGpuModelId;
 
     [ObservableProperty]
+    private bool hasAvailableGpu;
+
+    [ObservableProperty]
     private ObservableCollection<GpuDeviceDisplayInfo> detectedGpus = new();
 
     [ObservableProperty]
@@ -365,7 +368,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         var gpuUsageRows = snapshot
             .Where(m =>
                 m.Id.StartsWith("gpu.usage.") &&
-                m.GpuDeviceId != null)
+                m.GpuDeviceId != null &&
+                m.IsAvailable)
             .ToList();
 
         var dedicatedId = gpuUsageRows.FirstOrDefault(m =>
@@ -418,6 +422,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
             DedicatedGpuModelId = dedicatedModelId;
             IntegratedGpuModelId = integratedModelId;
+            HasAvailableGpu = gpus.Count > 0;
 
             DetectedGpus.SyncFrom(
                 gpus,

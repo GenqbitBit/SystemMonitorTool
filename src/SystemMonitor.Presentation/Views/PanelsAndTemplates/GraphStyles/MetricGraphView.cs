@@ -390,6 +390,12 @@ public class MetricGraphView : Control
 
     private void RenderSingle(DrawingContext context, Rect bounds, Point plotOrigin, double plotWidth, double plotHeight)
     {
+        if (!IsMetricAvailable(MetricId))
+        {
+            DrawUnavailable(context, bounds, GetMetricCategory(MetricId));
+            return;
+        }
+
         var history = HistoryStore!.GetHistory(MetricId!);
 
         var windowEnd = DateTime.UtcNow;
@@ -452,6 +458,12 @@ public class MetricGraphView : Control
 
     private void RenderMirrored(DrawingContext context, Rect bounds, Point plotOrigin, double plotWidth, double plotHeight)
     {
+        if (!IsMetricAvailable(MetricId) || !IsMetricAvailable(SecondaryMetricId))
+        {
+            DrawUnavailable(context, bounds, GetMetricCategory(MetricId ?? SecondaryMetricId));
+            return;
+        }
+
         var primaryHistory = HistoryStore!.GetHistory(MetricId!);
         var secondaryHistory = HistoryStore!.GetHistory(SecondaryMetricId!);
 
@@ -608,5 +620,24 @@ public class MetricGraphView : Control
     {
         var metric = Metrics?.FirstOrDefault(m => m.Id == metricId);
         return string.IsNullOrEmpty(metric?.Unit) ? string.Empty : metric!.Unit;
+    }
+
+    private bool IsMetricAvailable(string? metricId) =>
+        !string.IsNullOrEmpty(metricId)
+        && Metrics?.FirstOrDefault(metric => metric.Id == metricId)?.IsAvailable == true;
+
+    private string GetMetricCategory(string? metricId) =>
+        Metrics?.FirstOrDefault(metric => metric.Id == metricId)?.Category
+        ?? (GraphRole?.ToString().StartsWith("Gpu", StringComparison.OrdinalIgnoreCase) == true ? "GPU" : "Hardware");
+
+    private void DrawUnavailable(DrawingContext context, Rect bounds, string category)
+    {
+        var typeface = new Typeface(AxisFontFamily);
+        var message = $"{category} Graph Unavailable";
+        var text = new FormattedText(message, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            typeface, 10, AxisBrush);
+        var x = Math.Max(0, (bounds.Width - text.Width) / 2);
+        var y = Math.Max(0, (bounds.Height - text.Height) / 2);
+        context.DrawText(text, new Point(x, y));
     }
 }

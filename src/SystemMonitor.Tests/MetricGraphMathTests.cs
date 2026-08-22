@@ -8,6 +8,27 @@ namespace SystemMonitor.Tests;
 public class MetricGraphMathTests
 {
     [Fact]
+    public void MetricReading_UsesNaForUnavailableText()
+    {
+        var reading = new MetricReading
+        {
+            Kind = MetricKind.Text,
+            IsAvailable = false,
+            TextValue = "Unknown"
+        };
+
+        Assert.Equal("N/A", reading.DisplayValue);
+    }
+
+    [Theory]
+    [InlineData(1.6, "GB", "1.6 GB")]
+    [InlineData(500, "MB", "500 MB")]
+    public void MetricReading_FormatsDataSizeUsingMagnitude(double value, string unit, string expected)
+    {
+        Assert.Equal(expected, MetricReading.FormatDataSize(value, unit).DisplayValue);
+    }
+
+    [Fact]
     public void ComputePoints_ReturnsEmpty_WhenHistoryIsEmpty()
     {
         var now = DateTime.UtcNow;

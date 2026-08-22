@@ -54,7 +54,34 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
         if (provider is null)
             return;
 
-        _roots = provider.DiscoverTree().ToList();
+        try
+        {
+            _roots = provider.DiscoverTree().ToList();
+        }
+        catch (Exception ex)
+        {
+            _eventLog?.LogEvent(EventType.Error, ex.Message);
+            _roots = new List<Domain.Models.HardwareTreeNode>();
+        }
+
+        if (_roots.Count == 0)
+        {
+            _roots.Add(new Domain.Models.HardwareTreeNode
+            {
+                Name = "Hardware",
+                Kind = HardwareTreeNodeKind.Hardware,
+                Children =
+                {
+                    new Domain.Models.HardwareTreeNode
+                    {
+                        Name = "Hardware Reading",
+                        Kind = HardwareTreeNodeKind.Sensor,
+                        DisplayValue = "N/A",
+                        IsAvailable = false
+                    }
+                }
+            });
+        }
         var vms = _roots.Select(r => new HardwareTreeNodeViewModel(r)).ToList();
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>

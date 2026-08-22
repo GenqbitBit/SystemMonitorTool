@@ -291,22 +291,38 @@ public partial class CategoryMetricsView : UserControl
     {
         get
         {
+            IEnumerable<MetricReading>? selected;
             if (MetricId != null)
-            {
-                return Metrics?.Where(m => m.Id == MetricId);
-            }
-
-            var byCategory = Metrics?.Where(m =>
-                string.Equals(m.Category, CategoryLabel, System.StringComparison.OrdinalIgnoreCase));
+                selected = Metrics?.Where(m => m.Id == MetricId);
+            else
+                selected = Metrics?.Where(m =>
+                    string.Equals(m.Category, CategoryLabel, System.StringComparison.OrdinalIgnoreCase));
 
             if (GpuDeviceId != null)
-            {
-                byCategory = byCategory?.Where(m => m.GpuDeviceId == GpuDeviceId);
-            }
+                selected = selected?.Where(m => m.GpuDeviceId == GpuDeviceId);
 
-            return PrimaryTempOnly
-                ? byCategory?.Where(m => m.IsPrimary)
-                : byCategory;
+            if (PrimaryTempOnly)
+                selected = selected?.Where(m => m.IsPrimary);
+
+            var result = selected?.ToList() ?? new List<MetricReading>();
+            if (result.Count > 0)
+                return result;
+
+            var label = MetricId is not null
+                ? MetricId.Split('.').FirstOrDefault()?.ToUpperInvariant() ?? "Hardware"
+                : CategoryLabel ?? "Hardware";
+            return new[]
+            {
+                new MetricReading
+                {
+                    Id = MetricId ?? $"unavailable.{label.ToLowerInvariant()}",
+                    Category = label,
+                    Label = $"{label} Reading",
+                    Kind = MetricKind.Text,
+                    IsAvailable = false,
+                    TextValue = "N/A"
+                }
+            };
         }
     }
 

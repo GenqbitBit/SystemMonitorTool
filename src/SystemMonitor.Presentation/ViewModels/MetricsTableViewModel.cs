@@ -48,10 +48,7 @@ public partial class MetricsTableViewModel : ViewModelBase, IDisposable
         if (_disposed || !_isActive)
             return;
 
-        var rows = snapshot
-            .Where(r => r.IsAvailable)
-            .Select(MetricTableRow.From)
-            .ToList();
+        var rows = snapshot.Select(MetricTableRow.From).ToList();
 
         // MetricTableRow has no single identity field, but Category + Metric
         // together uniquely identify a row (e.g. ("CPU", "Usage")) and are

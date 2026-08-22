@@ -32,12 +32,38 @@ public class MetricReading
     // alongside for display ordering; this is what to key matching logic on.
     public string? GpuDeviceId { get; set; }
 
-    public string DisplayValue => TextValue is not null
-    ? TextValue
+    public string DisplayValue => !IsAvailable
+    ? "N/A"
+    : TextValue is not null
+    ? NormalizeText(TextValue)
     : Kind switch
     {
         MetricKind.Percentage => $"{Value}{Unit}",
         MetricKind.DataRate => $"{Value.ToString("N2", CultureInfo.InvariantCulture)} {Unit}",
+        MetricKind.DataSize => FormatDataSize(Value, Unit).DisplayValue,
         _ => $"{Value} {Unit}"
     };
+
+    public static (string Value, string Unit, string DisplayValue) FormatDataSize(double value, string unit)
+    {
+        if (unit == "GB" && Math.Abs(value) < 1)
+        {
+            var megabytes = value * 1024;
+            return (megabytes.ToString("0.##", CultureInfo.InvariantCulture), "MB",
+                $"{megabytes.ToString("0.##", CultureInfo.InvariantCulture)} MB");
+        }
+
+        if (unit == "MB" && Math.Abs(value) >= 1024)
+        {
+            var gigabytes = value / 1024;
+            return (gigabytes.ToString("0.##", CultureInfo.InvariantCulture), "GB",
+                $"{gigabytes.ToString("0.##", CultureInfo.InvariantCulture)} GB");
+        }
+
+        return (value.ToString("0.##", CultureInfo.InvariantCulture), unit,
+            $"{value.ToString("0.##", CultureInfo.InvariantCulture)} {unit}".TrimEnd());
+    }
+
+    public static string NormalizeText(string text) =>
+        string.Equals(text.Trim(), "Unknown", StringComparison.OrdinalIgnoreCase) ? "N/A" : text;
 }

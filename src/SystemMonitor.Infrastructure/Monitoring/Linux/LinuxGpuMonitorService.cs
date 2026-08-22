@@ -36,12 +36,12 @@ public class LinuxGpuMonitorService : IGpuMonitorService
             var busyPath = Path.Combine(devicePath, "gpu_busy_percent");
             var usedPath = Path.Combine(devicePath, "mem_info_vram_used");
             var totalPath = Path.Combine(devicePath, "mem_info_vram_total");
-            LinuxFileReader.TryReadDouble(busyPath, out var usage);
-            LinuxFileReader.TryReadDouble(usedPath, out var used);
-            LinuxFileReader.TryReadDouble(totalPath, out var total);
+            var hasUsage = LinuxFileReader.TryReadDouble(busyPath, out var usage);
+            var hasUsed = LinuxFileReader.TryReadDouble(usedPath, out var used);
+            var hasTotal = LinuxFileReader.TryReadDouble(totalPath, out var total);
             devices.Add(new GpuInfo
             {
-                IsAvailable = true,
+                IsAvailable = hasUsage || hasUsed || hasTotal,
                 Name = $"{vendor} {cardName}",
                 Vendor = vendor,
                 DeviceId = $"drm:{cardName}",

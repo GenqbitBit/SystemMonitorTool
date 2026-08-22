@@ -802,7 +802,8 @@
                                                         VerticalAlignment="Center"
                                                         Background="{DynamicResource LabelBackgroundBrush}"
                                                         HorizontalAlignment="Center"
-                                                        Grid.Row="0">
+                                                        Grid.Row="0"
+                                                        IsVisible="{Binding HasAvailableGpu}">
 
                                                 <panels:CategoryMetricsView
                                                     MetricId="{Binding DedicatedGpuModelId}"
@@ -834,7 +835,8 @@
                                                         VerticalAlignment="Center"
                                                         Background="{DynamicResource LabelBackgroundBrush}"
                                                         HorizontalAlignment="Center"
-                                                        Grid.Row="1">
+                                                        Grid.Row="1"
+                                                        IsVisible="{Binding HasAvailableGpu}">
 
                                                 <panels:CategoryMetricsView
                                                     MetricId="{Binding IntegratedGpuModelId}"
@@ -861,6 +863,15 @@
                                                     VerticalAlignment="Center"/>
 
                                             </StackPanel>
+
+                                            <TextBlock Grid.Row="0"
+                                                       Grid.RowSpan="2"
+                                                       Text="GPU Reading: N/A"
+                                                       FontSize="9"
+                                                       FontWeight="Bold"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       IsVisible="{Binding !HasAvailableGpu}" />
 
                                         </Grid>
 

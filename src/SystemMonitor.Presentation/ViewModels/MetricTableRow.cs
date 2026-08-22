@@ -12,10 +12,26 @@ public sealed record MetricTableRow(
     double? RawValue)   // numeric when numeric, null for text — kept for future sort/filter
 {
     /// <summary>Projects a domain reading into a display row.</summary>
-    public static MetricTableRow From(MetricReading reading) => new(
-        reading.Category,
-        reading.Label,
-        reading.TextValue ?? reading.Value.ToString("0.##", CultureInfo.InvariantCulture),
-        reading.TextValue is null ? reading.Unit : string.Empty,
-        reading.TextValue is null ? reading.Value : null);
+    public static MetricTableRow From(MetricReading reading)
+    {
+        if (reading.TextValue is not null)
+        {
+            return new(reading.Category, reading.Label,
+                MetricReading.NormalizeText(reading.TextValue), string.Empty, null);
+        }
+
+        if (!reading.IsAvailable)
+        {
+            return new(reading.Category, reading.Label, "N/A", string.Empty, null);
+        }
+
+        if (reading.Kind == MetricKind.DataSize)
+        {
+            var formatted = MetricReading.FormatDataSize(reading.Value, reading.Unit);
+            return new(reading.Category, reading.Label, formatted.Value, formatted.Unit, reading.Value);
+        }
+
+        return new(reading.Category, reading.Label,
+            reading.Value.ToString("0.##", CultureInfo.InvariantCulture), reading.Unit, reading.Value);
+    }
 }

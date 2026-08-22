@@ -64,11 +64,18 @@ public sealed class WindowsHardwareTreeProvider : IHardwareTreeProvider
 
     private static void ApplyValues(HardwareTreeNode node, Dictionary<string, ISensor> lookup)
     {
-        if (node.Kind == HardwareTreeNodeKind.Sensor && node.SensorKey is not null
-            && lookup.TryGetValue(node.SensorKey, out var sensor))
+        if (node.Kind == HardwareTreeNodeKind.Sensor && node.SensorKey is not null)
         {
-            node.IsAvailable = sensor.Value.HasValue;
-            node.DisplayValue = FormatSensorValue(sensor);
+            if (lookup.TryGetValue(node.SensorKey, out var sensor))
+            {
+                node.IsAvailable = sensor.Value.HasValue;
+                node.DisplayValue = FormatSensorValue(sensor);
+            }
+            else
+            {
+                node.IsAvailable = false;
+                node.DisplayValue = "N/A";
+            }
         }
 
         foreach (var child in node.Children)
