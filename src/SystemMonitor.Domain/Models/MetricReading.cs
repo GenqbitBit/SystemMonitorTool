@@ -48,16 +48,16 @@ public class MetricReading
     {
         if (unit == "GB" && Math.Abs(value) < 1)
         {
-            var megabytes = value * 1024;
+            var megabytes = value * 1000;
             return (megabytes.ToString("0.##", CultureInfo.InvariantCulture), "MB",
                 $"{megabytes.ToString("0.##", CultureInfo.InvariantCulture)} MB");
         }
 
-        if (unit == "MB" && Math.Abs(value) >= 1024)
+        if (unit == "MB" && Math.Abs(value) >= 1000)
         {
-            var gigabytes = value / 1024;
-            return (gigabytes.ToString("0.##", CultureInfo.InvariantCulture), "GB",
-                $"{gigabytes.ToString("0.##", CultureInfo.InvariantCulture)} GB");
+            var gigabytes = value / 1000;
+            return (gigabytes.ToString("0.0#", CultureInfo.InvariantCulture), "GB",
+                $"{gigabytes.ToString("0.0#", CultureInfo.InvariantCulture)} GB");
         }
 
         return (value.ToString("0.##", CultureInfo.InvariantCulture), unit,

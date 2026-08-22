@@ -22,7 +22,11 @@ public class MetricGraphMathTests
 
     [Theory]
     [InlineData(1.6, "GB", "1.6 GB")]
+    [InlineData(0.999, "GB", "999 MB")]
     [InlineData(500, "MB", "500 MB")]
+    [InlineData(999, "MB", "999 MB")]
+    [InlineData(1000, "MB", "1.0 GB")]
+    [InlineData(1500, "MB", "1.5 GB")]
     public void MetricReading_FormatsDataSizeUsingMagnitude(double value, string unit, string expected)
     {
         Assert.Equal(expected, MetricReading.FormatDataSize(value, unit).DisplayValue);
