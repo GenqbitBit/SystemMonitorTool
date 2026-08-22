@@ -23,7 +23,7 @@ public class MacOsCpuMonitorService : ICpuMonitorService
             if (_previousCpuTimes is { Length: > 0 } previous && cpuTimes.Length == previous.Length)
             {
                 var totalDelta = cpuTimes.Sum() - previous.Sum();
-                var idleDelta = cpuTimes[^1] - previous[^1];
+                var idleDelta = GetIdleValue(cpuTimes) - GetIdleValue(previous);
                 if (totalDelta > 0)
                     usage = Math.Clamp((totalDelta - idleDelta) * 100d / totalDelta, 0, 100);
             }
@@ -56,6 +56,13 @@ public class MacOsCpuMonitorService : ICpuMonitorService
         return output.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(value => MacOsCommandRunner.TryReadLong(value, out var parsed) && parsed >= 0 ? parsed : 0)
             .ToArray();
+    }
+
+    private static long GetIdleValue(long[] cpuTimes)
+    {
+        if (cpuTimes.Length == 0) return 0;
+        var idleIndex = cpuTimes.Length >= 4 ? 3 : cpuTimes.Length - 1;
+        return cpuTimes[Math.Clamp(idleIndex, 0, cpuTimes.Length - 1)];
     }
 
     private static int ReadInt(string name, int fallback)
