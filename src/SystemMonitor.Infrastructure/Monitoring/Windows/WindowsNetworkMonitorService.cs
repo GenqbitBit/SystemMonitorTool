@@ -6,6 +6,11 @@ using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
+/// <summary>
+/// Network monitoring using cross-platform BCL APIs.
+/// Note: Despite being in the Windows folder, this service works on all platforms
+/// because System.Net.NetworkInformation is cross-platform.
+/// </summary>
 public class WindowsNetworkMonitorService : INetworkMonitorService
 {
     private long _lastBytesReceived;

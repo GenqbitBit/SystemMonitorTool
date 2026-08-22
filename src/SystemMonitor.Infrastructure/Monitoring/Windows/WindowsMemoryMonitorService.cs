@@ -2,11 +2,13 @@ using System;
 using System.Linq;
 using System.Management;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
+[SupportedOSPlatform("windows")]
 public class WindowsMemoryMonitorService : IMemoryMonitorService
 {
     [StructLayout(LayoutKind.Sequential)]

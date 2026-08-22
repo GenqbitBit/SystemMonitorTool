@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Management;
+using System.Runtime.Versioning;
 using LibreHardwareMonitor.Hardware;
 using Microsoft.Win32;
 using SystemMonitor.Application.Interfaces;
@@ -10,6 +11,7 @@ using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
+[SupportedOSPlatform("windows")]
 public class WindowsCpuMonitorService : ICpuMonitorService, IDisposable
 {
     private readonly PerformanceCounter? _cpuCounter;

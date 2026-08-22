@@ -1,9 +1,14 @@
 using LibreHardwareMonitor.Hardware;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.Versioning;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
+[SupportedOSPlatform("windows")]
 public sealed class WindowsHardwareTreeProvider : IHardwareTreeProvider
 {
     private readonly Computer _computer;

@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Infrastructure.Monitoring;
 using SystemMonitor.Infrastructure;
+using SystemMonitor.Infrastructure.DependencyInjection;
 using SystemMonitor.Infrastructure.Persistence;
 using SystemMonitor.Domain.AsciiArt;
 using SystemMonitor.Presentation.Views.PanelsAndTemplates;

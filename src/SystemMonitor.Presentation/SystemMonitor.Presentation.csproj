@@ -1,8 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
+    <!-- ApplicationManifest only used on Windows; ignored on other platforms -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 

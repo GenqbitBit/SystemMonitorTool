@@ -4,12 +4,14 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Management;
+using System.Runtime.Versioning;
 using LibreHardwareMonitor.Hardware;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
+[SupportedOSPlatform("windows")]
 public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
 {
     private readonly string _driveName;
@@ -26,9 +28,14 @@ public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
     private readonly IHardware? _libreHardware;
     private readonly Dictionary<ISensor, (double Sum, int Count)> _temperatureAveraging = new();
 
-    public WindowsDiskMonitorService(string driveName = "C:\\")
+    /// <summary>
+    /// Initializes a new instance of the WindowsDiskMonitorService.
+    /// </summary>
+    /// <param name="driveName">The drive letter (e.g., "C:\") to monitor. Defaults to the system drive.</param>
+    public WindowsDiskMonitorService(string? driveName = null)
     {
-        _driveName = driveName;
+        // Default to system drive on Windows (typically C:\)
+        _driveName = driveName ?? Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\";
 
         try
         {

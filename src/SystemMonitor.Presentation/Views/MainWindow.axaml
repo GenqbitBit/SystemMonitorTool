@@ -791,7 +791,7 @@
                                           ColumnDefinitions="60*,Auto,40*">
 
                                         <Border ZIndex="-15"
-                                                Margin="10,10,-10,10"
+                                                Margin="10,10,10,10"
                                                 BorderBrush="{DynamicResource Accent1Brush}"
                                                 BorderThickness="1.6"/>
 
@@ -927,7 +927,7 @@
 
                                             </StackPanel>
 
-                                            <Border Margin="10,30,5,30"
+                                            <Border Margin="10,30,10,30"
                                                     BorderThickness="2"
                                                     BorderBrush="{DynamicResource Accent3Brush}"/>
 
@@ -1162,7 +1162,7 @@
                                         </Grid>
 
                                         <Border BorderBrush="{DynamicResource Accent2Brush}"
-                                                Margin="5,10,-11,10"
+                                                Margin="5,10,5,10"
                                                 BorderThickness="2"
                                                 Grid.Row="1">
 

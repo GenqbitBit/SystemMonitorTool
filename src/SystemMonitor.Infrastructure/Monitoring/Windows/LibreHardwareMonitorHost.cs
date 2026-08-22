@@ -1,4 +1,6 @@
 using LibreHardwareMonitor.Hardware;
+using System;
+using System.Runtime.Versioning;
 using SystemMonitor.Application.Interfaces;
 
 namespace SystemMonitor.Infrastructure.Monitoring.Windows;
@@ -15,6 +17,7 @@ namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 /// prefers constructor injection, convert Instance into a registered
 /// singleton and inject it — the rest of the code stays the same.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class LibreHardwareMonitorHost : IHardwareRefreshService, IDisposable
 {
     /// <summary>The one and only instance, created on first use.</summary>

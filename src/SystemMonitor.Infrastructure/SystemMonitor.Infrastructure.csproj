@@ -4,6 +4,7 @@
     <ProjectReference Include="..\SystemMonitor.Application\SystemMonitor.Application.csproj" />
   </ItemGroup>
 
+  <!-- All dependencies - platform-specific implementations selected at runtime -->
   <ItemGroup>
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
@@ -15,7 +16,7 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

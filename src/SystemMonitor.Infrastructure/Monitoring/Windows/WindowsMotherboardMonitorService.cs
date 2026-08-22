@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Runtime.Versioning;
 using LibreHardwareMonitor.Hardware;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
@@ -12,6 +13,7 @@ namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 /// sensor the board exposes — some expose none, and that is an
 /// honest null, not an error.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class WindowsMotherboardMonitorService : IMotherboardMonitorService
 {
     private readonly Computer _computer = LibreHardwareMonitorHost.Instance.Computer;
