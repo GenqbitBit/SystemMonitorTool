@@ -7,16 +7,53 @@ using SystemMonitor.Domain.Models;
 namespace SystemMonitor.Infrastructure.Monitoring.Linux;
 
 /// <summary>
-/// Linux GPU monitoring service (placeholder).
-/// Full implementation will use vulkan, glxinfo, or /sys/class/drm/.
-/// Currently returns placeholder data.
+/// Linux GPU discovery and driver-exposed telemetry from DRM sysfs.
 /// </summary>
 [SupportedOSPlatform("linux")]
 public class LinuxGpuMonitorService : IGpuMonitorService
 {
     public IReadOnlyList<GpuInfo> GetCurrentUsage()
     {
-        // Placeholder implementation - return empty list
-        return new List<GpuInfo>();
+        var devices = new List<GpuInfo>();
+        var index = 0;
+        foreach (var path in LinuxFileReader.GetDirectories("/sys/class/drm")
+            .Where(path => Path.GetFileName(path).StartsWith("card", StringComparison.OrdinalIgnoreCase)
+                && Path.GetFileName(path).Skip(4).All(char.IsDigit)))
+        {
+            var devicePath = Path.Combine(path, "device");
+            var vendorId = LinuxFileReader.ReadText(Path.Combine(devicePath, "vendor"));
+            var vendor = vendorId switch
+            {
+                "0x10de" => "NVIDIA",
+                "0x1002" => "AMD",
+                "0x8086" => "Intel",
+                _ => "Unknown"
+            };
+            var cardName = Path.GetFileName(path);
+            var driver = LinuxFileReader.ReadText(Path.Combine(devicePath, "uevent"))?
+                .Split('\n').FirstOrDefault(line => line.StartsWith("DRIVER=", StringComparison.Ordinal))?
+                .Split('=', 2).ElementAtOrDefault(1) ?? string.Empty;
+            var busyPath = Path.Combine(devicePath, "gpu_busy_percent");
+            var usedPath = Path.Combine(devicePath, "mem_info_vram_used");
+            var totalPath = Path.Combine(devicePath, "mem_info_vram_total");
+            LinuxFileReader.TryReadDouble(busyPath, out var usage);
+            LinuxFileReader.TryReadDouble(usedPath, out var used);
+            LinuxFileReader.TryReadDouble(totalPath, out var total);
+            devices.Add(new GpuInfo
+            {
+                IsAvailable = true,
+                Name = $"{vendor} {cardName}",
+                Vendor = vendor,
+                DeviceId = $"drm:{cardName}",
+                Index = index++,
+                IsIntegrated = false,
+                UsagePercent = Math.Clamp(usage, 0, 100),
+                DedicatedMemoryUsedMb = used / 1024 / 1024,
+                DedicatedMemoryTotalMb = total / 1024 / 1024,
+                DriverVersion = driver,
+                Timestamp = DateTime.UtcNow
+            });
+        }
+        return devices;
     }
 }

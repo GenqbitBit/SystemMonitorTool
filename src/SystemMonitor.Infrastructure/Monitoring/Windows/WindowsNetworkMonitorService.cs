@@ -49,7 +49,12 @@ public class WindowsNetworkMonitorService : INetworkMonitorService
 
     private static (long bytesReceived, long bytesSent) GetTotalBytes()
     {
-        var activeInterfaces = NetworkInterface.GetAllNetworkInterfaces()
+        NetworkInterface[] allInterfaces;
+        try { allInterfaces = NetworkInterface.GetAllNetworkInterfaces(); }
+        catch (NetworkInformationException) { return (0, 0); }
+        catch (PlatformNotSupportedException) { return (0, 0); }
+
+        var activeInterfaces = allInterfaces
             .Where(nic => nic.OperationalStatus == OperationalStatus.Up
                        && nic.NetworkInterfaceType != NetworkInterfaceType.Loopback);
 
@@ -58,9 +63,14 @@ public class WindowsNetworkMonitorService : INetworkMonitorService
 
         foreach (var nic in activeInterfaces)
         {
-            var stats = nic.GetIPv4Statistics();
-            received += stats.BytesReceived;
-            sent += stats.BytesSent;
+            try
+            {
+                var stats = nic.GetIPv4Statistics();
+                received += stats.BytesReceived;
+                sent += stats.BytesSent;
+            }
+            catch (NetworkInformationException) { }
+            catch (InvalidOperationException) { }
         }
 
         return (received, sent);
