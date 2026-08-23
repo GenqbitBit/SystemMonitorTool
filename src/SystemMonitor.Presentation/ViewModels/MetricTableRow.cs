@@ -25,13 +25,14 @@ public sealed record MetricTableRow(
             return new(reading.Category, reading.Label, "N/A", string.Empty, null);
         }
 
+        var unit = MetricReading.ResolveUnit(reading.Kind, reading.Unit);
         if (reading.Kind == MetricKind.DataSize)
         {
-            var formatted = MetricReading.FormatDataSize(reading.Value, reading.Unit);
+            var formatted = MetricReading.FormatDataSize(reading.Value, unit);
             return new(reading.Category, reading.Label, formatted.Value, formatted.Unit, reading.Value);
         }
 
         return new(reading.Category, reading.Label,
-            reading.Value.ToString("0.##", CultureInfo.InvariantCulture), reading.Unit, reading.Value);
+            reading.Value.ToString("0.##", CultureInfo.InvariantCulture), unit, reading.Value);
     }
 }

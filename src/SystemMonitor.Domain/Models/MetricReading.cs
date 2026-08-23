@@ -33,15 +33,28 @@ public class MetricReading
     public string? GpuDeviceId { get; set; }
 
     public string DisplayValue => !IsAvailable
-    ? "N/A"
-    : TextValue is not null
-    ? NormalizeText(TextValue)
-    : Kind switch
+        ? "N/A"
+        : TextValue is not null
+        ? NormalizeText(TextValue)
+        : FormatValue(Value, Kind, ResolveUnit(Kind, Unit));
+
+    public static string ResolveUnit(MetricKind kind, string? unit) =>
+        !string.IsNullOrWhiteSpace(unit)
+            ? unit
+            : kind switch
+            {
+                MetricKind.Percentage => "%",
+                MetricKind.Temperature => "°C",
+                MetricKind.DataSize => "GB",
+                _ => string.Empty
+            };
+
+    private static string FormatValue(double value, MetricKind kind, string unit) => kind switch
     {
-        MetricKind.Percentage => $"{Value}{Unit}",
-        MetricKind.DataRate => $"{Value.ToString("N2", CultureInfo.InvariantCulture)} {Unit}",
-        MetricKind.DataSize => FormatDataSize(Value, Unit).DisplayValue,
-        _ => $"{Value} {Unit}"
+        MetricKind.Percentage => $"{value.ToString("0.##", CultureInfo.InvariantCulture)}{unit}",
+        MetricKind.DataRate => $"{value.ToString("N2", CultureInfo.InvariantCulture)} {unit}".TrimEnd(),
+        MetricKind.DataSize => FormatDataSize(value, unit).DisplayValue,
+        _ => $"{value.ToString("0.##", CultureInfo.InvariantCulture)} {unit}".TrimEnd()
     };
 
     public static (string Value, string Unit, string DisplayValue) FormatDataSize(double value, string unit)

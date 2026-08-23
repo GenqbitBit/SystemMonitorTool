@@ -9,7 +9,7 @@ public static class BuiltInThemes
     {
         Id = "amethyst-dark",
         DisplayName = "Amethyst Dark",
-        BackgroundAsset = "purple background.gif",
+        BackgroundAsset = "Backgrounds/purple background.gif",
         Chrome = new ThemeChromeColors
         {
             Background = ThemeColor.FromHex("#321a36"),
@@ -38,7 +38,7 @@ public static class BuiltInThemes
     {
         Id = "cyber-slate",
         DisplayName = "Cyber Slate",
-        BackgroundAsset = "Cyber.gif",
+        BackgroundAsset = "Backgrounds/Cyber.gif",
         Chrome = new ThemeChromeColors
         {
             Background = ThemeColor.FromHex("#0C0A14"),
@@ -67,7 +67,7 @@ public static class BuiltInThemes
     {
         Id = "nordic",
         DisplayName = "Nordic",
-        BackgroundAsset = "nordic.gif",
+        BackgroundAsset = "Backgrounds/nordic.gif",
         Chrome = new ThemeChromeColors
         {
             Background = ThemeColor.FromHex("#2E3440"),
@@ -96,7 +96,7 @@ public static class BuiltInThemes
     {
         Id = "ocean-light",
         DisplayName = "Ocean Light",
-        BackgroundAsset = "ocean background.gif",
+        BackgroundAsset = "Backgrounds/ocean background.gif",
         Chrome = new ThemeChromeColors
         {
             Background = ThemeColor.FromHex("#1B2A38"),
@@ -125,7 +125,7 @@ public static class BuiltInThemes
     {
         Id = "brown-coffee",
         DisplayName = "Brown Coffee",
-        BackgroundAsset = "coffee brown.gif",
+        BackgroundAsset = "Backgrounds/coffee brown.gif",
         Chrome = new ThemeChromeColors
         {
             Background = ThemeColor.FromHex("#3D2A24"),
@@ -154,7 +154,7 @@ public static class BuiltInThemes
     {
         Id = "rose-quartz",
         DisplayName = "The Ferdy Special",
-        BackgroundAsset = "pink.gif",
+        BackgroundAsset = "Backgrounds/pink.gif",
         Chrome = new ThemeChromeColors
         {
             Background = ThemeColor.FromHex("#3B1028"),

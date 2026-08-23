@@ -8,7 +8,7 @@
         mc:Ignorable="d"
         x:Class="SystemMonitor.Presentation.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Icon="/Assets/pixelmonitor.png"
+        Icon="/Assets/appicon.ico"
         Title="MainUI"
         d:DesignWidth="850"
         d:DesignHeight="550"

@@ -1,5 +1,6 @@
 ﻿using System;
 using SystemMonitor.Domain.Models;
+using SystemMonitor.Presentation.ViewModels;
 using SystemMonitor.Presentation.Views.PanelsAndTemplates;
 using Xunit;
 
@@ -18,6 +19,58 @@ public class MetricGraphMathTests
         };
 
         Assert.Equal("N/A", reading.DisplayValue);
+    }
+
+    [Theory]
+    [InlineData(MetricKind.Percentage, "", 42.5, "42.5%")]
+    [InlineData(MetricKind.Temperature, "", 55, "55 °C")]
+    [InlineData(MetricKind.DataSize, "", 0.5, "500 MB")]
+    [InlineData(MetricKind.Text, "", 6, "6")]
+    [InlineData(MetricKind.DataRate, "", 1.5, "1.50")]
+    public void MetricReading_ResolvesApplicableUnitsWithoutInventingTextUnits(
+        MetricKind kind, string unit, double value, string expected)
+    {
+        var reading = new MetricReading
+        {
+            Kind = kind,
+            Unit = unit,
+            IsAvailable = true,
+            Value = value
+        };
+
+        Assert.Equal(expected, reading.DisplayValue);
+    }
+
+    [Fact]
+    public void MetricReading_PreservesExplicitUnit()
+    {
+        var reading = new MetricReading
+        {
+            Kind = MetricKind.Temperature,
+            Unit = "°F",
+            IsAvailable = true,
+            Value = 72
+        };
+
+        Assert.Equal("72 °F", reading.DisplayValue);
+    }
+
+    [Fact]
+    public void MetricTableRow_ResolvesUnitlessMemoryDataSize()
+    {
+        var reading = new MetricReading
+        {
+            Category = "Memory",
+            Label = "Used",
+            Kind = MetricKind.DataSize,
+            IsAvailable = true,
+            Value = 0.5
+        };
+
+        var row = MetricTableRow.From(reading);
+
+        Assert.Equal("500", row.Value);
+        Assert.Equal("MB", row.Unit);
     }
 
     [Theory]

@@ -14,7 +14,7 @@ public static class ThemeResourceApplier
 
         resources["WindowBackgroundBrush"] = ToBrush(chrome.Background, 0.7);
         resources["WindowBackgroundAsset"] = theme.BackgroundAsset;
-        resources["WindowBackgroundOpacity"] = theme.Id == "rose-quartz" ? 0.12 : 0.15;
+        resources["WindowBackgroundOpacity"] = theme.Id == "rose-quartz" ? 0.15 : 0.18;
         resources["WindowBorderBrush"] = ToBrush(chrome.WindowBorder);
         resources["SeparatorBrush"] = ToBrush(chrome.SeparatorLine);
         resources["LabelBackgroundBrush"] = ToBrush(chrome.LabelBackground);

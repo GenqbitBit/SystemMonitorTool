@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -127,7 +128,11 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
 
             await Task.Run(() =>
             {
-                var uri = new Uri($"avares://SystemMonitor.Presentation/Assets/{Uri.EscapeDataString(assetName)}");
+                var assetPath = string.Join(
+                    "/",
+                    assetName.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries)
+                        .Select(Uri.EscapeDataString));
+                var uri = new Uri($"avares://SystemMonitor.Presentation/Assets/{assetPath}");
                 using Stream stream = AssetLoader.Open(uri);
                 using var source = ImageSharpImage.Load<Bgra32>(stream);
                 var isGif = Path.GetExtension(assetName).Equals(".gif", StringComparison.OrdinalIgnoreCase);

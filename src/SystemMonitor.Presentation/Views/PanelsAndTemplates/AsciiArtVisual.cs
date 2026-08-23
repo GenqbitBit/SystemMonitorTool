@@ -20,8 +20,8 @@ public sealed class AsciiArtVisual : Control
         set => SetValue(ArtProperty, value);
     }
 
-    private const double CellWidth = 7.3;
-    private const double CellHeight = 11.7;
+    private const double CellWidth = 7;
+    private const double CellHeight = 12;
     private static readonly Typeface Mono = new("Consolas, Cascadia Mono, monospace");
 
    
