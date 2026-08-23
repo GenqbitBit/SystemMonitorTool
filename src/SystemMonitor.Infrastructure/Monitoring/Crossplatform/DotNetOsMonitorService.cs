@@ -18,10 +18,12 @@ namespace SystemMonitor.Infrastructure.Monitoring.CrossPlatform;
 public class DotNetOsMonitorService : IOsMonitorService
 {
     private const int TopProcessCount = 8;
+    private static readonly TimeSpan ProcessSampleInterval = TimeSpan.FromSeconds(2);
 
     private readonly object _gate = new();
     private Dictionary<int, TimeSpan> _previousCpuTimes = new();
     private DateTime _previousSampleUtc;
+    private DateTime _lastProcessSampleUtc = DateTime.MinValue;
     private OperatingSystemInfo? _lastInfo;
 
     public OperatingSystemInfo? LastInfo
@@ -38,6 +40,9 @@ public class DotNetOsMonitorService : IOsMonitorService
         lock (_gate) // shared state below; one reader/writer at a time.
         {
             var now = DateTime.UtcNow;
+            if (_lastInfo is not null && now - _lastProcessSampleUtc < ProcessSampleInterval)
+                return _lastInfo;
+
             var wallDelta = _previousSampleUtc == DateTime.MinValue
                 ? TimeSpan.Zero
                 : now - _previousSampleUtc;
@@ -116,6 +121,7 @@ public class DotNetOsMonitorService : IOsMonitorService
                 // This tick becomes next tick's memory.
                 _previousCpuTimes = nextCpuTimes;
                 _previousSampleUtc = now;
+                _lastProcessSampleUtc = now;
                 _lastInfo = result;
                 return result;
             }

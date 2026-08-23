@@ -6,6 +6,9 @@
 # dotenv files
 .env
 
+# Local .NET tool installs (dotnet-trace, dotnet-counters, etc.)
+.tools/
+
 # User-specific files
 *.rsuser
 *.suo

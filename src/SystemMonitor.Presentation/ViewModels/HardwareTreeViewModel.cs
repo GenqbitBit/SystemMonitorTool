@@ -89,6 +89,9 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
             if (_disposed || !_running)
                 return;
 
+            if (Roots.Count == vms.Count && Roots.Zip(vms, (current, next) => current.Name == next.Name && current.DisplayValue == next.DisplayValue && current.IsAvailable == next.IsAvailable).All(x => x))
+                return;
+
             Roots.Clear();
             foreach (var vm in vms) Roots.Add(vm);
         });

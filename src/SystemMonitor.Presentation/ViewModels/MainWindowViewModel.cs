@@ -364,6 +364,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (metricsProvider is null || os is null)
             return;
 
+        var previousSnapshot = _latestSnapshot;
+        var previousDedicatedGpuMetricId = DedicatedGpuMetricId;
+        var previousIntegratedGpuMetricId = IntegratedGpuMetricId;
+        var previousDedicatedGpuModelId = DedicatedGpuModelId;
+        var previousIntegratedGpuModelId = IntegratedGpuModelId;
+        var previousHasAvailableGpu = HasAvailableGpu;
+
         var snapshot = metricsProvider.GetSnapshot();
         _latestSnapshot = snapshot;
 
@@ -418,6 +425,20 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         var cpuProcesses = osInfo.TopProcessesByCpu;
         var memoryProcesses = osInfo.TopProcessesByMemory;
 
+        var shouldApplyUi = !AreMetricsEquivalent(previousSnapshot, snapshot)
+            || !string.Equals(previousDedicatedGpuMetricId, dedicatedId, StringComparison.Ordinal)
+            || !string.Equals(previousIntegratedGpuMetricId, integratedId, StringComparison.Ordinal)
+            || !string.Equals(previousDedicatedGpuModelId, dedicatedModelId, StringComparison.Ordinal)
+            || !string.Equals(previousIntegratedGpuModelId, integratedModelId, StringComparison.Ordinal)
+            || previousHasAvailableGpu != (gpus.Count > 0)
+            || !AreProcessListsEquivalent(DetectedGpus, gpus, g => g.DeviceId)
+            || !AreProcessListsEquivalent(TopProcesses, combinedProcesses, p => p.ProcessId)
+            || !AreProcessListsEquivalent(TopCpuProcesses, cpuProcesses, p => p.ProcessId)
+            || !AreProcessListsEquivalent(TopMemoryProcesses, memoryProcesses, p => p.ProcessId);
+
+        if (!shouldApplyUi)
+            return;
+
         void Apply()
         {
             Metrics.SyncFrom(snapshot, m => m.Id);
@@ -451,6 +472,49 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             Apply();
         else
             QueueUiUpdate(Apply);
+    }
+
+    private static bool AreMetricsEquivalent(IReadOnlyList<MetricReading> left, IReadOnlyList<MetricReading> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+
+        for (var i = 0; i < left.Count; i++)
+        {
+            var a = left[i];
+            var b = right[i];
+            if (a.Id != b.Id || a.Value != b.Value || a.IsAvailable != b.IsAvailable || a.TextValue != b.TextValue)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool AreProcessListsEquivalent<TItem, TKey>(
+        ObservableCollection<TItem> current,
+        IReadOnlyList<TItem> latest,
+        Func<TItem, TKey> keySelector)
+        where TKey : notnull
+    {
+        if (current.Count != latest.Count)
+            return false;
+
+        var indexByKey = new Dictionary<TKey, int>(current.Count);
+        for (var i = 0; i < current.Count; i++)
+            indexByKey[keySelector(current[i])] = i;
+
+        for (var i = 0; i < latest.Count; i++)
+        {
+            var item = latest[i];
+            var key = keySelector(item);
+            if (!indexByKey.TryGetValue(key, out var currentIndex) || currentIndex != i)
+                return false;
+
+            if (!EqualityComparer<TItem>.Default.Equals(current[i], item))
+                return false;
+        }
+
+        return true;
     }
 
     private void QueueUiUpdate(Action update)
