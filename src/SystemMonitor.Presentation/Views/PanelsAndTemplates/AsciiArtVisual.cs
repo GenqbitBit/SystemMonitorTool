@@ -34,7 +34,7 @@ public sealed class AsciiArtVisual : Control
     private const double CellWidth = 6;
     private const double CellHeight = 10;
     private static readonly Typeface Mono = new("Consolas, Cascadia Mono, monospace");
-    private static readonly TimeSpan GlintInterval = TimeSpan.FromMilliseconds(40);
+    private static readonly TimeSpan GlintInterval = TimeSpan.FromMilliseconds(80);
 
     private static readonly Dictionary<(char Glyph, double FontSize), FormattedText> _glyphTextCache = new();
 
@@ -65,7 +65,15 @@ public sealed class AsciiArtVisual : Control
 
         if (change.Property == IsPlayingProperty && change.NewValue is bool isPlaying)
         {
-            if (isPlaying)
+            if (isPlaying && IsVisible)
+                StartGlint();
+            else
+                StopGlint();
+        }
+
+        if (change.Property == IsVisibleProperty && change.NewValue is bool isVisible)
+        {
+            if (isVisible && IsPlaying)
                 StartGlint();
             else
                 StopGlint();
@@ -81,7 +89,7 @@ public sealed class AsciiArtVisual : Control
             if (ThemeRuntime.Service is not null)
                 ThemeRuntime.Service.ThemeChanged += _themeChangedHandler;
 
-            if (IsPlaying)
+            if (IsPlaying && IsVisible)
                 StartGlint();
         };
         this.DetachedFromVisualTree += (_, _) =>
@@ -113,12 +121,18 @@ public sealed class AsciiArtVisual : Control
 
     private void StartGlint()
     {
-        if (_glintTimer is not null)
+        if (_glintTimer is not null || !IsVisible || !IsPlaying)
             return;
 
         _glintTimer = new DispatcherTimer { Interval = GlintInterval };
         _glintTimer.Tick += (_, _) =>
         {
+            if (!IsVisible || !IsPlaying)
+            {
+                StopGlint();
+                return;
+            }
+
             _elapsedMs += GlintInterval.TotalMilliseconds;
             InvalidateVisual();
         };

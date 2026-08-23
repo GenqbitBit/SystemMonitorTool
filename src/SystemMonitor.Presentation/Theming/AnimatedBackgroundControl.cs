@@ -60,11 +60,25 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
         });
     }
 
+    private bool _isVisibleInTree;
+
     public AnimatedBackgroundControl()
     {
         Content = _image;
         _image.Stretch = Avalonia.Media.Stretch.UniformToFill;
         _timer.Tick += OnTimerTick;
+
+        AttachedToVisualTree += (_, _) =>
+        {
+            _isVisibleInTree = true;
+            StartTimerIfNeeded();
+        };
+
+        DetachedFromVisualTree += (_, _) =>
+        {
+            _isVisibleInTree = false;
+            _timer.Stop();
+        };
     }
 
     public void SetAsset(string assetName)
@@ -209,7 +223,7 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
                             {
                                 if (!_disposed && ReferenceEquals(_currentFrameSet, frameSet))
                                 {
-                                    _image.Source = frameSet.GetFrame(0);
+                                    _image.Source = frameSet.GetFrameAt(0);
                                     _displayedFrameSet = frameSet;
                                     TrimCache();
                                     if (!_timer.IsEnabled)
@@ -254,6 +268,15 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
         cancellationSource.Dispose();
     }
 
+    private void StartTimerIfNeeded()
+    {
+        if (_disposed || !_isVisibleInTree || _currentFrameSet is null || _currentFrameSet.Count == 0)
+            return;
+
+        if (!_timer.IsEnabled)
+            _timer.Start();
+    }
+
     private void ApplyFrameSet(FrameSet frameSet, string assetName)
     {
         _timer.Stop();
@@ -262,34 +285,34 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
         _frameIndex = 0;
         _timer.Interval = TimeSpan.FromMilliseconds(MinimumFrameDelayMilliseconds);
 
-        var frames = frameSet.GetFramesSnapshot();
-        if (frames.Count > 0)
+        if (frameSet.Count > 0)
         {
-            _image.Source = frames[0];
+            _image.Source = frameSet.GetFrameAt(0);
             _displayedFrameSet = frameSet;
-            _timer.Interval = frameSet.DelaysSnapshot[0];
-            _timer.Start();
+            _timer.Interval = frameSet.GetDelayAt(0);
+            StartTimerIfNeeded();
         }
     }
 
     private void OnTimerTick(object? sender, EventArgs e)
     {
-        if (_currentFrameSet is null)
+        if (_currentFrameSet is null || !_isVisibleInTree)
+        {
+            _timer.Stop();
             return;
+        }
 
-        var frames = _currentFrameSet.GetFramesSnapshot();
-        var delays = _currentFrameSet.DelaysSnapshot;
-
-        if (frames.Count == 0)
+        var count = _currentFrameSet.Count;
+        if (count == 0)
         {
             _timer.Interval = TimeSpan.FromMilliseconds(MinimumFrameDelayMilliseconds);
             return;
         }
 
-        _frameIndex = (_frameIndex + 1) % frames.Count;
+        _frameIndex = (_frameIndex + 1) % count;
 
-        _image.Source = frames[_frameIndex];
-        _timer.Interval = delays[_frameIndex];
+        _image.Source = _currentFrameSet.GetFrameAt(_frameIndex);
+        _timer.Interval = _currentFrameSet.GetDelayAt(_frameIndex);
     }
 
     private void TrimCache()
@@ -358,6 +381,14 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
         private readonly List<TimeSpan> _delays = new();
 
         public bool IsFullyLoaded { get; set; }
+        public int Count
+        {
+            get
+            {
+                lock (_lock)
+                    return _frames.Count;
+            }
+        }
 
         public bool TryAddFrame(Bitmap frame, TimeSpan delay, CancellationToken cancellation)
         {
@@ -372,7 +403,7 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
             }
         }
 
-        public Bitmap GetFrame(int index)
+        public Bitmap GetFrameAt(int index)
         {
             lock (_lock)
             {
@@ -380,22 +411,11 @@ public sealed class AnimatedBackgroundControl : UserControl, IDisposable
             }
         }
 
-        public List<Bitmap> GetFramesSnapshot()
+        public TimeSpan GetDelayAt(int index)
         {
             lock (_lock)
             {
-                return new List<Bitmap>(_frames);
-            }
-        }
-
-        public List<TimeSpan> DelaysSnapshot
-        {
-            get
-            {
-                lock (_lock)
-                {
-                    return new List<TimeSpan>(_delays);
-                }
+                return _delays[index];
             }
         }
 
