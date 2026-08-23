@@ -601,16 +601,23 @@ public class MetricGraphView : Control
     IReadOnlyList<MetricHistoryPoint> history, IBrush brush, string unitSuffix,
     Typeface typeface, double fontSize, Rect bounds, bool toRight, double labelYOffset = 0)
     {
+        // Use the theme's bright metric-value color only for the current live
+        // tip label/marker so it stays readable even when the graph itself is
+        // intentionally dimmed by the active theme. Keep the graph line colors
+        // themselves untouched.
+        var themeColor = Theming.ThemeRuntime.Service.CurrentTheme.Chrome.MetricValue;
+        var valueBrush = new SolidColorBrush(Color.FromArgb(themeColor.A, themeColor.R, themeColor.G, themeColor.B));
+
         // points is ascending-by-X but its endpoint mapping to "newest" flips
         // with toRight (see MetricGraphMath.ComputePoints): points[^1] is newest
         // when toRight, points[0] is newest when !toRight. history is always
         // chronological, so history[^1] is always the newest value.
         var current = toRight ? points[^1] : points[0];
         var currentPoint = new Point(rectOrigin.X + current.X, rectOrigin.Y + current.Y);
-        context.DrawEllipse(brush, null, currentPoint, 2.5, 2.5);
+        context.DrawEllipse(valueBrush, null, currentPoint, 2.5, 2.5);
 
         var currentLabel = MetricGraphMath.FormatAxisValue(history[^1].Value) + unitSuffix;
-        var currentText = new FormattedText(currentLabel, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
+        var currentText = new FormattedText(currentLabel, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, valueBrush);
         var labelX = Math.Clamp(currentPoint.X + 4, 0, bounds.Width - currentText.Width - 2);
         var labelY = Math.Clamp(currentPoint.Y - currentText.Height - 2 + labelYOffset, 0, bounds.Height - currentText.Height);
         context.DrawText(currentText, new Point(labelX, labelY));

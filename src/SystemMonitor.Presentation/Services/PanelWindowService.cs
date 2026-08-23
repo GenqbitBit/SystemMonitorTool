@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using SystemMonitor.Presentation.Views.Subwindows.Settings;
@@ -13,7 +15,6 @@ namespace SystemMonitor.Presentation.Services;
 
 public class PanelWindowService : IPanelWindowService
 {
-
     public static class PanelLabels
     {
         public const string Settings = "Settings";
@@ -24,80 +25,101 @@ public class PanelWindowService : IPanelWindowService
     }
 
     private readonly Dictionary<string, Window> _openWindows = new();
-    private readonly Dictionary<string, PixelPoint> _lastNormalPositions = new();
 
     public void TogglePanel(string label, Window owner)
     {
         if (_openWindows.TryGetValue(label, out var existing))
         {
-   
-            if (existing.WindowState == WindowState.Normal)
-            {
-                _lastNormalPositions[label] = existing.Position;
-            }
-
-            existing.Close();
+            CloseTrackedWindow(label, existing);
             return;
         }
 
-        Window? window = CreateWindow(label, owner);
+        var window = CreateWindow(label, owner);
         if (window is null)
-        {
             return;
-        }
 
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Position = ComputeCenteredPosition(owner, window);
 
-        if (_lastNormalPositions.TryGetValue(label, out var savedPosition))
-        {
-            window.WindowStartupLocation = WindowStartupLocation.Manual;
-            window.Position = savedPosition;
-        }
-
-        window.PropertyChanged += (_, e) =>
-        {
-
-            if (e.Property.Name == nameof(Window.Position) &&
-                window.WindowState == WindowState.Normal)
-            {
-                _lastNormalPositions[label] = window.Position;
-            }
-            else if (e.Property.Name == nameof(Window.WindowState))
-            {
-                if (window.WindowState == WindowState.Normal)
-                {
-                    if (_lastNormalPositions.TryGetValue(label, out var lastPosition))
-                    {
-                        window.Position = lastPosition;
-                    }
-                }
-            }
-        };
-
-        window.Closing += (_, _) =>
-        {
-            if (window.WindowState == WindowState.Normal)
-            {
-                _lastNormalPositions[label] = window.Position;
-            }
-        };
-
-        window.Closed += (_, _) =>
-        {
-            _openWindows.Remove(label);
-        };
-
+        AttachWindowLifecycle(label, owner, window);
         _openWindows[label] = window;
 
-        if (label == PanelLabels.ViewDataTable && owner.DataContext is MainWindowViewModel ownerVm)
-            ownerVm.MetricsTable.SetActive(true, ownerVm.LatestSnapshot);
-
-        window.Closed += (_, _) =>
-        {
-            if (label == PanelLabels.ViewDataTable && owner.DataContext is MainWindowViewModel ownerVm)
-                ownerVm.MetricsTable.SetActive(false);
-        };
-
+        PrepareSpecialPanelState(label, owner, isActive: true);
         window.Show(owner);
+        window.Activate();
+    }
+
+    public void CloseAllPanels()
+    {
+        foreach (var panel in _openWindows.ToList())
+        {
+            var (_, window) = panel;
+            if (window.IsVisible)
+                window.Close();
+            else
+                RemoveWindow(panel.Key, window);
+        }
+    }
+
+    private void CloseTrackedWindow(string label, Window existing)
+    {
+        PrepareSpecialPanelState(label, existing.Owner as Window, isActive: false);
+        existing.Close();
+    }
+
+    private void AttachWindowLifecycle(string label, Window owner, Window window)
+    {
+        window.Closed += OnWindowClosed;
+
+        void OnWindowClosed(object? sender, EventArgs e)
+        {
+            window.Closed -= OnWindowClosed;
+
+            PrepareSpecialPanelState(label, owner, isActive: false);
+            RemoveWindow(label, window);
+        }
+    }
+
+    private void RemoveWindow(string label, Window window)
+    {
+        if (_openWindows.TryGetValue(label, out var tracked) && tracked == window)
+            _openWindows.Remove(label);
+    }
+
+    private static PixelPoint ComputeCenteredPosition(Window owner, Window child)
+    {
+        var ownerBounds = owner.Bounds;
+        var childWidth = child.Width > 0 ? child.Width : child.Bounds.Width;
+        var childHeight = child.Height > 0 ? child.Height : child.Bounds.Height;
+
+        var centeredX = owner.Position.X + (ownerBounds.Width - childWidth) / 2;
+        var centeredY = owner.Position.Y + (ownerBounds.Height - childHeight) / 2;
+
+        var screen = owner.Screens.ScreenFromVisual(owner) ?? owner.Screens.Primary;
+        if (screen is null)
+            return owner.Position;
+
+        var workingArea = screen.WorkingArea;
+
+        var minX = workingArea.X;
+        var maxX = Math.Max(minX, workingArea.Right - childWidth);
+        var minY = workingArea.Y;
+        var maxY = Math.Max(minY, workingArea.Bottom - childHeight);
+
+        return new PixelPoint(
+            (int)Math.Round(Math.Clamp(centeredX, minX, maxX)),
+            (int)Math.Round(Math.Clamp(centeredY, minY, maxY)));
+    }
+
+    private static void PrepareSpecialPanelState(string label, Window? owner, bool isActive)
+    {
+        if (owner?.DataContext is not MainWindowViewModel ownerVm)
+            return;
+
+        ownerVm.SetPanelNavState(label, isActive);
+
+        if (label == PanelLabels.ViewDataTable)
+            ownerVm.MetricsTable.SetActive(isActive, ownerVm.LatestSnapshot);
     }
 
     private static Window? CreateWindow(string label, Window owner)
@@ -109,21 +131,23 @@ public class PanelWindowService : IPanelWindowService
             PanelLabels.Settings => vm is not null
                 ? new SettingsWindow
                 {
-                    DataContext = new SettingsPanelViewModel(vm.Settings)
+                    DataContext = new SettingsPanelViewModel(vm.Settings),
+                    WindowStartupLocation = WindowStartupLocation.Manual,
                 }
                 : null,
             PanelLabels.Themes => new ThemesWindow
                 {
-                    DataContext = new ThemesPanelViewModel(ThemeRuntime.Service)
+                    DataContext = new ThemesPanelViewModel(ThemeRuntime.Service),
+                    WindowStartupLocation = WindowStartupLocation.Manual,
                 },
             PanelLabels.Logs => vm is not null
-                ? new LogsWindow { DataContext = vm.LogsPanel }
+                ? new LogsWindow { DataContext = vm.LogsPanel, WindowStartupLocation = WindowStartupLocation.Manual }
                 : null,
             PanelLabels.ViewDataTable => vm is not null
-                ? new DataTableWindow { DataContext = vm.MetricsTable }
+                ? new DataTableWindow { DataContext = vm.MetricsTable, WindowStartupLocation = WindowStartupLocation.Manual }
                 : null,
             PanelLabels.ViewTopProcesses => vm is not null
-                ? new TopProcessesWindow { DataContext = vm }
+                ? new TopProcessesWindow { DataContext = vm, WindowStartupLocation = WindowStartupLocation.Manual }
                 : null,
             _ => null
         };

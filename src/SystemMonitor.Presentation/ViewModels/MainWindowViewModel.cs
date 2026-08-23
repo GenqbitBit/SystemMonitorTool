@@ -167,11 +167,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         NavItems = new ObservableCollection<NavItemViewModel>
         {
-            new("Settings", SelectNavItem),
-            new("Themes", SelectNavItem),
-            new("Logs", SelectNavItem),
-            new("View Top Processes", SelectNavItem),
-            new("View Data Table", SelectNavItem),
+            new(PanelWindowService.PanelLabels.Settings, SelectNavItem),
+            new(PanelWindowService.PanelLabels.Themes, SelectNavItem),
+            new(PanelWindowService.PanelLabels.Logs, SelectNavItem),
+            new(PanelWindowService.PanelLabels.ViewTopProcesses, SelectNavItem),
+            new(PanelWindowService.PanelLabels.ViewDataTable, SelectNavItem),
         };
 
     }
@@ -181,6 +181,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public LogsPanelViewModel LogsPanel { get; private set; } = null!;
 
     public ObservableCollection<NavItemViewModel> NavItems { get; private set; } = null!;
+
+    public void SetPanelNavState(string label, bool isActive)
+    {
+        foreach (var item in NavItems)
+            item.IsActive = isActive && item.Label == label;
+    }
 
     private void SelectNavItem(NavItemViewModel selected)
     {
