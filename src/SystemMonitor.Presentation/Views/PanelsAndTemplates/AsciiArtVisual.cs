@@ -239,12 +239,11 @@ public sealed class AsciiArtVisual : Control
 
         var preferredSize = new Size(art.GetLength(1) * CellWidth, art.GetLength(0) * CellHeight);
 
-        if (availableSize.Width <= 0 || availableSize.Height <= 0)
+        if (double.IsInfinity(availableSize.Width) || double.IsInfinity(availableSize.Height))
             return preferredSize;
 
-        var fitScale = ComputeFitScale(preferredSize, availableSize);
         return new Size(
-            Math.Max(0, preferredSize.Width * fitScale),
-            Math.Max(0, preferredSize.Height * fitScale));
+            Math.Max(0, availableSize.Width),
+            Math.Max(0, availableSize.Height));
     }
 }

@@ -8,24 +8,29 @@
   <Grid ColumnDefinitions="*">
 
     <Grid Grid.Column="0"
-      Margin="0,0,0,0"
       HorizontalAlignment="Right"
-      VerticalAlignment="Bottom">
+      VerticalAlignment="Bottom"
+      ZIndex="20">
       <Grid.Styles>
         <Style Selector="Button">
-          <Setter Property="Background" Value="Transparent"/>
+          <Setter Property="Background" Value="#000000"/>
         </Style>
         <Style Selector="Button:pointerover /template/ ContentPresenter">
-          <Setter Property="Background" Value="Transparent"/>
+          <Setter Property="Background" Value="#000000"/>
         </Style>
         <Style Selector="Button:pressed /template/ ContentPresenter">
-          <Setter Property="Background" Value="Transparent"/>
+          <Setter Property="Background" Value="#000000"/>
         </Style>
       </Grid.Styles>
 
       <Button Command="{Binding TogglePlaybackCommand}"
-            HorizontalAlignment="Center">
-        <Panel Width="15" Height="15">
+        Width="15"
+        Height="15"
+        Padding="0"
+        MinWidth="0"
+        MinHeight="0"
+        Background="#000000">
+        <Panel>
           <Image 
                 Stretch="Uniform"
                 HorizontalAlignment="Center"
@@ -61,23 +66,28 @@
     <Grid Grid.Column="0"
       HorizontalAlignment="Right"
       VerticalAlignment="Bottom"
-      Margin="0,0,0,25">
+      Margin="0,0,0,20"
+      ZIndex="20">
       <Grid.Styles>
         <Style Selector="Button">
-          <Setter Property="Background" Value="Transparent"/>
+          <Setter Property="Background" Value="#000000"/>
         </Style>
         <Style Selector="Button:pointerover /template/ ContentPresenter">
-          <Setter Property="Background" Value="Transparent"/>
+          <Setter Property="Background" Value="#000000"/>
         </Style>
         <Style Selector="Button:pressed /template/ ContentPresenter">
-          <Setter Property="Background" Value="Transparent"/>
+          <Setter Property="Background" Value="#000000"/>
         </Style>
       </Grid.Styles>
 
       <Button Command="{Binding UploadCommand}"
-            HorizontalAlignment="Left">
-        <Panel Width="15" Height="15"
-          HorizontalAlignment="Right">
+        Width="15"
+        Height="15"
+        Padding="0"
+        MinWidth="0"
+        MinHeight="0"
+        Background="#000000">
+        <Panel>
           <Image Stretch="Uniform"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center">
@@ -90,17 +100,21 @@
     </Grid>
     
 
-    <Panel Grid.Column="0" HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="False">
+    <Grid Grid.Column="0"
+          Margin="2"
+          HorizontalAlignment="Stretch"
+          VerticalAlignment="Stretch"
+          ClipToBounds="True">
       <panels:AsciiArtVisual x:Name="ArtVisual"
                             Art="{Binding CurrentArt}"
                             IsPlaying="{Binding IsPlaying}"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            ClipToBounds="False"/>
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Stretch"
+                            ClipToBounds="True"/>
 
       <TextBlock Text="{Binding ErrorMessage}"
                 Foreground="Red"
                 IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-    </Panel>
+    </Grid>
   </Grid>
 </UserControl>

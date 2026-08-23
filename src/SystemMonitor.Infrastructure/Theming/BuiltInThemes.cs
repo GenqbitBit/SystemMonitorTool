@@ -155,6 +155,7 @@ public static class BuiltInThemes
         Id = "rose-quartz",
         DisplayName = "The Ferdy Special",
         BackgroundAsset = "Backgrounds/pink.gif",
+        BackgroundOpacityOverride = 0.19,
         Chrome = new ThemeChromeColors
         {
             Background = ThemeColor.FromHex("#3B1028"),
