@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
 using SystemMonitor.Domain.AsciiArt;
+using SystemMonitor.Presentation.Theming;
 
 namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
 
@@ -14,34 +15,38 @@ public sealed class AsciiArtVisual : Control
     public static readonly StyledProperty<AsciiCell[,]?> ArtProperty =
         AvaloniaProperty.Register<AsciiArtVisual, AsciiCell[,]?>(nameof(Art));
 
+    public static readonly StyledProperty<bool> IsPlayingProperty =
+        AvaloniaProperty.Register<AsciiArtVisual, bool>(nameof(IsPlaying), true);
+
     public AsciiCell[,]? Art
     {
         get => GetValue(ArtProperty);
         set => SetValue(ArtProperty, value);
     }
 
-    private const double CellWidth = 7;
-    private const double CellHeight = 12;
+    public bool IsPlaying
+    {
+        get => GetValue(IsPlayingProperty);
+        set => SetValue(IsPlayingProperty, value);
+    }
+
+    private const double CellWidth = 6;
+    private const double CellHeight = 10;
     private static readonly Typeface Mono = new("Consolas, Cascadia Mono, monospace");
+    private static readonly TimeSpan GlintInterval = TimeSpan.FromMilliseconds(40);
 
-   
-    private const double FlickerIntervalMs = 145;        
-    private const double FlickerFractionPerTick = 0.12;  
-    private const int MaxTierJump = 2;                  
-
-    // Cache for reusable FormattedText per glyph (static because font/size are fixed)
-    private static readonly Dictionary<char, FormattedText> _glyphTextCache = new();
+    private static readonly Dictionary<(char Glyph, double FontSize), FormattedText> _glyphTextCache = new();
 
     private AsciiCell[,]? _displayArt;
-    private DispatcherTimer? _flickerTimer;
-    private readonly Random _rng = new();
+    private DispatcherTimer? _glintTimer;
+    private double _elapsedMs;
 
-    // Reused across frames instead of allocating per cell per render.
     private readonly Dictionary<uint, SolidColorBrush> _brushCache = new();
 
     static AsciiArtVisual()
     {
         AffectsMeasure<AsciiArtVisual>(ArtProperty);
+        AffectsRender<AsciiArtVisual>(IsPlayingProperty);
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -51,17 +56,43 @@ public sealed class AsciiArtVisual : Control
         if (change.Property == ArtProperty)
         {
             _displayArt = Clone(change.GetNewValue<AsciiCell[,]?>());
-            // Clear brush cache when art changes to prevent unbounded growth
             _brushCache.Clear();
             InvalidateMeasure();
             InvalidateVisual();
+        }
+
+        if (change.Property == IsPlayingProperty && change.NewValue is bool isPlaying)
+        {
+            if (isPlaying)
+                StartGlint();
+            else
+                StopGlint();
         }
     }
 
     public AsciiArtVisual()
     {
-        this.AttachedToVisualTree += (_, _) => StartFlicker();
-        this.DetachedFromVisualTree += (_, _) => StopFlicker();
+        if (ThemeRuntime.Service is not null)
+        {
+            ThemeRuntime.Service.ThemeChanged += (_, _) => InvalidateVisual();
+        }
+
+        this.AttachedToVisualTree += (_, _) =>
+        {
+            if (IsPlaying)
+                StartGlint();
+        };
+        this.DetachedFromVisualTree += (_, _) => StopGlint();
+    }
+
+    public static double ComputeGlintFactor(int row, int col, double elapsedMs)
+    {
+        double rowWave = Math.Sin((elapsedMs * 0.0018) + (row * 1.35));
+        double columnWave = Math.Sin((elapsedMs * 0.0012) + (col * 0.85) + (row * 0.40));
+        double shimmer = Math.Sin((elapsedMs * 0.0024) + (row * 1.8) - (col * 0.65)) * 0.12;
+
+        double factor = 1.0 + (rowWave * 0.18) + (columnWave * 0.10) + shimmer;
+        return Math.Clamp(factor, 0.85, 1.25);
     }
 
     private static AsciiCell[,]? Clone(AsciiCell[,]? source)
@@ -72,82 +103,82 @@ public sealed class AsciiArtVisual : Control
         return copy;
     }
 
-    private void StartFlicker()
+    private void StartGlint()
     {
-        if (_flickerTimer is not null)
+        if (_glintTimer is not null)
             return;
 
-        _flickerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(FlickerIntervalMs) };
-        _flickerTimer.Tick += (_, _) => Flicker();
-        _flickerTimer.Start();
-    }
-
-    private void StopFlicker()
-    {
-        _flickerTimer?.Stop();
-        _flickerTimer = null;
-    }
-
-    private void Flicker()
-    {
-        var art = _displayArt;
-        if (art is null) return;
-
-        int rows = art.GetLength(0);
-        int cols = art.GetLength(1);
-        int totalCells = rows * cols;
-        int perturbCount = Math.Max(1, (int)(totalCells * FlickerFractionPerTick));
-
-        bool changed = false;
-
-        for (int i = 0; i < perturbCount; i++)
+        _glintTimer = new DispatcherTimer { Interval = GlintInterval };
+        _glintTimer.Tick += (_, _) =>
         {
-            int row = _rng.Next(rows);
-            int col = _rng.Next(cols);
-            var cell = art[row, col];
-
-            if (cell.Glyph == ' ') continue;
-
-            int jump = _rng.Next(-MaxTierJump, MaxTierJump + 1);
-            if (jump == 0) continue;
-
-            int newTier = Math.Clamp(cell.Tier + jump, 0, AsciiGlyphRamp.Tiers.Length - 1);
-            if (newTier == cell.Tier) continue;
-
-            art[row, col] = cell with { Glyph = AsciiGlyphRamp.Tiers[newTier], Tier = newTier };
-            changed = true;
-        }
-
-        if (changed) InvalidateVisual();
+            _elapsedMs += GlintInterval.TotalMilliseconds;
+            InvalidateVisual();
+        };
+        _glintTimer.Start();
     }
 
-    private SolidColorBrush GetBrush(byte r, byte g, byte b)
+    private void StopGlint()
     {
-        // Pack RGB into a single key instead of allocating a Color/tuple as dict key.
-        uint key = ((uint)r << 16) | ((uint)g << 8) | b;
+        _glintTimer?.Stop();
+        _glintTimer = null;
+    }
+
+    private static Color GetThemeMetricColor()
+    {
+        var service = ThemeRuntime.Service;
+        if (service is null)
+            return Color.FromRgb(192, 132, 252);
+
+        return ThemeResourceApplier.ToColor(service.CurrentTheme.Chrome.MetricValue);
+    }
+
+    private SolidColorBrush GetBrush(Color color)
+    {
+        uint key = ((uint)color.A << 24) | ((uint)color.R << 16) | ((uint)color.G << 8) | color.B;
 
         if (_brushCache.TryGetValue(key, out var cached))
             return cached;
 
-        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+        var brush = new SolidColorBrush(color);
         _brushCache[key] = brush;
         return brush;
     }
 
-    // Retrieves a cached FormattedText for the given glyph.
-    // The brush is temporary and will be overwritten before drawing.
-    private FormattedText GetOrCreateFormattedText(char glyph)
+    private static Color AdjustForGlint(Color baseColor, double factor)
     {
-        if (!_glyphTextCache.TryGetValue(glyph, out var ft))
+        return Color.FromArgb(
+            baseColor.A,
+            ClampToByte(baseColor.R * factor),
+            ClampToByte(baseColor.G * factor),
+            ClampToByte(baseColor.B * factor));
+    }
+
+    private static double ComputeFitScale(Size preferredSize, Size availableSize)
+    {
+        if (preferredSize.Width <= 0 || preferredSize.Height <= 0)
+            return 1d;
+
+        if (availableSize.Width <= 0 || availableSize.Height <= 0)
+            return 1d;
+
+        double scaleX = availableSize.Width / preferredSize.Width;
+        double scaleY = availableSize.Height / preferredSize.Height;
+        return Math.Min(scaleX, scaleY);
+    }
+
+    private static FormattedText GetOrCreateFormattedText(char glyph, double fontSize)
+    {
+        var key = (glyph, fontSize);
+        if (!_glyphTextCache.TryGetValue(key, out var ft))
         {
             ft = new FormattedText(
                 glyph.ToString(),
                 CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight,
                 Mono,
-                CellHeight,
-                Brushes.White);  // dummy brush, replaced before drawing
-            _glyphTextCache[glyph] = ft;
+                fontSize,
+                Brushes.White);
+            _glyphTextCache[key] = ft;
         }
         return ft;
     }
@@ -158,8 +189,23 @@ public sealed class AsciiArtVisual : Control
         var art = _displayArt;
         if (art is null) return;
 
+        var themeColor = GetThemeMetricColor();
         int rows = art.GetLength(0);
         int cols = art.GetLength(1);
+
+        double preferredWidth = cols * CellWidth;
+        double preferredHeight = rows * CellHeight;
+        var availableBounds = Bounds.Width > 0 && Bounds.Height > 0
+            ? Bounds.Size
+            : new Size(preferredWidth, preferredHeight);
+        double fitScale = ComputeFitScale(new Size(preferredWidth, preferredHeight), availableBounds);
+
+        double cellWidth = CellWidth * fitScale;
+        double cellHeight = CellHeight * fitScale;
+        double contentWidth = preferredWidth * fitScale;
+        double contentHeight = preferredHeight * fitScale;
+        double originX = (availableBounds.Width - contentWidth) / 2d;
+        double originY = (availableBounds.Height - contentHeight) / 2d;
 
         for (int row = 0; row < rows; row++)
         {
@@ -168,23 +214,37 @@ public sealed class AsciiArtVisual : Control
                 var cell = art[row, col];
                 if (cell.Glyph == ' ') continue;
 
-                // Reuse a cached FormattedText for this glyph
-                var ft = GetOrCreateFormattedText(cell.Glyph);
-                var brush = GetBrush(cell.R, cell.G, cell.B);
+                double factor = ComputeGlintFactor(row, col, _elapsedMs);
+                var brush = GetBrush(AdjustForGlint(themeColor, factor));
 
-                // Update the brush on the cached instance (cheap, no re-layout)
+                var textSize = Math.Max(1d, CellHeight * fitScale);
+                var ft = GetOrCreateFormattedText(cell.Glyph, textSize);
                 ft.SetForegroundBrush(brush);
 
-                var origin = new Point(col * CellWidth, row * CellHeight);
+                var origin = new Point(originX + (col * cellWidth), originY + (row * cellHeight));
                 context.DrawText(ft, origin);
             }
         }
+    }
+
+    private static byte ClampToByte(double value)
+    {
+        return (byte)Math.Clamp(Math.Round(value), 0, 255);
     }
 
     protected override Size MeasureOverride(Size availableSize)
     {
         var art = _displayArt;
         if (art is null) return new Size(0, 0);
-        return new Size(art.GetLength(1) * CellWidth, art.GetLength(0) * CellHeight);
+
+        var preferredSize = new Size(art.GetLength(1) * CellWidth, art.GetLength(0) * CellHeight);
+
+        if (availableSize.Width <= 0 || availableSize.Height <= 0)
+            return preferredSize;
+
+        var fitScale = ComputeFitScale(preferredSize, availableSize);
+        return new Size(
+            Math.Max(0, preferredSize.Width * fitScale),
+            Math.Max(0, preferredSize.Height * fitScale));
     }
 }

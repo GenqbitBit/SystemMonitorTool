@@ -61,7 +61,7 @@
     <Grid Grid.Column="0"
       HorizontalAlignment="Right"
       VerticalAlignment="Bottom"
-      Margin="0,0,-1.5,25">
+      Margin="0,0,0,25">
       <Grid.Styles>
         <Style Selector="Button">
           <Setter Property="Background" Value="Transparent"/>
@@ -93,14 +93,10 @@
     <Panel Grid.Column="0" HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="False">
       <panels:AsciiArtVisual x:Name="ArtVisual"
                             Art="{Binding CurrentArt}"
+                            IsPlaying="{Binding IsPlaying}"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
-                            RenderTransformOrigin="{Binding RotationOrigin}"
-                            ClipToBounds="False">
-        <panels:AsciiArtVisual.RenderTransform>
-          <ScaleTransform ScaleX="1" ScaleY="1"/>
-        </panels:AsciiArtVisual.RenderTransform>
-      </panels:AsciiArtVisual>
+                            ClipToBounds="False"/>
 
       <TextBlock Text="{Binding ErrorMessage}"
                 Foreground="Red"
