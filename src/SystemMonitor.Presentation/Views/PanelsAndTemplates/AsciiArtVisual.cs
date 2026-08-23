@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
 using SystemMonitor.Domain.AsciiArt;
+using SystemMonitor.Domain.Models.Theming;
 using SystemMonitor.Presentation.Theming;
 
 namespace SystemMonitor.Presentation.Views.PanelsAndTemplates;
@@ -40,6 +41,7 @@ public sealed class AsciiArtVisual : Control
     private AsciiCell[,]? _displayArt;
     private DispatcherTimer? _glintTimer;
     private double _elapsedMs;
+    private readonly EventHandler<ThemeDefinition> _themeChangedHandler;
 
     private readonly Dictionary<uint, SolidColorBrush> _brushCache = new();
 
@@ -72,17 +74,23 @@ public sealed class AsciiArtVisual : Control
 
     public AsciiArtVisual()
     {
-        if (ThemeRuntime.Service is not null)
-        {
-            ThemeRuntime.Service.ThemeChanged += (_, _) => InvalidateVisual();
-        }
+        _themeChangedHandler = (_, _) => InvalidateVisual();
 
         this.AttachedToVisualTree += (_, _) =>
         {
+            if (ThemeRuntime.Service is not null)
+                ThemeRuntime.Service.ThemeChanged += _themeChangedHandler;
+
             if (IsPlaying)
                 StartGlint();
         };
-        this.DetachedFromVisualTree += (_, _) => StopGlint();
+        this.DetachedFromVisualTree += (_, _) =>
+        {
+            if (ThemeRuntime.Service is not null)
+                ThemeRuntime.Service.ThemeChanged -= _themeChangedHandler;
+
+            StopGlint();
+        };
     }
 
     public static double ComputeGlintFactor(int row, int col, double elapsedMs)
