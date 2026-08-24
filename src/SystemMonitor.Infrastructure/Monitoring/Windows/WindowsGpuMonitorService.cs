@@ -28,6 +28,10 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
     private readonly Dictionary<string, PerformanceCounter> _engineCounters = new();
     private readonly Computer _computer;
     private readonly Dictionary<ISensor, (double Sum, int Count)> _temperatureAveraging = new();
+    private readonly Dictionary<string, double> _usageCache = new();
+    private readonly object _usageCacheGate = new();
+    private DateTime _lastUsageRefreshUtc = DateTime.MinValue;
+    private static readonly TimeSpan UsageRefreshInterval = TimeSpan.FromMilliseconds(1500);
 
     public WindowsGpuMonitorService()
     {
@@ -382,6 +386,19 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 
     private double GetGpuUsagePercent(string? luidFilter)
     {
+        if (string.IsNullOrWhiteSpace(luidFilter))
+            return 0;
+
+        var now = DateTime.UtcNow;
+        lock (_usageCacheGate)
+        {
+            if (_usageCache.TryGetValue(luidFilter, out var cached)
+                && now - _lastUsageRefreshUtc < UsageRefreshInterval)
+            {
+                return cached;
+            }
+        }
+
         PerformanceCounterCategory category;
         try
         {
@@ -389,6 +406,11 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         }
         catch
         {
+            lock (_usageCacheGate)
+            {
+                _usageCache[luidFilter] = 0;
+                _lastUsageRefreshUtc = now;
+            }
             return 0;
         }
 
@@ -399,6 +421,11 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         }
         catch
         {
+            lock (_usageCacheGate)
+            {
+                _usageCache[luidFilter] = 0;
+                _lastUsageRefreshUtc = now;
+            }
             return 0;
         }
 
@@ -411,6 +438,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
             _engineCounters[staleKey].Dispose();
             _engineCounters.Remove(staleKey);
         }
+
         double total = 0;
         foreach (var instance in allInstances.Where(i => MatchesGpu(i, luidFilter)))
         {
@@ -439,7 +467,14 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
                 _engineCounters.Remove(instance);
             }
         }
-        return Math.Round(total, 2);
+
+        var rounded = Math.Round(total, 2);
+        lock (_usageCacheGate)
+        {
+            _usageCache[luidFilter] = rounded;
+            _lastUsageRefreshUtc = now;
+        }
+        return rounded;
     }
 
     private static bool MatchesGpu(string instanceName, string? luidFilter) =>

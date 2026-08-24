@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.Versioning;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Application.UseCases;
 using SystemMonitor.Domain.Models;
+using SystemMonitor.Infrastructure.Monitoring.CrossPlatform;
 using Xunit;
 
 namespace SystemMonitor.Tests;
@@ -31,8 +34,50 @@ public sealed class MetricsSnapshotProviderTests
         Assert.True(Find(snapshot, "network.download").IsAvailable);
     }
 
+    [Fact]
+    public void HardwareRefresh_IsThrottledAcrossFastSnapshots()
+    {
+        var refreshService = new CountingHardwareRefresh();
+        var provider = new MetricsSnapshotProvider(
+            new HealthyCpu(),
+            new HealthyMemory(),
+            new HealthyDisk(),
+            new HealthyNetwork(),
+            new EmptyMotherboard(),
+            new EmptyGpu(),
+            new HealthyOperatingSystem(),
+            new MetricHistoryStore(),
+            refreshService);
+
+        _ = provider.GetSnapshot();
+        _ = provider.GetSnapshot();
+
+        Assert.Equal(1, refreshService.CallCount);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("windows")]
+    public void WindowsProcessAccessCheck_AllowsAccessibleProcess()
+    {
+        using var current = Process.GetCurrentProcess();
+
+        Assert.True(DotNetOsMonitorService.IsProcessAccessible(current));
+    }
+
     private static MetricReading Find(IReadOnlyList<MetricReading> readings, string id) =>
         Assert.Single(readings, reading => reading.Id == id);
+
+    private sealed class HealthyCpu : ICpuMonitorService
+    {
+        public CpuInfo GetCurrentUsage() => new() { ModelName = "Test CPU", CoreCount = 8, ThreadCount = 16, UsagePercent = 15 };
+    }
+
+    private sealed class CountingHardwareRefresh : IHardwareRefreshService
+    {
+        public int CallCount { get; private set; }
+
+        public void RefreshAll() => CallCount++;
+    }
 
     private sealed class ThrowingCpu : ICpuMonitorService
     {

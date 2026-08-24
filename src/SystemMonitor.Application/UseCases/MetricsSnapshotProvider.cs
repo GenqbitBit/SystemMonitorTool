@@ -20,6 +20,9 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private readonly IHardwareRefreshService? _hardwareRefresh;
     private readonly Dictionary<string, Queue<double>> _smoothingWindows = new();
     private readonly Dictionary<string, (int Index, bool Integrated, string Name, string Suffix)> _gpuLabels = new();
+    private readonly object _hardwareRefreshGate = new();
+    private DateTime _lastHardwareRefreshUtc = DateTime.MinValue;
+    private static readonly TimeSpan HardwareRefreshInterval = TimeSpan.FromSeconds(2);
     private const int SmoothingWindow = 4;
     private const int DecimalPlaces = 2;
 
@@ -231,6 +234,15 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     {
         if (_hardwareRefresh is null)
             return;
+
+        var now = DateTime.UtcNow;
+        lock (_hardwareRefreshGate)
+        {
+            if (now - _lastHardwareRefreshUtc < HardwareRefreshInterval)
+                return;
+
+            _lastHardwareRefreshUtc = now;
+        }
 
         try
         {

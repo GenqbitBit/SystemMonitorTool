@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
@@ -18,13 +19,37 @@ namespace SystemMonitor.Infrastructure.Monitoring.CrossPlatform;
 public class DotNetOsMonitorService : IOsMonitorService
 {
     private const int TopProcessCount = 8;
-    private static readonly TimeSpan ProcessSampleInterval = TimeSpan.FromSeconds(2);
+    private const int MaxExpensiveProcessDetailsPerSample = 8;
+    private static readonly TimeSpan ProcessSampleInterval = TimeSpan.FromSeconds(10);
 
     private readonly object _gate = new();
     private Dictionary<int, TimeSpan> _previousCpuTimes = new();
     private DateTime _previousSampleUtc;
     private DateTime _lastProcessSampleUtc = DateTime.MinValue;
     private OperatingSystemInfo? _lastInfo;
+
+    [SupportedOSPlatform("windows")]
+    public static bool IsProcessAccessible(Process process)
+    {
+        if (!OperatingSystem.IsWindows())
+            return true;
+
+        var handle = IntPtr.Zero;
+        try
+        {
+            handle = NativeMethods.OpenProcess(0x1000, false, process.Id);
+            return handle != IntPtr.Zero;
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            if (handle != IntPtr.Zero)
+                NativeMethods.CloseHandle(handle);
+        }
+    }
 
     public OperatingSystemInfo? LastInfo
     {
@@ -58,10 +83,15 @@ public class DotNetOsMonitorService : IOsMonitorService
                 var threadTotal = 0;
                 long? handleTotal = OperatingSystem.IsWindows() ? 0 : null;
 
+                var processIndex = 0;
                 foreach (var process in processes)
                 {
+                    processIndex++;
                     try
                     {
+                        if (OperatingSystem.IsWindows() && !IsProcessAccessible(process))
+                            continue;
+
                         var cpuTime = process.TotalProcessorTime;
                         nextCpuTimes[process.Id] = cpuTime;
 
@@ -83,13 +113,36 @@ public class DotNetOsMonitorService : IOsMonitorService
                             WorkingSetMB = Math.Round(process.WorkingSet64 / 1024d / 1024d, 1)
                         };
 
-                        try { sample.ThreadCount = process.Threads.Count; threadTotal += sample.ThreadCount; }
-                        catch { /* some platforms refuse — honest 0 */ }
-
-                        if (handleTotal.HasValue)
+                        if (processIndex <= MaxExpensiveProcessDetailsPerSample)
                         {
-                            try { handleTotal += process.HandleCount; }
-                            catch { /* protected process — skip its handles */ }
+                            try
+                            {
+                                sample.ThreadCount = process.Threads.Count;
+                                threadTotal += sample.ThreadCount;
+                            }
+                            catch
+                            {
+                                sample.ThreadCount = 0;
+                            }
+
+                            if (handleTotal.HasValue)
+                            {
+                                try
+                                {
+                                    var handleCount = process.HandleCount;
+                                    handleTotal += handleCount;
+                                }
+                                catch
+                                {
+                                    // Protected or inaccessible process: skip the handle count,
+                                    // but keep the global process scan moving without repeating
+                                    // the same failure path for the entire process table.
+                                }
+                            }
+                        }
+                        else
+                        {
+                            sample.ThreadCount = 0;
                         }
 
                         sampled.Add(sample);
@@ -195,5 +248,15 @@ public class DotNetOsMonitorService : IOsMonitorService
             return "macOS"; // raw Darwin version stays in OsVersion; refine later if you like.
 
         return "Unknown OS";
+    }
+
+    private static class NativeMethods
+    {
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern IntPtr OpenProcess(uint processAccess, [MarshalAs(UnmanagedType.Bool)] bool inheritHandle, int processId);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool CloseHandle(IntPtr handle);
     }
 }

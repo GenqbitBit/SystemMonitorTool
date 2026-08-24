@@ -9,6 +9,9 @@
 # Local .NET tool installs (dotnet-trace, dotnet-counters, etc.)
 .tools/
 
+# Custom publish output
+/publish-win-x64/
+
 # User-specific files
 *.rsuser
 *.suo
