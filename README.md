@@ -102,8 +102,8 @@ Avalonia UI
 ## Cross-Platform Design
 
 <p>
-  <img alt="Windows" src="https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows&logoColor=white">
-  <img alt="Linux" src="https://img.shields.io/badge/Linux-FCC624?style=flat-square&logo=linux&logoColor=black">
+  <img alt="Windows" src="https://custom-icon-badges.demolab.com/badge/Windows-000000?style=flat-square&logo=windows11&logoColor=white">
+  <img alt="Linux" src="https://img.shields.io/badge/Linux-000000?style=flat-square&logo=linux&logoColor=white">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-000000?style=flat-square&logo=apple&logoColor=white">
 </p>
 
