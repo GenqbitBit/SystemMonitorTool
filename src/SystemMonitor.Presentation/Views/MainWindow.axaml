@@ -1363,7 +1363,7 @@
                            FontSize="12"
                            HorizontalAlignment="Left"
                            VerticalAlignment="Center"
-                           Text="Currently on Development | https://github.com/GenqbitBit/SystemMonitorTool"
+                           Text="Beta | https://github.com/GenqbitBit/SystemMonitorTool"
                            TextTrimming="CharacterEllipsis"/>
 
                 <TextBlock Grid.Column="1"
