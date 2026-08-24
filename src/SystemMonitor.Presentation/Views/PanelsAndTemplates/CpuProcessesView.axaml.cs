@@ -11,7 +11,24 @@ public partial class CpuProcessesView : UserControl
         AvaloniaProperty.Register<CpuProcessesView, IEnumerable<ProcessInfo>?>(nameof(Processes));
 
     public static readonly StyledProperty<string> TitleProperty =
-        AvaloniaProperty.Register<CpuProcessesView, string>(nameof(Title), "Top CPU");
+    AvaloniaProperty.Register<CpuProcessesView, string>(nameof(Title), "Top CPU");
+
+    public string Title
+    {
+        get => GetValue(TitleProperty);
+        set => SetValue(TitleProperty, value);
+    }
+
+    public static readonly StyledProperty<string> TitleSuffixProperty =
+        AvaloniaProperty.Register<CpuProcessesView, string>(nameof(TitleSuffix), "10 seconds");
+
+    public string TitleSuffix
+    {
+        get => GetValue(TitleSuffixProperty);
+        set => SetValue(TitleSuffixProperty, value);
+    }
+
+
 
     public IEnumerable<ProcessInfo>? Processes
     {
@@ -19,11 +36,6 @@ public partial class CpuProcessesView : UserControl
         set => SetValue(ProcessesProperty, value);
     }
 
-    public string Title
-    {
-        get => GetValue(TitleProperty);
-        set => SetValue(TitleProperty, value);
-    }
 
     public CpuProcessesView()
     {

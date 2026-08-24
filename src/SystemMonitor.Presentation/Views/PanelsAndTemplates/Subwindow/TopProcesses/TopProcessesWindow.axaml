@@ -4,7 +4,7 @@
         xmlns:panels="using:SystemMonitor.Presentation.Views.PanelsAndTemplates"
         x:Class="SystemMonitor.Presentation.Views.Subwindows.TopProcesses.TopProcessesWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="Top Processes"
+        Title="Top Processes Interval:10 seconds"
         Width="500" Height="450"
         CanResize="False"
         WindowStartupLocation="CenterOwner">

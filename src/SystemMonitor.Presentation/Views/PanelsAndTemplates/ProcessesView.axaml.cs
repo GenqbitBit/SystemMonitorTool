@@ -11,7 +11,7 @@ public partial class ProcessesView : UserControl
         AvaloniaProperty.Register<ProcessesView, IEnumerable<ProcessInfo>?>(nameof(Processes));
 
     public static readonly StyledProperty<string> TitleProperty =
-        AvaloniaProperty.Register<ProcessesView, string>(nameof(Title), "Top Processes");
+        AvaloniaProperty.Register<ProcessesView, string>(nameof(Title), "Top Processes Interval:10 seconds");
 
     public IEnumerable<ProcessInfo>? Processes
     {
