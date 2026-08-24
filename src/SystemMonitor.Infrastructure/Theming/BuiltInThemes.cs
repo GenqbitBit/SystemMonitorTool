@@ -153,7 +153,7 @@ public static class BuiltInThemes
     public static readonly ThemeDefinition RoseQuartz = new()
     {
         Id = "rose-quartz",
-        DisplayName = "The Ferdy Special",
+        DisplayName = "Rose Quartz",
         BackgroundAsset = "Backgrounds/pink.gif",
         BackgroundOpacityOverride = 0.19,
         Chrome = new ThemeChromeColors
