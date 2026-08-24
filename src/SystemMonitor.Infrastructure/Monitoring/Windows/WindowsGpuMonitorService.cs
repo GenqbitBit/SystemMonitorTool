@@ -28,9 +28,8 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
     private readonly Dictionary<string, PerformanceCounter> _engineCounters = new();
     private readonly Computer _computer;
     private readonly Dictionary<ISensor, (double Sum, int Count)> _temperatureAveraging = new();
-    private readonly Dictionary<string, double> _usageCache = new();
+    private readonly Dictionary<string, (double Value, DateTime RefreshedUtc)> _usageCache = new();
     private readonly object _usageCacheGate = new();
-    private DateTime _lastUsageRefreshUtc = DateTime.MinValue;
     private static readonly TimeSpan UsageRefreshInterval = TimeSpan.FromMilliseconds(1500);
 
     public WindowsGpuMonitorService()
@@ -393,9 +392,9 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         lock (_usageCacheGate)
         {
             if (_usageCache.TryGetValue(luidFilter, out var cached)
-                && now - _lastUsageRefreshUtc < UsageRefreshInterval)
+                && now - cached.RefreshedUtc < UsageRefreshInterval)
             {
-                return cached;
+                return cached.Value;
             }
         }
 
@@ -408,8 +407,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         {
             lock (_usageCacheGate)
             {
-                _usageCache[luidFilter] = 0;
-                _lastUsageRefreshUtc = now;
+                _usageCache[luidFilter] = (0, now);
             }
             return 0;
         }
@@ -423,8 +421,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         {
             lock (_usageCacheGate)
             {
-                _usageCache[luidFilter] = 0;
-                _lastUsageRefreshUtc = now;
+                _usageCache[luidFilter] = (0, now);
             }
             return 0;
         }
@@ -471,8 +468,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         var rounded = Math.Round(total, 2);
         lock (_usageCacheGate)
         {
-            _usageCache[luidFilter] = rounded;
-            _lastUsageRefreshUtc = now;
+            _usageCache[luidFilter] = (rounded, now);
         }
         return rounded;
     }

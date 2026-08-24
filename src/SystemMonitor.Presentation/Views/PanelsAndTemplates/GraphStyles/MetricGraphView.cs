@@ -340,7 +340,35 @@ public class MetricGraphView : Control
 
     private void OnMetricsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (!AffectsThisView(e))
+            return;
+
         InvalidateVisual();
+    }
+
+    private bool AffectsThisView(NotifyCollectionChangedEventArgs e)
+    {
+        // Reset (full replace) or Move (reordering) can't be cheaply attributed
+        // to a specific metric — repaint defensively.
+        if (e.Action == NotifyCollectionChangedAction.Reset
+            || e.Action == NotifyCollectionChangedAction.Move)
+            return true;
+
+        return ContainsRelevantMetric(e.OldItems) || ContainsRelevantMetric(e.NewItems);
+    }
+
+    private bool ContainsRelevantMetric(System.Collections.IList? items)
+    {
+        if (items is null)
+            return false;
+
+        foreach (var obj in items)
+        {
+            if (obj is MetricReading m && (m.Id == MetricId || m.Id == SecondaryMetricId))
+                return true;
+        }
+
+        return false;
     }
 
     public override void Render(DrawingContext context)
