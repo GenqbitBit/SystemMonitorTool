@@ -49,7 +49,14 @@ jobs:
           -p:EnableCompressionInSingleFile=true
           -o publish-${{ matrix.rid }}
 
-      - name: Package (zip)
+      - name: Package (zip) - Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path publish-${{ matrix.rid }}\* -DestinationPath ${{ env.APP_NAME }}-${{ matrix.rid }}.zip
+
+      - name: Package (zip) - Unix
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           cd publish-${{ matrix.rid }}
