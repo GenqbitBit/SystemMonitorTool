@@ -20,7 +20,7 @@ public class DotNetOsMonitorService : IOsMonitorService
 {
     private const int TopProcessCount = 8;
     private const int MaxExpensiveProcessDetailsPerSample = 8;
-    private static readonly TimeSpan ProcessSampleInterval = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan ProcessSampleInterval = TimeSpan.FromSeconds(2);
 
     private readonly object _gate = new();
     private Dictionary<int, TimeSpan> _previousCpuTimes = new();

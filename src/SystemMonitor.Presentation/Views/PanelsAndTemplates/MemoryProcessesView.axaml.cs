@@ -14,7 +14,7 @@ public partial class MemoryProcessesView : UserControl
     AvaloniaProperty.Register<MemoryProcessesView, string>(nameof(Title), "Top Mem");
 
 public static readonly StyledProperty<string> TitleSuffixProperty =
-    AvaloniaProperty.Register<MemoryProcessesView, string>(nameof(TitleSuffix), "10 seconds");
+    AvaloniaProperty.Register<MemoryProcessesView, string>(nameof(TitleSuffix), "2 seconds");
 
     public IEnumerable<ProcessInfo>? Processes
     {

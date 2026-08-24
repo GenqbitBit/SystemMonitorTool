@@ -20,7 +20,7 @@ public partial class CpuProcessesView : UserControl
     }
 
     public static readonly StyledProperty<string> TitleSuffixProperty =
-        AvaloniaProperty.Register<CpuProcessesView, string>(nameof(TitleSuffix), "10 seconds");
+        AvaloniaProperty.Register<CpuProcessesView, string>(nameof(TitleSuffix), "2 seconds");
 
     public string TitleSuffix
     {
