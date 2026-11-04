@@ -96,6 +96,18 @@ public class MetricGraphView : Control
     private IBrush? _valueBrush;
     private Color _valueBrushColor;
 
+    // Pens are reference types allocated per pen object. The render path used to
+    // construct a fresh Pen for every grid line, axis rectangle and the baseline
+    // on every frame, for every graph. They only depend on the brushes, so they
+    // are cached and invalidated when a brush property changes.
+    private Pen? _gridPen;
+    private Pen? _axisPen;
+    private Pen? _baselinePen;
+
+    private Pen GridPen => _gridPen ??= new Pen(GridBrush, 1);
+    private Pen AxisPen => _axisPen ??= new Pen(AxisBrush, 1);
+    private Pen BaselinePen => _baselinePen ??= new Pen(BaselineBrush, 1.5);
+
     public GraphKind? GraphKind
     {
         get => GetValue(GraphKindProperty);
@@ -267,6 +279,15 @@ public class MetricGraphView : Control
             // Cached FormattedText objects embed both the brush and typeface.
             _labelCache.Clear();
         }
+
+        if (change.Property == GridBrushProperty
+            || change.Property == AxisBrushProperty
+            || change.Property == BaselineBrushProperty)
+        {
+            _gridPen = null;
+            _axisPen = null;
+            _baselinePen = null;
+        }
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -293,6 +314,9 @@ public class MetricGraphView : Control
     {
         ApplyThemeColors();
         _labelCache.Clear();
+        _gridPen = null;
+        _axisPen = null;
+        _baselinePen = null;
         InvalidateVisual();
     }
 
@@ -307,6 +331,9 @@ public class MetricGraphView : Control
         ApplyGraphSettings(settings);
         ApplyThemeColors();
         _labelCache.Clear();
+        _gridPen = null;
+        _axisPen = null;
+        _baselinePen = null;
         InvalidateVisual();
     }
 
@@ -461,7 +488,7 @@ public class MetricGraphView : Control
             foreach (var (value, normalized) in MetricGraphMath.ComputeValueAxisTicks(minValue, maxValue, valueTickCount))
             {
                 var y = plotOrigin.Y + (plotHeight - normalized * plotHeight);
-                context.DrawLine(new Pen(GridBrush, 1), new Point(plotOrigin.X, y), new Point(plotOrigin.X + plotWidth, y));
+                context.DrawLine(GridPen, new Point(plotOrigin.X, y), new Point(plotOrigin.X + plotWidth, y));
 
                 var label = MetricGraphMath.FormatAxisValue(value) + unitSuffix;
                 var text = GetLabelText(label, typeface, fontSize, AxisBrush);
@@ -472,7 +499,7 @@ public class MetricGraphView : Control
             {
                 var effectiveX = ToRight ? normalizedX : 1 - normalizedX;
                 var x = plotOrigin.X + effectiveX * plotWidth;
-                context.DrawLine(new Pen(GridBrush, 1), new Point(x, plotOrigin.Y), new Point(x, plotOrigin.Y + plotHeight));
+                context.DrawLine(GridPen, new Point(x, plotOrigin.Y), new Point(x, plotOrigin.Y + plotHeight));
 
                 var text = GetLabelText(label, typeface, fontSize, AxisBrush);
                 var textX = Math.Clamp(x - text.Width / 2, plotOrigin.X, bounds.Width - text.Width);
@@ -480,7 +507,7 @@ public class MetricGraphView : Control
             }
         }
 
-        context.DrawRectangle(new Pen(AxisBrush, 1), new Rect(plotOrigin, new Size(plotWidth, plotHeight)));
+        context.DrawRectangle(AxisPen, new Rect(plotOrigin, new Size(plotWidth, plotHeight)));
 
         var plotRect = new Rect(plotOrigin, new Size(plotWidth, plotHeight));
         _defaultLineRenderer.LineBrush = LineBrush;
@@ -545,13 +572,13 @@ public class MetricGraphView : Control
             foreach (var (_, normalized) in MetricGraphMath.ComputeValueAxisTicks(primaryRange.Min, primaryRange.Max, valueTickCount))
             {
                 var yTop = topRect.Y + (topRect.Height - normalized * topRect.Height);
-                context.DrawLine(new Pen(GridBrush, 1), new Point(topRect.X, yTop), new Point(topRect.X + topRect.Width, yTop));
+                context.DrawLine(GridPen, new Point(topRect.X, yTop), new Point(topRect.X + topRect.Width, yTop));
             }
 
             foreach (var (_, normalized) in MetricGraphMath.ComputeValueAxisTicks(secondaryRange.Min, secondaryRange.Max, valueTickCount))
             {
                 var yBottom = bottomRect.Y + normalized * bottomRect.Height;
-                context.DrawLine(new Pen(GridBrush, 1), new Point(bottomRect.X, yBottom), new Point(bottomRect.X + bottomRect.Width, yBottom));
+                context.DrawLine(GridPen, new Point(bottomRect.X, yBottom), new Point(bottomRect.X + bottomRect.Width, yBottom));
             }
 
             // Time axis is drawn independently per half rather than once for
@@ -563,7 +590,7 @@ public class MetricGraphView : Control
             {
                 var effectiveX = ToRight ? normalizedX : 1 - normalizedX;
                 var x = plotOrigin.X + effectiveX * plotWidth;
-                context.DrawLine(new Pen(GridBrush, 1), new Point(x, topRect.Y), new Point(x, topRect.Y + topRect.Height));
+                context.DrawLine(GridPen, new Point(x, topRect.Y), new Point(x, topRect.Y + topRect.Height));
             }
 
             foreach (var (normalizedX, label) in timeTicks)
@@ -583,7 +610,7 @@ public class MetricGraphView : Control
             {
                 var effectiveX = SecondaryToRight ? normalizedX : 1 - normalizedX;
                 var x = plotOrigin.X + effectiveX * plotWidth;
-                context.DrawLine(new Pen(GridBrush, 1), new Point(x, bottomRect.Y), new Point(x, bottomRect.Y + bottomRect.Height));
+                context.DrawLine(GridPen, new Point(x, bottomRect.Y), new Point(x, bottomRect.Y + bottomRect.Height));
             }
 
             foreach (var (normalizedX, label) in timeTicks)
@@ -602,8 +629,8 @@ public class MetricGraphView : Control
             }
         }
 
-        context.DrawRectangle(new Pen(AxisBrush, 1), topRect);
-        context.DrawRectangle(new Pen(AxisBrush, 1), bottomRect);
+        context.DrawRectangle(AxisPen, topRect);
+        context.DrawRectangle(AxisPen, bottomRect);
 
         _defaultLineRenderer.LineBrush = LineBrush;
         _defaultLineRenderer.LineThickness = LineThickness;
@@ -620,7 +647,7 @@ public class MetricGraphView : Control
             secondaryRenderer.Draw(context, bottomRect, secondaryHistory, secondaryRange.Max, secondaryRange.Min, windowStart, windowEnd, baselineAtTop: true, useFrozenValues: useFrozenValues, toRight: SecondaryToRight);
         }
 
-        context.DrawLine(new Pen(BaselineBrush, 1.5), new Point(plotOrigin.X, baselineY - halfGap / 2), new Point(plotOrigin.X + plotWidth, baselineY - halfGap / 2));
+        context.DrawLine(BaselinePen, new Point(plotOrigin.X, baselineY - halfGap / 2), new Point(plotOrigin.X + plotWidth, baselineY - halfGap / 2));
 
         var primaryUnit = GetUnitSuffix(MetricId);
         var secondaryUnit = GetUnitSuffix(SecondaryMetricId);
@@ -697,18 +724,38 @@ public class MetricGraphView : Control
         return _valueBrush;
     }
 
-    private string GetUnitSuffix(string? metricId)
+    // Plain indexed scan instead of LINQ FirstOrDefault: metrics are looked up
+    // several times per render, for every graph, on every frame, and the LINQ
+    // form allocated a delegate plus enumerator for each lookup.
+    private MetricReading? FindMetric(string? metricId)
     {
-        var metric = Metrics?.FirstOrDefault(m => m.Id == metricId);
-        return string.IsNullOrEmpty(metric?.Unit) ? string.Empty : metric!.Unit;
+        if (string.IsNullOrEmpty(metricId))
+            return null;
+
+        var metrics = Metrics;
+        if (metrics is null)
+            return null;
+
+        for (var i = 0; i < metrics.Count; i++)
+        {
+            var candidate = metrics[i];
+            if (string.Equals(candidate.Id, metricId, StringComparison.Ordinal))
+                return candidate;
+        }
+
+        return null;
     }
 
-    private bool IsMetricAvailable(string? metricId) =>
-        !string.IsNullOrEmpty(metricId)
-        && Metrics?.FirstOrDefault(metric => metric.Id == metricId)?.IsAvailable == true;
+    private string GetUnitSuffix(string? metricId)
+    {
+        var unit = FindMetric(metricId)?.Unit;
+        return string.IsNullOrEmpty(unit) ? string.Empty : unit!;
+    }
+
+    private bool IsMetricAvailable(string? metricId) => FindMetric(metricId)?.IsAvailable == true;
 
     private string GetMetricCategory(string? metricId) =>
-        Metrics?.FirstOrDefault(metric => metric.Id == metricId)?.Category
+        FindMetric(metricId)?.Category
         ?? (GraphRole?.ToString().StartsWith("Gpu", StringComparison.OrdinalIgnoreCase) == true ? "GPU" : "Hardware");
 
     private void DrawUnavailable(DrawingContext context, Rect bounds, string category)

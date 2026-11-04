@@ -18,7 +18,8 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
     private readonly ManualResetEventSlim _stopSignal = new();
     private volatile bool _running;
     private volatile bool _disposed;
-    private List<Domain.Models.HardwareTreeNode> _roots = new();
+    // Written by the discovery thread, read by the value-refresh thread.
+    private volatile List<Domain.Models.HardwareTreeNode> _roots = new();
     private int _discovering;
 
     private static readonly TimeSpan ValueRefreshInterval = TimeSpan.FromSeconds(2);

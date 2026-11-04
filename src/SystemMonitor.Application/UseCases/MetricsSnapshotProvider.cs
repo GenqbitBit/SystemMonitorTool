@@ -18,7 +18,10 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private readonly IOsMonitorService _os;
     private readonly IMetricHistoryStore _historyStore;
     private readonly IHardwareRefreshService? _hardwareRefresh;
-    private readonly Dictionary<string, Queue<double>> _smoothingWindows = new();
+    private readonly Dictionary<string, RunningAverageWindow> _smoothingWindows = new();
+    private readonly Dictionary<(string Category, string Suffix), string> _temperatureMetricIds = new();
+    private readonly HashSet<string> _temperatureCategories = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<string> _staleGpuDeviceIds = new();
     private readonly Dictionary<string, (int Index, bool Integrated, string Name, string Suffix)> _gpuLabels = new();
     private readonly object _hardwareRefreshGate = new();
     private DateTime _lastHardwareRefreshUtc = DateTime.MinValue;
@@ -92,7 +95,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             hardwareTemperatures = _lastHardwareTemperatures;
         }
 
-        var readings = new List<MetricReading>();
+        var readings = new List<MetricReading>(96);
 
         // CPU — identity rows first (emission order = display order).
         var cpuInfo = ReadService(_cpu.GetCurrentUsage, new CpuInfo(), "CPU", out var cpuServiceAvailable);
@@ -190,66 +193,63 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             readings.Add(BuildGpuTextReading(MetricCatalog.GpuModel, gpuInfo, gpuInfo.Name, gpuLabelSuffix));
         }
 
-        foreach (var deviceId in _gpuLabels.Keys.Where(id => !activeGpuIds.Contains(id)).ToList())
-            _gpuLabels.Remove(deviceId);
+        // Only scan for stale identities when the counts disagree; the common
+        // case (same devices every tick) then costs nothing instead of the
+        // list-and-LINQ allocation the previous form paid on every snapshot.
+        if (_gpuLabels.Count != activeGpuIds.Count)
+        {
+            _staleGpuDeviceIds.Clear();
+            foreach (var deviceId in _gpuLabels.Keys)
+            {
+                if (!activeGpuIds.Contains(deviceId))
+                    _staleGpuDeviceIds.Add(deviceId);
+            }
+
+            for (var i = 0; i < _staleGpuDeviceIds.Count; i++)
+                _gpuLabels.Remove(_staleGpuDeviceIds[i]);
+        }
 
 
         PruneSmoothingWindows(readings);
         // Prefer the full hardware-tree scan, but supplement categories the
         // shared scan did not return from their existing monitor snapshots.
-        var temperatureCategories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        _temperatureCategories.Clear();
         if (hardwareTemperatures is not null)
         {
             foreach (var reading in hardwareTemperatures)
             {
-                temperatureCategories.Add(reading.Category);
+                _temperatureCategories.Add(reading.Category);
                 readings.Add(BuildTemperatureMetric(
                     reading.Category,
                     reading,
-                    idSuffix: string.IsNullOrWhiteSpace(reading.SensorId)
-                        ? $"{reading.HardwareName}.{reading.SensorLabel}"
-                        : reading.SensorId));
+                    id: GetTemperatureMetricId(
+                        reading.Category,
+                        string.IsNullOrWhiteSpace(reading.SensorId)
+                            ? $"{reading.HardwareName}.{reading.SensorLabel}"
+                            : reading.SensorId)));
             }
         }
 
-        void AddTemperatureFallback(
-            string category,
-            IEnumerable<TemperatureReading> fallbackReadings,
-            Func<TemperatureReading, string>? idSuffix = null)
-        {
-            if (temperatureCategories.Contains(category))
-                return;
-
-            var added = false;
-            foreach (var reading in fallbackReadings)
-            {
-                readings.Add(BuildTemperatureMetric(
-                    category,
-                    reading,
-                    idSuffix: idSuffix?.Invoke(reading) ?? reading.SensorLabel));
-                added = true;
-            }
-
-            if (added)
-                temperatureCategories.Add(category);
-        }
-
-        AddTemperatureFallback("CPU", cpuInfo.Temperatures);
+        AddTemperatureFallback(readings, "CPU", cpuInfo.Temperatures);
         AddTemperatureFallback(
+            readings,
             "MOTHERBOARD",
-            boardInfo?.Temperatures.AsEnumerable() ?? Enumerable.Empty<TemperatureReading>());
-        AddTemperatureFallback("RAM", memInfo.Temperatures);
-        AddTemperatureFallback("STORAGE", diskInfo.Temperatures);
-        if (!temperatureCategories.Contains("GPU"))
+            boardInfo?.Temperatures ?? (IReadOnlyList<TemperatureReading>)Array.Empty<TemperatureReading>());
+        AddTemperatureFallback(readings, "RAM", memInfo.Temperatures);
+        AddTemperatureFallback(readings, "STORAGE", diskInfo.Temperatures);
+        if (!_temperatureCategories.Contains("GPU"))
         {
-            foreach (var gpuInfo in gpuInfos.Where(gpu => gpu.IsAvailable))
+            for (var i = 0; i < gpuInfos.Count; i++)
             {
+                var gpuInfo = gpuInfos[i];
+                if (!gpuInfo.IsAvailable) continue;
+
                 foreach (var reading in gpuInfo.Temperatures)
                 {
                     readings.Add(BuildTemperatureMetric(
                         "GPU",
                         reading,
-                        idSuffix: $"{gpuInfo.DeviceId}.{reading.SensorLabel}",
+                        id: GetTemperatureMetricId("GPU", $"{gpuInfo.DeviceId}.{reading.SensorLabel}"),
                         gpuIndex: gpuInfo.Index,
                         gpuIsIntegrated: gpuInfo.IsIntegrated,
                         gpuDeviceId: gpuInfo.DeviceId));
@@ -257,7 +257,52 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             }
         }
 
+        // Sensor sets are stable in practice, so the id cache is a pure win;
+        // the cap only guards against pathological hardware churn.
+        if (_temperatureMetricIds.Count > 256)
+            _temperatureMetricIds.Clear();
+
         return readings;
+    }
+
+    // Appends a category's fallback sensors only when the shared hardware scan
+    // did not already provide that category. The previous local-function form
+    // captured the readings list and category set in a closure allocated on
+    // every single tick.
+    private void AddTemperatureFallback(
+        List<MetricReading> readings,
+        string category,
+        IReadOnlyList<TemperatureReading> fallbackReadings)
+    {
+        if (_temperatureCategories.Contains(category))
+            return;
+
+        var added = false;
+        for (var i = 0; i < fallbackReadings.Count; i++)
+        {
+            var reading = fallbackReadings[i];
+            readings.Add(BuildTemperatureMetric(
+                category,
+                reading,
+                id: GetTemperatureMetricId(category, reading.SensorLabel)));
+            added = true;
+        }
+
+        if (added)
+            _temperatureCategories.Add(category);
+    }
+
+    // Temperature ids were rebuilt (and lower-cased) for every sensor on every
+    // tick. The identity only depends on category + sensor suffix, so cache it.
+    private string GetTemperatureMetricId(string category, string suffix)
+    {
+        var key = (category, suffix);
+        if (_temperatureMetricIds.TryGetValue(key, out var id))
+            return id;
+
+        id = $"temp.{category}.{suffix}".ToLowerInvariant();
+        _temperatureMetricIds[key] = id;
+        return id;
     }
 
     private static MetricReading BuildUnavailableReading(MetricCatalogEntry entry) => new()
@@ -407,11 +452,11 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     // old inline loop over ITemperatureMonitorService.GetCurrentUsage() — same
     // Id scheme ("temp.{category}.{idSuffix}"), same Min/Max/Average rounding.
     private static MetricReading BuildTemperatureMetric(
-        string category, TemperatureReading reading, string idSuffix,
+        string category, TemperatureReading reading, string id,
         int? gpuIndex = null, bool? gpuIsIntegrated = null,
         string? gpuDeviceId = null) => new()
     {
-        Id = $"temp.{category}.{idSuffix}".ToLowerInvariant(),
+        Id = id,
         Category = category,
         Label = reading.SensorLabel,
         Kind = MetricKind.Temperature,
@@ -430,10 +475,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private static MetricReading BuildGpuTextReading(
         MetricCatalogEntry entry, GpuInfo gpuInfo, string? text, string labelSuffix)
     {
-        var normalized = string.IsNullOrWhiteSpace(text)
-            || string.Equals(text.Trim(), "Unknown", StringComparison.OrdinalIgnoreCase)
-            ? "N/A"
-            : text;
+        var normalized = IsMissingText(text) ? "N/A" : text!;
 
         return new MetricReading
         {
@@ -466,10 +508,7 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
 
     private static MetricReading BuildTextReading(MetricCatalogEntry entry, string? text, bool available = true)
     {
-        var normalized = string.IsNullOrWhiteSpace(text)
-            || string.Equals(text.Trim(), "Unknown", StringComparison.OrdinalIgnoreCase)
-            ? "N/A"
-            : text;
+        var normalized = IsMissingText(text) ? "N/A" : text!;
 
         return new MetricReading
         {
@@ -499,17 +538,54 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private static string FormatHandles(long? handles) =>
         handles.HasValue ? handles.Value.ToString("N0") : "—";
 
+    // "Unchanged or blank text" check without allocating: the previous form
+    // Trim()ed (and therefore copied) every identity string on every tick.
+    private static bool IsMissingText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return true;
+
+        return text.AsSpan().Trim().Equals("Unknown".AsSpan(), StringComparison.OrdinalIgnoreCase);
+    }
+
     private double Smooth(string id, double newValue)
     {
         if (!_smoothingWindows.TryGetValue(id, out var window))
         {
-            window = new Queue<double>();
+            window = new RunningAverageWindow(SmoothingWindow);
             _smoothingWindows[id] = window;
         }
-        window.Enqueue(newValue);
-        if (window.Count > SmoothingWindow)
-            window.Dequeue();
-        return window.Average();
+
+        return window.Add(newValue);
+    }
+
+    // Fixed-size ring buffer with a running sum. Replaces a Queue<double> whose
+    // Average() call boxed an enumerator and re-summed the window on every
+    // smoothed metric, on every tick.
+    private sealed class RunningAverageWindow
+    {
+        private readonly double[] _values;
+        private int _count;
+        private int _next;
+        private double _sum;
+
+        public RunningAverageWindow(int capacity) => _values = new double[capacity];
+
+        public double Add(double value)
+        {
+            if (_count < _values.Length)
+                _count++;
+            else
+                _sum -= _values[_next];
+
+            _values[_next] = value;
+            _sum += value;
+
+            if (++_next == _values.Length)
+                _next = 0;
+
+            return _sum / _count;
+        }
     }
 
     private static double Round(double value) => Math.Round(value, DecimalPlaces);

@@ -35,6 +35,10 @@ public sealed class MetricHistoryStore : IMetricHistoryStore
     private readonly object _lock = new();
     private readonly List<string> _pruneScratch = new();
 
+    // Reused across ticks: Record() runs at the poll rate, and this set used to
+    // be allocated fresh (plus resized) on every single call.
+    private readonly HashSet<string> _activeMetricIds = new(StringComparer.Ordinal);
+
     public MetricHistoryStore(TimeSpan? window = null)
     {
         _window = window ?? TimeSpan.FromSeconds(60);
@@ -48,7 +52,8 @@ public sealed class MetricHistoryStore : IMetricHistoryStore
 
         lock (_lock)
         {
-            var activeMetricIds = new HashSet<string>();
+            var activeMetricIds = _activeMetricIds;
+            activeMetricIds.Clear();
             foreach (var reading in snapshot)
             {
                 activeMetricIds.Add(reading.Id);
@@ -163,7 +168,7 @@ public sealed class MetricHistoryStore : IMetricHistoryStore
                     _liveTip.Remove(metricId);
             }
 
-            if (frozen.Count == 0 && !_liveTip.ContainsKey(metricId))
+            if (frozen.Count == 0)
             {
                 _history.Remove(metricId);
                 _committedRange.Remove(metricId);

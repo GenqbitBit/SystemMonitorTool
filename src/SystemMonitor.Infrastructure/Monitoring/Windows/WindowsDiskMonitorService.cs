@@ -28,6 +28,11 @@ public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
     private readonly IHardware? _libreHardware;
     private readonly Dictionary<string, (double Sum, int Count)> _temperatureAveraging = new();
 
+    // DriveInfo resolves volume geometry through the OS on construction; the
+    // per-tick path only needs the (cheap) free-space query, so the instance is
+    // reused instead of rebuilt on every sample.
+    private DriveInfo? _drive;
+
     /// <summary>
     /// Initializes a new instance of the WindowsDiskMonitorService.
     /// </summary>
@@ -54,7 +59,7 @@ public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
 
         try
         {
-            var drive = new DriveInfo(_driveName);
+            var drive = GetDrive();
             _fileSystem = drive.DriveFormat;
         }
         catch
@@ -196,9 +201,11 @@ public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
         return start > 0 && end > start ? wmiReference.Substring(start, end - start) : null;
     }
 
+    private DriveInfo GetDrive() => _drive ??= new DriveInfo(_driveName);
+
     public DiskInfo GetCurrentUsage()
     {
-        var drive = new DriveInfo(_driveName);
+        var drive = GetDrive();
         const double bytesPerGB = 1024L * 1024 * 1024;
         const double bytesPerMB = 1024 * 1024;
 

@@ -43,7 +43,12 @@ public sealed class AsciiArtVisual : Control
     private const double GlintMinFactor = 0.85;
     private const double GlintMaxFactor = 1.25;
 
-    private static readonly Dictionary<(char Glyph, double FontSize), FormattedText> _glyphTextCache = new();
+    // The art uses a small fixed glyph ramp, so (glyph, size, colour) is a
+    // bounded key space. Baking the glint colour into the cached FormattedText
+    // avoids the previous per-cell SetForegroundBrush mutation, which forced
+    // Avalonia to re-apply text formatting for thousands of cells per frame.
+    private const int MaxCachedGlyphs = 1024;
+    private readonly Dictionary<(char Glyph, double FontSize, Color Color), FormattedText> _glyphTextCache = new();
 
     private AsciiCell[,]? _displayArt;
     private DispatcherTimer? _glintTimer;
@@ -66,6 +71,7 @@ public sealed class AsciiArtVisual : Control
         {
             _displayArt = Clone(change.GetNewValue<AsciiCell[,]?>());
             _brushCache.Clear();
+            _glyphTextCache.Clear();
             InvalidateMeasure();
             InvalidateVisual();
         }
@@ -92,6 +98,7 @@ public sealed class AsciiArtVisual : Control
         _themeChangedHandler = (_, _) =>
         {
             _brushCache.Clear();
+            _glyphTextCache.Clear();
             InvalidateVisual();
         };
 
@@ -199,26 +206,25 @@ public sealed class AsciiArtVisual : Control
         return Math.Min(scaleX, scaleY);
     }
 
-    private static FormattedText GetOrCreateFormattedText(char glyph, double fontSize)
+    private FormattedText GetOrCreateFormattedText(char glyph, double fontSize, SolidColorBrush brush)
     {
-        // Static cache shared by every AsciiArtVisual instance. Resizing used
-        // to mint a new font size (and a permanent cache entry) continuously;
-        // sizes are quantized by the caller and the cache is capped.
-        if (_glyphTextCache.Count > 512)
+        var key = (glyph, fontSize, brush.Color);
+        if (_glyphTextCache.TryGetValue(key, out var ft))
+            return ft;
+
+        // Resizing used to mint a new font size (and a permanent cache entry)
+        // continuously; the caller quantizes sizes and the cache is capped.
+        if (_glyphTextCache.Count >= MaxCachedGlyphs)
             _glyphTextCache.Clear();
 
-        var key = (glyph, fontSize);
-        if (!_glyphTextCache.TryGetValue(key, out var ft))
-        {
-            ft = new FormattedText(
-                glyph.ToString(),
-                CultureInfo.InvariantCulture,
-                FlowDirection.LeftToRight,
-                Mono,
-                fontSize,
-                Brushes.White);
-            _glyphTextCache[key] = ft;
-        }
+        ft = new FormattedText(
+            glyph.ToString(),
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            Mono,
+            fontSize,
+            brush);
+        _glyphTextCache[key] = ft;
         return ft;
     }
 
@@ -246,6 +252,9 @@ public sealed class AsciiArtVisual : Control
         double originX = (availableBounds.Width - contentWidth) / 2d;
         double originY = (availableBounds.Height - contentHeight) / 2d;
 
+        // Constant for the whole frame; it used to be recomputed per cell.
+        var textSize = Math.Clamp(Math.Round(Math.Max(1d, CellHeight * fitScale) * 2) / 2, 1, 64);
+
         for (int row = 0; row < rows; row++)
         {
             for (int col = 0; col < cols; col++)
@@ -255,10 +264,7 @@ public sealed class AsciiArtVisual : Control
 
                 double factor = QuantizeGlintFactor(ComputeGlintFactor(row, col, _elapsedMs));
                 var brush = GetBrush(AdjustForGlint(themeColor, factor));
-
-                var textSize = Math.Clamp(Math.Round(Math.Max(1d, CellHeight * fitScale) * 2) / 2, 1, 64);
-                var ft = GetOrCreateFormattedText(cell.Glyph, textSize);
-                ft.SetForegroundBrush(brush);
+                var ft = GetOrCreateFormattedText(cell.Glyph, textSize, brush);
 
                 var origin = new Point(originX + (col * cellWidth), originY + (row * cellHeight));
                 context.DrawText(ft, origin);

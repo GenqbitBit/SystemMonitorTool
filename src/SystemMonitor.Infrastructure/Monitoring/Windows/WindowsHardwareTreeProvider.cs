@@ -36,14 +36,23 @@ public sealed class WindowsHardwareTreeProvider : IHardwareTreeProvider
         }
     }
 
+    // Sensor identity is stable for the life of the opened Computer; only the
+    // values change. The lookup used to be rebuilt inside the per-root loop
+    // (a full recursive hardware walk per root, every refresh tick), and is now
+    // built once and reused.
+    private Dictionary<string, ISensor>? _sensorLookup;
+
     public void RefreshValues(IReadOnlyList<HardwareTreeNode> roots)
     {
+        if (roots.Count == 0)
+            return;
+
         lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
         {
-            foreach (var root in roots)
-            {
-                ApplyValues(root, BuildSensorLookup());
-            }
+            var lookup = _sensorLookup ??= BuildSensorLookup();
+
+            for (var i = 0; i < roots.Count; i++)
+                ApplyValues(roots[i], lookup);
         }
     }
 

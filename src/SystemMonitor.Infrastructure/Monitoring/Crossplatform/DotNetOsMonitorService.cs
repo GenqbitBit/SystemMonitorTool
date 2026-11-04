@@ -19,11 +19,14 @@ namespace SystemMonitor.Infrastructure.Monitoring.CrossPlatform;
 public class DotNetOsMonitorService : IOsMonitorService
 {
     private const int TopProcessCount = 8;
-    private const int MaxExpensiveProcessDetailsPerSample = 8;
     private static readonly TimeSpan ProcessSampleInterval = TimeSpan.FromSeconds(2);
 
     private readonly object _gate = new();
     private Dictionary<int, TimeSpan> _previousCpuTimes = new();
+
+    // Second buffer, swapped with _previousCpuTimes after each sample, so the
+    // per-PID CPU-time map is not reallocated (and regrown) every two seconds.
+    private Dictionary<int, TimeSpan> _nextCpuTimes = new();
     private DateTime _previousSampleUtc;
     private DateTime _lastProcessSampleUtc = DateTime.MinValue;
     private OperatingSystemInfo? _lastInfo;
@@ -82,18 +85,26 @@ public class DotNetOsMonitorService : IOsMonitorService
             var processes = Process.GetProcesses();
             try
             {
-                var sampled = new List<ProcessInfo>(processes.Length);
-                var nextCpuTimes = new Dictionary<int, TimeSpan>(processes.Length);
+                var previousCpuTimes = _previousCpuTimes;
+                var nextCpuTimes = _nextCpuTimes;
+                nextCpuTimes.Clear();
+
                 var topProcesses = new List<ProcessInfo>(TopProcessCount);
                 var topProcessesByCpu = new List<ProcessInfo>(TopProcessCount);
                 var topProcessesByMemory = new List<ProcessInfo>(TopProcessCount);
-                var threadTotal = 0;
-                long? handleTotal = OperatingSystem.IsWindows() ? 0 : null;
 
-                var processIndex = 0;
+                // Windows can report system-wide thread/handle totals from one
+                // cheap psapi call. The previous code derived "OS threads" by
+                // summing Threads.Count over only the first eight processes in
+                // enumeration order — expensive per process and simply wrong —
+                // and paid a handle-table lookup per process for the same reason.
+                var systemCounters = OperatingSystem.IsWindows() ? TryGetWindowsSystemCounts() : null;
+                var threadTotal = systemCounters?.Threads ?? 0;
+                long? handleTotal = systemCounters?.Handles;
+                var collectProcessThreadCounts = !OperatingSystem.IsWindows();
+
                 foreach (var process in processes)
                 {
-                    processIndex++;
                     try
                     {
                         // No OpenProcess/CloseHandle pre-check here: reading
@@ -105,7 +116,7 @@ public class DotNetOsMonitorService : IOsMonitorService
                         nextCpuTimes[process.Id] = cpuTime;
 
                         // Rate = CPU-time delta / wall-time delta, spread over all cores.
-                        var previous = _previousCpuTimes.TryGetValue(process.Id, out var prev)
+                        var previous = previousCpuTimes.TryGetValue(process.Id, out var prev)
                             ? prev : cpuTime; // new process: first sample is 0%.
                         var cpuPercent = wallDelta == TimeSpan.Zero
                             ? 0
@@ -122,7 +133,10 @@ public class DotNetOsMonitorService : IOsMonitorService
                             WorkingSetMB = Math.Round(process.WorkingSet64 / 1024d / 1024d, 1)
                         };
 
-                        if (processIndex <= MaxExpensiveProcessDetailsPerSample)
+                        // Non-Windows has no system-wide thread counter in the
+                        // BCL, so the totals are still summed per process there.
+                        // ThreadCount participates in ProcessInfo value equality.
+                        if (collectProcessThreadCounts)
                         {
                             try
                             {
@@ -133,28 +147,7 @@ public class DotNetOsMonitorService : IOsMonitorService
                             {
                                 sample.ThreadCount = 0;
                             }
-
-                            if (handleTotal.HasValue)
-                            {
-                                try
-                                {
-                                    var handleCount = process.HandleCount;
-                                    handleTotal += handleCount;
-                                }
-                                catch
-                                {
-                                    // Protected or inaccessible process: skip the handle count,
-                                    // but keep the global process scan moving without repeating
-                                    // the same failure path for the entire process table.
-                                }
-                            }
                         }
-                        else
-                        {
-                            sample.ThreadCount = 0;
-                        }
-
-                        sampled.Add(sample);
                         AddTopProcess(topProcesses, sample, CompareCombined);
                         AddTopProcess(topProcessesByCpu, sample, CompareCpu);
                         AddTopProcess(topProcessesByMemory, sample, CompareMemory);
@@ -180,8 +173,10 @@ public class DotNetOsMonitorService : IOsMonitorService
                     TopProcessesByMemory = topProcessesByMemory
                 };
 
-                // This tick becomes next tick's memory.
+                // Swap buffers: this tick becomes next tick's memory, and the
+                // map read above becomes the scratch map (cleared next sample).
                 _previousCpuTimes = nextCpuTimes;
+                _nextCpuTimes = previousCpuTimes;
                 _previousSampleUtc = now;
                 _lastProcessSampleUtc = now;
                 _lastInfo = result;
@@ -259,6 +254,35 @@ public class DotNetOsMonitorService : IOsMonitorService
         return "Unknown OS";
     }
 
+    private readonly struct SystemCounters
+    {
+        public int? Threads { get; init; }
+        public long? Handles { get; init; }
+    }
+
+    private static SystemCounters? TryGetWindowsSystemCounts()
+    {
+        try
+        {
+            if (!NativeMethods.GetPerformanceInfo(
+                    out var info,
+                    (uint)Marshal.SizeOf<NativeMethods.PERFORMANCE_INFORMATION>()))
+            {
+                return null;
+            }
+
+            return new SystemCounters
+            {
+                Threads = info.ThreadCount > 0 ? (int)info.ThreadCount : null,
+                Handles = info.HandleCount > 0 ? info.HandleCount : (long?)null
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static class NativeMethods
     {
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -267,5 +291,30 @@ public class DotNetOsMonitorService : IOsMonitorService
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static extern bool CloseHandle(IntPtr handle);
+
+        // System-wide process/thread/handle totals, one syscall.
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct PERFORMANCE_INFORMATION
+        {
+            public uint cb;
+            public nuint CommitTotal;
+            public nuint CommitLimit;
+            public nuint CommitPeak;
+            public nuint PhysicalTotal;
+            public nuint PhysicalAvailable;
+            public nuint SystemCache;
+            public nuint KernelTotal;
+            public nuint KernelPaged;
+            public nuint KernelNonpaged;
+            public nuint PageSize;
+            public uint HandleCount;
+            public uint ProcessCount;
+            public uint ThreadCount;
+        }
+
+        [DllImport("psapi.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool GetPerformanceInfo(
+            out PERFORMANCE_INFORMATION performanceInformation, uint size);
     }
 }

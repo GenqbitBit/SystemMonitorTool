@@ -42,6 +42,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private IOsMonitorService? _os;
     private AlertMonitor? _alertMonitor;
     private volatile IReadOnlyList<MetricReading> _latestSnapshot = Array.Empty<MetricReading>();
+
+    // Reused when the GPU identity set is unchanged, so the polling thread does
+    // not copy the collection (and re-run GPU LINQ) on every tick.
+    private GpuDeviceDisplayInfo[] _lastGpuDevices = Array.Empty<GpuDeviceDisplayInfo>();
     private readonly object _uiUpdateGate = new();
     private Action? _pendingUiUpdate;
     private bool _uiUpdateQueued;
@@ -408,42 +412,68 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         if (metricsChanged || previousSnapshot.Count == 0)
         {
-            var gpuUsageRows = snapshot
-                .Where(m =>
-                    m.Id.StartsWith("gpu.usage.") &&
-                    m.GpuDeviceId != null &&
-                    m.IsAvailable)
-                .ToList();
+            // One pass over the snapshot instead of three Where(...).ToList()
+            // sequences plus DistinctBy/OrderBy rebuilds — this runs on the
+            // polling thread every tick while values are changing.
+            string? firstUsageId = null;
+            string? firstModelId = null;
+            HashSet<string>? seenDeviceIds = null;
+            List<GpuDeviceDisplayInfo>? gpuList = null;
 
-            dedicatedId = gpuUsageRows.FirstOrDefault(m => m.GpuIsIntegrated == false)?.Id
-                ?? gpuUsageRows.FirstOrDefault()?.Id;
+            for (var i = 0; i < snapshot.Count; i++)
+            {
+                var reading = snapshot[i];
+                var deviceId = reading.GpuDeviceId;
+                if (deviceId is null)
+                    continue;
 
-            integratedId = gpuUsageRows.FirstOrDefault(m => m.GpuIsIntegrated == true)?.Id
-                ?? gpuUsageRows.FirstOrDefault()?.Id;
+                if (reading.Id.StartsWith("gpu.usage.", StringComparison.Ordinal))
+                {
+                    if (!reading.IsAvailable)
+                        continue;
 
-            var gpuModelRows = snapshot
-                .Where(m =>
-                    m.Id.StartsWith("gpu.model.") &&
-                    m.GpuDeviceId != null)
-                .ToList();
+                    firstUsageId ??= reading.Id;
+                    if (reading.GpuIsIntegrated == false)
+                        dedicatedId ??= reading.Id;
+                    else if (reading.GpuIsIntegrated == true)
+                        integratedId ??= reading.Id;
 
-            dedicatedModelId = gpuModelRows.FirstOrDefault(m => m.GpuIsIntegrated == false)?.Id
-                ?? gpuModelRows.FirstOrDefault()?.Id;
+                    seenDeviceIds ??= new HashSet<string>(StringComparer.Ordinal);
+                    if (seenDeviceIds.Add(deviceId))
+                    {
+                        gpuList ??= new List<GpuDeviceDisplayInfo>(2);
+                        gpuList.Add(new GpuDeviceDisplayInfo(
+                            deviceId,
+                            reading.GpuIndex ?? 0,
+                            reading.GpuIsIntegrated ?? false,
+                            $"GPU {reading.GpuIndex} ({(reading.GpuIsIntegrated == true ? "Integrated" : "Dedicated")})"));
+                    }
+                }
+                else if (reading.Id.StartsWith("gpu.model.", StringComparison.Ordinal))
+                {
+                    firstModelId ??= reading.Id;
+                    if (reading.GpuIsIntegrated == false)
+                        dedicatedModelId ??= reading.Id;
+                    else if (reading.GpuIsIntegrated == true)
+                        integratedModelId ??= reading.Id;
+                }
+            }
 
-            integratedModelId = gpuModelRows.FirstOrDefault(m => m.GpuIsIntegrated == true)?.Id
-                ?? gpuModelRows.FirstOrDefault()?.Id;
+            // Preserve the previous single-GPU fallbacks.
+            dedicatedId ??= firstUsageId;
+            integratedId ??= firstUsageId;
+            dedicatedModelId ??= firstModelId;
+            integratedModelId ??= firstModelId;
 
-            gpus = gpuUsageRows
-                .Select(m => new GpuDeviceDisplayInfo(
-                    m.GpuDeviceId!,
-                    m.GpuIndex ?? 0,
-                    m.GpuIsIntegrated ?? false,
-                    $"GPU {m.GpuIndex} ({(m.GpuIsIntegrated == true
-                        ? "Integrated"
-                        : "Dedicated")})"))
-                .DistinctBy(g => g.DeviceId)
-                .OrderBy(g => g.Index)
-                .ToArray();
+            if (gpuList is null)
+            {
+                gpus = Array.Empty<GpuDeviceDisplayInfo>();
+            }
+            else
+            {
+                gpuList.Sort(static (a, b) => a.Index.CompareTo(b.Index));
+                gpus = gpuList.ToArray();
+            }
         }
         else
         {
@@ -451,8 +481,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             integratedId = previousIntegratedGpuMetricId;
             dedicatedModelId = previousDedicatedGpuModelId;
             integratedModelId = previousIntegratedGpuModelId;
-            gpus = DetectedGpus.ToArray();
+            gpus = _lastGpuDevices;
         }
+
+        _lastGpuDevices = gpus;
 
         var osInfo = os.LastInfo ?? os.GetCurrentInfo();
 

@@ -74,7 +74,9 @@ public sealed class SqliteEventLogService : IEventLogService, IAsyncDisposable, 
         using var pragma = _connection.CreateCommand();
         // WAL for concurrent readers; busy_timeout so this writer waits for
         // the metric-history writer instead of failing with "database is locked".
-        pragma.CommandText = "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;";
+        // synchronous=NORMAL pairs with WAL: one fsync per checkpoint instead
+        // of one per commit, without risking database corruption.
+        pragma.CommandText = "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;";
         pragma.ExecuteNonQuery();
 
         using var create = _connection.CreateCommand();

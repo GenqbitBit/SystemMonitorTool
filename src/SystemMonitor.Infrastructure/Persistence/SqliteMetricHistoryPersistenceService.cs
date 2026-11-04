@@ -31,6 +31,15 @@ public sealed class SqliteMetricHistoryPersistenceService : IMetricHistoryPersis
     private readonly Channel<(string MetricId, DateTime Timestamp, double Value)> _writeQueue;
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _backgroundWriterTask;
+
+    // One long-lived writer connection with a prepared insert, instead of
+    // opening a connection (and re-issuing journal_mode=WAL) for every 750 ms
+    // batch. Only the background loop touches these.
+    private readonly SqliteConnection _writerConnection;
+    private readonly SqliteCommand _insertCommand;
+    private readonly SqliteParameter _insertId;
+    private readonly SqliteParameter _insertTimestamp;
+    private readonly SqliteParameter _insertValue;
     private DateTime _lastRecordUtc = DateTime.MinValue;
     private DateTime _lastCleanup = DateTime.MinValue;
     private bool _disposed;
@@ -43,11 +52,12 @@ public sealed class SqliteMetricHistoryPersistenceService : IMetricHistoryPersis
         Directory.CreateDirectory(folder);
         _connectionString = $"Data Source={Path.Combine(folder, "history.db")};Pooling=True";
 
-        using (var connection = new SqliteConnection(_connectionString))
+        _writerConnection = new SqliteConnection(_connectionString);
+        _writerConnection.Open();
+        Configure(_writerConnection);
+
+        using (var cmd = _writerConnection.CreateCommand())
         {
-            connection.Open();
-            Configure(connection);
-            using var cmd = connection.CreateCommand();
             cmd.CommandText = """
                 CREATE TABLE IF NOT EXISTS metric_history (
                     metric_id TEXT NOT NULL,
@@ -55,9 +65,19 @@ public sealed class SqliteMetricHistoryPersistenceService : IMetricHistoryPersis
                     value REAL NOT NULL);
                 CREATE INDEX IF NOT EXISTS idx_metric_history_lookup
                     ON metric_history (metric_id, timestamp);
+                CREATE INDEX IF NOT EXISTS idx_metric_history_timestamp
+                    ON metric_history (timestamp);
                 """;
             cmd.ExecuteNonQuery();
         }
+
+        _insertCommand = _writerConnection.CreateCommand();
+        _insertCommand.CommandText =
+            "INSERT INTO metric_history (metric_id, timestamp, value) VALUES ($id, $ts, $val);";
+        _insertId = _insertCommand.Parameters.Add("$id", SqliteType.Text);
+        _insertTimestamp = _insertCommand.Parameters.Add("$ts", SqliteType.Integer);
+        _insertValue = _insertCommand.Parameters.Add("$val", SqliteType.Real);
+        _insertCommand.Prepare();
 
         _writeQueue = Channel.CreateBounded<(string, DateTime, double)>(
             new BoundedChannelOptions(20_000)
@@ -72,7 +92,12 @@ public sealed class SqliteMetricHistoryPersistenceService : IMetricHistoryPersis
     private static void Configure(SqliteConnection connection)
     {
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;";
+        // Journal mode is a persistent database property: issuing it once here
+        // replaces a write-locking pragma per batch. synchronous=NORMAL is the
+        // standard WAL pairing and avoids an fsync per commit for local
+        // telemetry, where losing the last fraction of a second on power loss
+        // is acceptable.
+        cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;";
         cmd.ExecuteNonQuery();
     }
 
@@ -104,32 +129,27 @@ public sealed class SqliteMetricHistoryPersistenceService : IMetricHistoryPersis
             {
                 try
                 {
-                    using var connection = new SqliteConnection(_connectionString);
-                    await connection.OpenAsync(_cts.Token).ConfigureAwait(false);
-                    Configure(connection);
-
-                    using var transaction = connection.BeginTransaction();
-                    using var cmd = connection.CreateCommand();
-                    cmd.Transaction = transaction;
-                    cmd.CommandText =
-                        "INSERT INTO metric_history (metric_id, timestamp, value) VALUES ($id, $ts, $val);";
-                    var id = cmd.Parameters.Add("$id", SqliteType.Text);
-                    var ts = cmd.Parameters.Add("$ts", SqliteType.Integer);
-                    var val = cmd.Parameters.Add("$val", SqliteType.Real);
-                    cmd.Prepare();
+                    using var transaction = _writerConnection.BeginTransaction();
+                    _insertCommand.Transaction = transaction;
 
                     var rows = 0;
                     while (rows < MaxRowsPerBatch && reader.TryRead(out var point))
                     {
-                        id.Value = point.MetricId;
-                        ts.Value = point.Timestamp.Ticks;
-                        val.Value = point.Value;
-                        cmd.ExecuteNonQuery();
+                        _insertId.Value = point.MetricId;
+                        _insertTimestamp.Value = point.Timestamp.Ticks;
+                        _insertValue.Value = point.Value;
+                        _insertCommand.ExecuteNonQuery();
                         rows++;
                     }
 
+                    if (rows == 0)
+                    {
+                        transaction.Rollback();
+                        continue;
+                    }
+
                     transaction.Commit();
-                    MaybeCleanup(connection);
+                    MaybeCleanup(_writerConnection);
                 }
                 catch (OperationCanceledException)
                 {
@@ -210,5 +230,7 @@ public sealed class SqliteMetricHistoryPersistenceService : IMetricHistoryPersis
         }
 
         _cts.Dispose();
+        _insertCommand.Dispose();
+        _writerConnection.Dispose();
     }
 }

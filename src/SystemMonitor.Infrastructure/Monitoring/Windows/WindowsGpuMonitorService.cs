@@ -22,7 +22,9 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         bool IsIntegrated,
         string DeviceId,             // stable identity — LUID string, or index-based fallback
         string? LuidFilter,          // used only for GPU Engine (usage %) perf-counter matching
-        IHardware? LibreHardware);   // used for VRAM total/used sensors AND temperature sensors
+        IHardware? LibreHardware,    // used for temperature sensor filtering
+        ISensor? MemoryTotalSensor,  // resolved once; per-tick reads are O(1)
+        ISensor? MemoryUsedSensor);
 
     private readonly List<GpuDevice> _devices = new();
     private readonly Dictionary<string, PerformanceCounter> _engineCounters = new();
@@ -36,6 +38,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
     // and the instance list instead of rebuilding both per device per tick.
     private PerformanceCounterCategory? _engineCategory;
     private string[] _engineInstanceNames = Array.Empty<string>();
+    private string[] _engine3dInstances = Array.Empty<string>();
     private readonly HashSet<string> _engineInstanceSet = new(StringComparer.Ordinal);
     private readonly List<string> _staleEngineCounters = new();
     private DateTime _engineInstancesUtc = DateTime.MinValue;
@@ -89,6 +92,8 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
                     $"across refreshes if enumeration order changes.");
             }
 
+            var (memoryTotalSensor, memoryUsedSensor) = ResolveMemorySensors(libreHardware);
+
             _devices.Add(new GpuDevice(
                 Index: index,
                 Name: name,
@@ -97,7 +102,9 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
                 IsIntegrated: integrated,
                 DeviceId: deviceId,
                 LuidFilter: luidFilter,
-                LibreHardware: libreHardware));
+                LibreHardware: libreHardware,
+                MemoryTotalSensor: memoryTotalSensor,
+                MemoryUsedSensor: memoryUsedSensor));
 
             index++;
         }
@@ -224,11 +231,15 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 
     public IReadOnlyList<GpuInfo> GetCurrentUsage()
     {
-        return _devices.Select(device =>
+        var devices = _devices;
+        var result = new List<GpuInfo>(devices.Count);
+
+        for (var i = 0; i < devices.Count; i++)
         {
+            var device = devices[i];
             var (totalMb, usedMb) = GetGpuMemoryMb(device);
 
-            return new GpuInfo
+            result.Add(new GpuInfo
             {
                 IsAvailable = true,
                 DeviceId = device.DeviceId,
@@ -242,42 +253,52 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
                 UsagePercent = GetGpuUsagePercent(device.LuidFilter),
                 Temperatures = GetGpuTemperatures(device),
                 Timestamp = DateTime.UtcNow
-            };
-        }).ToList();
+            });
+        }
+
+        return result;
+    }
+
+    // Resolves the two VRAM sensors once at construction. The previous read
+    // walked every sensor of every GPU on every tick to find them.
+    private static (ISensor? Total, ISensor? Used) ResolveMemorySensors(IHardware? hardware)
+    {
+        if (hardware is null)
+            return (null, null);
+
+        ISensor? total = null;
+        ISensor? used = null;
+
+        lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
+        {
+            foreach (var sensor in hardware.Sensors)
+            {
+                if (sensor.SensorType != SensorType.SmallData)
+                    continue;
+
+                if (total is null && sensor.Name == "GPU Memory Total")
+                    total = sensor;
+                else if (used is null && sensor.Name == "GPU Memory Used")
+                    used = sensor;
+            }
+        }
+
+        return (total, used);
     }
 
     private static (double totalMb, double usedMb) GetGpuMemoryMb(GpuDevice device)
     {
-        if (device.LibreHardware is null)
-        {
+        if (device.MemoryTotalSensor is null && device.MemoryUsedSensor is null)
             return (0, 0);
-        }
 
         lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
         {
-            double totalMb = 0;
-            double usedMb = 0;
-
-            foreach (var sensor in device.LibreHardware.Sensors)
-            {
-                if (sensor.SensorType != SensorType.SmallData || sensor.Value is not float value)
-                {
-                    continue;
-                }
-
-                if (sensor.Name == "GPU Memory Total")
-                {
-                    totalMb = Math.Round(value, 2);
-                }
-                else if (sensor.Name == "GPU Memory Used")
-                {
-                    usedMb = Math.Round(value, 2);
-                }
-            }
-
-            return (totalMb, usedMb);
+            return (ReadMegabytes(device.MemoryTotalSensor), ReadMegabytes(device.MemoryUsedSensor));
         }
     }
+
+    private static double ReadMegabytes(ISensor? sensor) =>
+        sensor?.Value is float value ? Math.Round(value, 2) : 0;
 
     // Reads this device's slice of the shared temperature cache. The old
     // version walked (and re-read) every GPU sensor on every tick.
@@ -406,6 +427,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
             if (now - _engineInstancesUtc >= UsageRefreshInterval)
             {
                 _engineInstanceNames = _engineCategory.GetInstanceNames();
+                _engine3dInstances = FilterEngine3dInstances(_engineInstanceNames);
                 _engineInstancesUtc = now;
 
                 _engineInstanceSet.Clear();
@@ -434,10 +456,10 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         }
 
         double total = 0;
-        foreach (var instance in _engineInstanceNames)
+        var instances = _engine3dInstances;
+        for (var i = 0; i < instances.Length; i++)
         {
-            if (!instance.Contains("engtype_3D", StringComparison.Ordinal))
-                continue;
+            var instance = instances[i];
             if (!instance.Contains(luidFilter, StringComparison.OrdinalIgnoreCase))
                 continue;
 
@@ -473,6 +495,28 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         return rounded;
     }
 
+    // Splits the (hundreds of) GPU Engine instances down to the 3D engines
+    // once per refresh, so the per-device scan only inspects relevant entries.
+    private static string[] FilterEngine3dInstances(string[] instanceNames)
+    {
+        var count = 0;
+        for (var i = 0; i < instanceNames.Length; i++)
+        {
+            if (instanceNames[i].Contains("engtype_3D", StringComparison.Ordinal))
+                count++;
+        }
+
+        var filtered = new string[count];
+        var index = 0;
+        for (var i = 0; i < instanceNames.Length; i++)
+        {
+            if (instanceNames[i].Contains("engtype_3D", StringComparison.Ordinal))
+                filtered[index++] = instanceNames[i];
+        }
+
+        return filtered;
+    }
+
     public void Dispose()
     {
         lock (_usageCacheGate)
@@ -484,6 +528,7 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
             _usageCache.Clear();
             _engineCategory = null;
             _engineInstanceNames = Array.Empty<string>();
+            _engine3dInstances = Array.Empty<string>();
         }
     }
 }

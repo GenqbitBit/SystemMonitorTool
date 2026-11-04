@@ -42,6 +42,12 @@ public sealed class LibreHardwareMonitorHost : IHardwareRefreshService, IDisposa
     // SubHardware again on every scan was pure overhead.
     private IHardware[] _hardware = Array.Empty<IHardware>();
 
+    // Sensor handles are stable for the lifetime of the opened Computer. The
+    // old lookups re-walked every hardware device and its sensor list on every
+    // tick just to find one value; these indices make a per-tick read O(1).
+    private readonly Dictionary<HardwareType, ISensor> _packagePowerSensors = new();
+    private ISensor? _cpuClockSensor;
+
     private Dictionary<string, IReadOnlyList<TemperatureReading>> _temperaturesByCategory =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -96,6 +102,35 @@ public sealed class LibreHardwareMonitorHost : IHardwareRefreshService, IDisposa
             return _temperaturesByCategory.TryGetValue(category, out var readings)
                 ? readings
                 : EmptyReadings;
+        }
+    }
+
+    // Resolves the handful of sensors the monitor services read every tick and
+    // keeps the references, so no tick has to enumerate sensors again.
+    private void IndexSensorsLocked()
+    {
+        _packagePowerSensors.Clear();
+        _cpuClockSensor = null;
+
+        foreach (var hardware in Computer.Hardware)
+        {
+            foreach (var sensor in hardware.Sensors)
+            {
+                if (sensor.SensorType == SensorType.Power
+                    && sensor.Name.Contains("Package", StringComparison.Ordinal)
+                    && !_packagePowerSensors.ContainsKey(hardware.HardwareType))
+                {
+                    _packagePowerSensors[hardware.HardwareType] = sensor;
+                }
+
+                if (_cpuClockSensor is null
+                    && hardware.HardwareType == HardwareType.Cpu
+                    && sensor.SensorType == SensorType.Clock
+                    && sensor.Name == "Cores (Average)")
+                {
+                    _cpuClockSensor = sensor;
+                }
+            }
         }
     }
 
@@ -213,6 +248,7 @@ public sealed class LibreHardwareMonitorHost : IHardwareRefreshService, IDisposa
                 }
             }
 
+            IndexSensorsLocked();
             RebuildTemperatureCacheLocked();
         }
     }
@@ -226,17 +262,10 @@ public sealed class LibreHardwareMonitorHost : IHardwareRefreshService, IDisposa
     {
         lock (UpdateSyncRoot)
         {
-            foreach (var hardware in Computer.Hardware)
-            {
-                if (hardware.HardwareType != type) continue;
-                foreach (var sensor in hardware.Sensors)
-                {
-                    if (sensor.SensorType == SensorType.Power &&
-                        sensor.Name.Contains("Package"))
-                        return PositiveOrNull(sensor.Value);
-                }
-            }
-            return null;
+            if (!_packagePowerSensors.TryGetValue(type, out var sensor))
+                return null;
+
+            return PositiveOrNull(sensor.Value);
         }
     }
 
@@ -249,17 +278,7 @@ public sealed class LibreHardwareMonitorHost : IHardwareRefreshService, IDisposa
     {
         lock (UpdateSyncRoot)
         {
-            foreach (var hardware in Computer.Hardware)
-            {
-                if (hardware.HardwareType != HardwareType.Cpu) continue;
-                foreach (var sensor in hardware.Sensors)
-                {
-                    if (sensor.SensorType == SensorType.Clock &&
-                        sensor.Name == "Cores (Average)")
-                        return PositiveOrNull(sensor.Value);
-                }
-            }
-            return null;
+            return _cpuClockSensor is null ? null : PositiveOrNull(_cpuClockSensor.Value);
         }
     }
 
@@ -286,6 +305,8 @@ public sealed class LibreHardwareMonitorHost : IHardwareRefreshService, IDisposa
 
             _disposed = true;
             _temperatureCacheValid = false;
+            _packagePowerSensors.Clear();
+            _cpuClockSensor = null;
             _allTemperatureReadings = EmptyReadings;
             _temperaturesByCategory = new Dictionary<string, IReadOnlyList<TemperatureReading>>(
                 StringComparer.OrdinalIgnoreCase);
