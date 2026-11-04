@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SystemMonitor.Presentation.ViewModels;
 using SystemMonitor.Presentation.Views;
+using SystemMonitor.Presentation.Services;
 
 using Microsoft.Extensions.DependencyInjection;
 using SystemMonitor.Application.Interfaces;

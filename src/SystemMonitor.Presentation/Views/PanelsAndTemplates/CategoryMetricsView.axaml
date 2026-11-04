@@ -50,7 +50,7 @@
                                     FontSize="{Binding #Root.MetricFontSize}"
                                     FontFamily="{Binding #Root.ContentFontFamily, Converter={x:Static local:NullToUnsetConverter.Instance}}"
                                     FontWeight="{Binding #Root.ValueFontWeight}"
-                                    Foreground="{Binding #Root.ValueForeground, TargetNullValue={DynamicResource MetricValueBrush}}"
+                                    Foreground="{DynamicResource MetricValueBrush}"
                                     TextWrapping="Wrap"
                                     VerticalAlignment="Center"
                                     IsVisible="{Binding #Root.ShowValue}" />

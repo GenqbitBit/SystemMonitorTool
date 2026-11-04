@@ -40,6 +40,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private IEventLogService? _eventLog;
     private IThresholdMonitorService? _thresholdMonitor;
     private IOsMonitorService? _os;
+    private AlertMonitor? _alertMonitor;
     private IReadOnlyList<MetricReading> _latestSnapshot = Array.Empty<MetricReading>();
     private readonly object _uiUpdateGate = new();
     private Action? _pendingUiUpdate;
@@ -92,6 +93,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     public IReadOnlyList<MetricReading> LatestSnapshot => _latestSnapshot;
 
+    public void SetAlertMonitor(AlertMonitor alertMonitor)
+    {
+        _alertMonitor = alertMonitor;
+    }
+
     private sealed class DesignTimeHardwareTreeProvider : IHardwareTreeProvider
     {
         public IReadOnlyList<HardwareTreeNode> DiscoverTree() =>
@@ -113,6 +119,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _historyStore = historyStore;
         _hardwareTree = new HardwareTreeViewModel();
         MetricsTable = new MetricsTableViewModel();
+        TemperatureTable = new MetricsTableViewModel(
+            new CatalogDesignTimeMetricsSnapshotProvider(),
+            "Temperature Table",
+            MetricKind.Temperature);
         LogsPanel = new LogsPanelViewModel();
         InitializePresentationState();
     }
@@ -152,6 +162,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         InitializePresentationState();
         MetricsTable = metricsTable;
+        TemperatureTable = new MetricsTableViewModel(
+            metricsProvider,
+            "Temperature Table",
+            MetricKind.Temperature);
         LogsPanel = new LogsPanelViewModel(eventLog);
         _hardwareTree = new HardwareTreeViewModel(hardwareTreeProvider, eventLog);
 
@@ -172,11 +186,14 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             new(PanelWindowService.PanelLabels.Logs, SelectNavItem),
             new(PanelWindowService.PanelLabels.ViewTopProcesses, SelectNavItem),
             new(PanelWindowService.PanelLabels.ViewDataTable, SelectNavItem),
+            new(PanelWindowService.PanelLabels.ViewTemperatures, SelectNavItem),
         };
 
     }
 
     public MetricsTableViewModel MetricsTable { get; private set; } = null!;
+
+    public MetricsTableViewModel TemperatureTable { get; }
 
     public LogsPanelViewModel LogsPanel { get; private set; } = null!;
 
@@ -377,6 +394,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _historyStore.Record(snapshot);
         historyPersistence?.Record(snapshot);
         thresholdMonitor?.Check(snapshot);
+        _alertMonitor?.Check(snapshot);
 
         var metricsChanged = !AreMetricsEquivalent(previousSnapshot, snapshot);
 
@@ -458,6 +476,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             Metrics.SyncFrom(snapshot, m => m.Id);
             MetricsTable.ApplySnapshot(snapshot);
+            TemperatureTable.ApplySnapshot(snapshot);
 
             DedicatedGpuMetricId = dedicatedId;
             IntegratedGpuMetricId = integratedId;
@@ -498,7 +517,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             var a = left[i];
             var b = right[i];
-            if (a.Id != b.Id || a.Value != b.Value || a.IsAvailable != b.IsAvailable || a.TextValue != b.TextValue)
+            if (a.Id != b.Id || a.Label != b.Label || a.Value != b.Value
+                || a.IsAvailable != b.IsAvailable || a.TextValue != b.TextValue)
                 return false;
         }
 
@@ -592,6 +612,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _pollingCts.Dispose();
 
         MetricsTable.Dispose();
+        TemperatureTable.Dispose();
         LogsPanel.Dispose();
         _hardwareTree.Dispose();
 

@@ -94,15 +94,18 @@ public class WindowsCpuMonitorService : ICpuMonitorService, IDisposable
                 // CPU has no "primary vs sub-reading" distinction like GPU does —
                 // every CPU temp sensor (Package, per-core, per-CCD) is reported
                 // as primary, matching the old service's behavior for category != GPU.
-                readings.AddRange(temperatureSensors.Select(sensor => BuildTemperatureReading(sensor, isPrimary: true)));
+                readings.AddRange(temperatureSensors.Select(sensor =>
+                    BuildTemperatureReading(hardware, sensor, isPrimary: true)));
             }
         }
 
-        DisambiguateDuplicateLabels(readings);
         return readings;
     }
 
-    private TemperatureReading BuildTemperatureReading(ISensor sensor, bool isPrimary)
+    private TemperatureReading BuildTemperatureReading(
+        IHardware hardware,
+        ISensor sensor,
+        bool isPrimary)
     {
         // A reading of exactly 0°C is never real for these components — see
         // investigation notes: confirmed not permissions/version/AV related,
@@ -133,7 +136,9 @@ public class WindowsCpuMonitorService : ICpuMonitorService, IDisposable
 
         return new TemperatureReading
         {
-            SensorLabel = sensor.Name ?? "Unknown",
+            Category = "CPU",
+            HardwareName = hardware.Name,
+            SensorLabel = $"{hardware.Name}: {sensor.Name ?? "Unknown"}",
             IsAvailable = isRealReading,
             TemperatureCelsius = isRealReading ? sensor.Value!.Value : 0,
             MinCelsius = min,
@@ -141,20 +146,6 @@ public class WindowsCpuMonitorService : ICpuMonitorService, IDisposable
             AverageCelsius = average,
             IsPrimary = isPrimary
         };
-    }
-
-    private static void DisambiguateDuplicateLabels(List<TemperatureReading> readings)
-    {
-        var groups = readings.GroupBy(r => r.SensorLabel);
-        foreach (var group in groups.Where(g => g.Count() > 1))
-        {
-            var index = 1;
-            foreach (var reading in group)
-            {
-                reading.SensorLabel = $"{reading.SensorLabel} #{index}";
-                index++;
-            }
-        }
     }
 
     // The registry needs no privilege and no vendor SDK — identity data

@@ -1,0 +1,102 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:SystemMonitor.Presentation.ViewModels"
+        xmlns:models="using:SystemMonitor.Presentation.ViewModels"
+        x:Class="SystemMonitor.Presentation.Views.Subwindows.Temperatures.TemperatureTableWindow"
+        x:DataType="vm:MetricsTableViewModel"
+        Title="Temperatures"
+        Width="620" Height="560"
+        MinWidth="620" MinHeight="560"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <Border BorderBrush="{DynamicResource PanelAccentBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Margin="10"
+                Padding="14,12"
+                MinWidth="420">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                <TextBlock Grid.Row="0"
+                           Text="Temperature Table"
+                           FontSize="12"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource MetricValueBrush}"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,6" />
+
+                <TextBlock Grid.Row="1"
+                           Text="Live hardware sensor temperatures"
+                           FontSize="9"
+                           Opacity="0.7"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,10" />
+
+                <TextBlock Grid.Row="2"
+                           Text="Install PawnIO driver and run as administrator to read CPU temperature."
+                           FontSize="9"
+                           TextWrapping="Wrap"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,8"
+                           IsVisible="{Binding CpuPawnIoGuidanceVisible}" />
+
+                <Border Grid.Row="3"
+                        BorderBrush="{DynamicResource PanelAccentBorderBrush}"
+                        BorderThickness="0,0,0,1"
+                        Padding="0,0,0,6"
+                        Margin="0,0,0,4">
+                    <Grid ColumnDefinitions="0.7*,1.8*,1*,1*" Opacity="0.6">
+                        <TextBlock Grid.Column="0" Text="CATEGORY" FontSize="9" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="1" Text="SENSOR" FontSize="9" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="2" Text="CELSIUS" FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                        <TextBlock Grid.Column="3" Text="FAHRENHEIT" FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                    </Grid>
+                </Border>
+
+                <StackPanel Grid.Row="4" Spacing="4">
+                    <ItemsControl ItemsSource="{Binding TemperatureRows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="models:TemperatureTableRow">
+                                <Border BorderBrush="{DynamicResource SeparatorBrush}"
+                                        BorderThickness="0,0,0,1"
+                                        Padding="0,6">
+                                    <Grid ColumnDefinitions="0.7*,1.8*,1*,1*">
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{Binding Category}"
+                                                   FontSize="10"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Metric}"
+                                                   FontSize="10"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding Celsius}"
+                                                   FontSize="10"
+                                                   HorizontalAlignment="Right"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{Binding ., Converter={StaticResource TemperatureTableBrush}}" />
+                                        <TextBlock Grid.Column="3"
+                                                   Text="{Binding Fahrenheit}"
+                                                   FontSize="10"
+                                                   HorizontalAlignment="Right"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{Binding ., Converter={StaticResource TemperatureTableBrush}}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Text="No temperature sensors detected yet."
+                               FontSize="10"
+                               Opacity="0.7"
+                               HorizontalAlignment="Center"
+                               Margin="0,12"
+                               IsVisible="{Binding NoTemperatureSensors}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </ScrollViewer>
+</Window>

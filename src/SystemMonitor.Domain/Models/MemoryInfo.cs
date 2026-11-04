@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace SystemMonitor.Domain.Models;
 
 public class MemoryInfo
@@ -13,4 +15,7 @@ public class MemoryInfo
     public int SpeedMhz { get; set; }                        // e.g. 3200
     public string ModuleConfig { get; set; } = string.Empty; // e.g. "2 x 8 GB"
     public string Manufacturer { get; set; } = string.Empty; // e.g. "Corsair"
+
+    // Available RAM temperature sensors from LibreHardwareMonitor, when exposed.
+    public List<TemperatureReading> Temperatures { get; set; } = new();
 }

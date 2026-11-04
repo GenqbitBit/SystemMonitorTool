@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using SystemMonitor.Presentation.Views.Subwindows.Settings;
 using SystemMonitor.Presentation.Theming;
 using SystemMonitor.Presentation.Views.Subwindows.DataTable;
+using SystemMonitor.Presentation.Views.Subwindows.Temperatures;
 using SystemMonitor.Presentation.Views.Subwindows.TopProcesses;
 using SystemMonitor.Presentation.Views.Subwindows.Themes;
 using SystemMonitor.Presentation.Views.Subwindows.Logs;
@@ -21,6 +22,7 @@ public class PanelWindowService : IPanelWindowService
         public const string Themes = "Themes";
         public const string Logs = "Logs";
         public const string ViewDataTable = "View Data Table";
+        public const string ViewTemperatures = "View Temperatures";
         public const string ViewTopProcesses = "View Top Processes";
     }
 
@@ -120,6 +122,8 @@ public class PanelWindowService : IPanelWindowService
 
         if (label == PanelLabels.ViewDataTable)
             ownerVm.MetricsTable.SetActive(isActive, ownerVm.LatestSnapshot);
+        else if (label == PanelLabels.ViewTemperatures)
+            ownerVm.TemperatureTable.SetActive(isActive, ownerVm.LatestSnapshot);
     }
 
     private static Window? CreateWindow(string label, Window owner)
@@ -145,6 +149,9 @@ public class PanelWindowService : IPanelWindowService
                 : null,
             PanelLabels.ViewDataTable => vm is not null
                 ? new DataTableWindow { DataContext = vm.MetricsTable, WindowStartupLocation = WindowStartupLocation.Manual }
+                : null,
+            PanelLabels.ViewTemperatures => vm is not null
+                ? new TemperatureTableWindow { DataContext = vm.TemperatureTable }
                 : null,
             PanelLabels.ViewTopProcesses => vm is not null
                 ? new TopProcessesWindow { DataContext = vm, WindowStartupLocation = WindowStartupLocation.Manual }

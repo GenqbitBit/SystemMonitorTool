@@ -17,11 +17,24 @@ public partial class MetricsTableViewModel : ViewModelBase, IDisposable
 
     private bool _isActive;
     private bool _disposed;
+    private readonly MetricKind? _kindFilter;
+
+    [ObservableProperty]
+    private string title = "Data Table";
 
     // This table's rows — synced in place every tick rather than rebuilt
     // wholesale.
     [ObservableProperty]
     private ObservableCollection<MetricTableRow> rows = new();
+
+    [ObservableProperty]
+    private ObservableCollection<TemperatureTableRow> temperatureRows = new();
+
+    [ObservableProperty]
+    private bool noTemperatureSensors = true;
+
+    [ObservableProperty]
+    private bool cpuPawnIoGuidanceVisible;
 
     public MetricsTableViewModel()
         : this(new CatalogDesignTimeMetricsSnapshotProvider())
@@ -31,6 +44,16 @@ public partial class MetricsTableViewModel : ViewModelBase, IDisposable
     public MetricsTableViewModel(IMetricsSnapshotProvider snapshotProvider)
     {
         _snapshotProvider = snapshotProvider;
+    }
+
+    public MetricsTableViewModel(
+        IMetricsSnapshotProvider snapshotProvider,
+        string title,
+        MetricKind? kindFilter)
+    {
+        _snapshotProvider = snapshotProvider;
+        Title = title;
+        _kindFilter = kindFilter;
     }
 
     public void SetActive(bool isActive, IReadOnlyList<MetricReading>? latestSnapshot = null)
@@ -47,6 +70,31 @@ public partial class MetricsTableViewModel : ViewModelBase, IDisposable
     {
         if (_disposed || !_isActive)
             return;
+
+        if (_kindFilter == MetricKind.Temperature)
+        {
+            var temperatureRows = snapshot
+                .Where(r => r.Kind == MetricKind.Temperature)
+                .Select(TemperatureTableRow.From)
+                .ToList();
+
+            void ApplyTemperatures()
+            {
+                TemperatureRows.SyncFrom(temperatureRows, r => r.Id);
+                NoTemperatureSensors = temperatureRows.Count == 0;
+                var cpuRows = temperatureRows
+                    .Where(r => r.Category.Equals("CPU", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                CpuPawnIoGuidanceVisible = cpuRows.Count > 0 && cpuRows.All(r => r.Celsius == "Unavailable");
+            }
+
+            if (Dispatcher.UIThread.CheckAccess())
+                ApplyTemperatures();
+            else
+                Dispatcher.UIThread.Post(ApplyTemperatures);
+
+            return;
+        }
 
         var rows = snapshot.Select(MetricTableRow.From).ToList();
 

@@ -1,7 +1,12 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using LibreHardwareMonitor.Hardware;
 using System;
 using System.Runtime.Versioning;
 using SystemMonitor.Application.Interfaces;
+using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Infrastructure.Monitoring.Windows;
 
@@ -42,11 +47,25 @@ public sealed class LibreHardwareMonitorHost : IHardwareRefreshService, IDisposa
         }
     }
 
+    public IReadOnlyList<TemperatureReading> GetTemperatureReadings()
+    {
+        lock (UpdateSyncRoot)
+        {
+            var readings = new List<TemperatureReading>();
+            foreach (var hardware in Computer.Hardware)
+                CollectTemperatureReadings(hardware, readings);
+
+            return readings;
+        }
+    }
+
     private LibreHardwareMonitorHost()
     {
         Computer = new Computer
         {
+            IsBatteryEnabled = true,
             IsCpuEnabled = true,
+            IsControllerEnabled = true,
             IsGpuEnabled = true,
             IsMemoryEnabled = true,
             IsStorageEnabled = true,
@@ -121,6 +140,67 @@ public sealed class LibreHardwareMonitorHost : IHardwareRefreshService, IDisposa
         foreach (var subHardware in hardware.SubHardware)
             UpdateRecursive(subHardware);
     }
+
+    private static void CollectTemperatureReadings(
+        IHardware hardware,
+        List<TemperatureReading> readings)
+    {
+        try
+        {
+            hardware.Update();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[Temperature] Update failed for '{hardware.Name}': {ex.Message}");
+        }
+
+        var sensors = hardware.Sensors
+            .Where(sensor => sensor.SensorType == SensorType.Temperature)
+            .ToList();
+
+        Debug.WriteLine(
+            $"[Temperature] Hardware='{hardware.Name}', Type={hardware.HardwareType}, " +
+            $"TemperatureSensors={sensors.Count}");
+
+        var category = CategoryOf(hardware.HardwareType);
+        foreach (var sensor in sensors)
+        {
+            var value = sensor.Value;
+            var available = value is { } current && float.IsFinite(current) && current > 0 && current <= 125;
+            var label = string.IsNullOrWhiteSpace(hardware.Name)
+                ? sensor.Name ?? "Unknown"
+                : $"{hardware.Name}: {sensor.Name ?? "Unknown"}";
+            var currentValue = available ? value!.Value : 0;
+
+            readings.Add(new TemperatureReading
+            {
+                Category = category,
+                HardwareName = hardware.Name,
+                SensorId = $"{hardware.Identifier}/{sensor.Identifier}",
+                SensorLabel = label,
+                IsAvailable = available,
+                TemperatureCelsius = currentValue,
+                MinCelsius = available ? sensor.Min ?? currentValue : 0,
+                MaxCelsius = available ? sensor.Max ?? currentValue : 0,
+                AverageCelsius = currentValue,
+                IsPrimary = true
+            });
+        }
+
+        foreach (var subHardware in hardware.SubHardware)
+            CollectTemperatureReadings(subHardware, readings);
+    }
+
+    private static string CategoryOf(HardwareType type) => type switch
+    {
+        HardwareType.Cpu => "CPU",
+        HardwareType.GpuAmd or HardwareType.GpuNvidia or HardwareType.GpuIntel => "GPU",
+        HardwareType.Motherboard or HardwareType.SuperIO => "MOTHERBOARD",
+        HardwareType.Storage => "STORAGE",
+        HardwareType.Memory => "RAM",
+        HardwareType.Battery => "BATTERY",
+        _ => "OTHER"
+    };
 
     public void Dispose()
     {

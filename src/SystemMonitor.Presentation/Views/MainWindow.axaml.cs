@@ -10,6 +10,7 @@ public partial class MainWindow : Window
     private readonly IPanelWindowService _panelWindowService;
     private MainWindowViewModel? _subscribedViewModel;
     private Action<string>? _panelRequestHandler;
+    private AlertMonitor? _alertMonitor;
 
     public MainWindow() : this(new PanelWindowService())
     {
@@ -19,6 +20,9 @@ public partial class MainWindow : Window
     {
         _panelWindowService = panelWindowService;
         InitializeComponent();
+
+        if (!Design.IsDesignMode)
+            _alertMonitor = new AlertMonitor(this);
 
         DataContextChanged += (_, _) =>
         {
@@ -31,6 +35,9 @@ public partial class MainWindow : Window
             if (DataContext is MainWindowViewModel vm)
             {
                 _subscribedViewModel = vm;
+                if (_alertMonitor is not null)
+                    vm.SetAlertMonitor(_alertMonitor);
+
                 _panelRequestHandler = label => _panelWindowService.TogglePanel(label, this);
                 vm.OpenPanelRequested += _panelRequestHandler;
             }

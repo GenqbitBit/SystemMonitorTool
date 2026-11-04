@@ -67,6 +67,19 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private IReadOnlyList<MetricReading> GetSnapshotCore()
     {
         TryRefreshHardware();
+        IReadOnlyList<TemperatureReading>? hardwareTemperatures = null;
+        if (_hardwareRefresh is not null)
+        {
+            try
+            {
+                hardwareTemperatures = _hardwareRefresh.GetTemperatureReadings();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Temperature] hardware scan failed; using component readings: {ex}");
+            }
+        }
+
         var readings = new List<MetricReading>();
 
         // CPU — identity rows first (emission order = display order).
@@ -83,9 +96,6 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         readings.Add(BuildTextReading(MetricCatalog.CpuCores, cpuInfo.CoreCount.ToString(), cpuAvailable));
         readings.Add(BuildTextReading(MetricCatalog.CpuThreads, cpuInfo.ThreadCount.ToString(), cpuAvailable));
 
-        // Motherboard — identity rows only. The temperature row was removed:
-        // this machine's Super I/O channel never reports a real value, and a
-        // permanent "0 °C" is noise, not telemetry.
         var boardInfo = ReadService(_motherboard.GetCurrentInfo, null, "Motherboard", out var boardServiceAvailable);
         if (boardInfo is not null)
         {
@@ -173,30 +183,65 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
 
 
         PruneSmoothingWindows(readings);
-        // Temperature — now bundled into each hardware's own Info model instead
-        // of a centralized ITemperatureMonitorService. Kept at the same position
-        // (end of the snapshot) to minimize output-order drift from before.
-        foreach (var reading in cpuInfo.Temperatures)
+        // Prefer the full hardware-tree scan, but supplement categories the
+        // shared scan did not return from their existing monitor snapshots.
+        var temperatureCategories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (hardwareTemperatures is not null)
         {
-            readings.Add(BuildTemperatureMetric("CPU", reading, idSuffix: reading.SensorLabel));
+            foreach (var reading in hardwareTemperatures)
+            {
+                temperatureCategories.Add(reading.Category);
+                readings.Add(BuildTemperatureMetric(
+                    reading.Category,
+                    reading,
+                    idSuffix: string.IsNullOrWhiteSpace(reading.SensorId)
+                        ? $"{reading.HardwareName}.{reading.SensorLabel}"
+                        : reading.SensorId));
+            }
         }
-        foreach (var reading in diskInfo.Temperatures)
+
+        void AddTemperatureFallback(
+            string category,
+            IEnumerable<TemperatureReading> fallbackReadings,
+            Func<TemperatureReading, string>? idSuffix = null)
         {
-            readings.Add(BuildTemperatureMetric("Disk", reading, idSuffix: reading.SensorLabel, labelSuffix: diskLabelSuffix));
-        }
-        foreach (var gpuInfo in gpuInfos)
-        {
-            if (!gpuInfo.IsAvailable) continue;
-            var gpuLabelSuffix = GetGpuLabelSuffix(gpuInfo);
-            foreach (var reading in gpuInfo.Temperatures)
+            if (temperatureCategories.Contains(category))
+                return;
+
+            foreach (var reading in fallbackReadings)
             {
                 readings.Add(BuildTemperatureMetric(
-                    "GPU", reading,
-                    idSuffix: $"{gpuInfo.DeviceId}.{reading.SensorLabel}",
-                    labelSuffix: gpuLabelSuffix,
-                    gpuIndex: gpuInfo.Index,
-                    gpuIsIntegrated: gpuInfo.IsIntegrated,
-                    gpuDeviceId: gpuInfo.DeviceId));
+                    category,
+                    reading,
+                    idSuffix: idSuffix?.Invoke(reading) ?? reading.SensorLabel));
+            }
+
+            if (readings.Any(reading =>
+                    reading.Kind == MetricKind.Temperature &&
+                    reading.Category.Equals(category, StringComparison.OrdinalIgnoreCase)))
+                temperatureCategories.Add(category);
+        }
+
+        AddTemperatureFallback("CPU", cpuInfo.Temperatures);
+        AddTemperatureFallback(
+            "MOTHERBOARD",
+            boardInfo?.Temperatures.AsEnumerable() ?? Enumerable.Empty<TemperatureReading>());
+        AddTemperatureFallback("RAM", memInfo.Temperatures);
+        AddTemperatureFallback("STORAGE", diskInfo.Temperatures);
+        if (!temperatureCategories.Contains("GPU"))
+        {
+            foreach (var gpuInfo in gpuInfos.Where(gpu => gpu.IsAvailable))
+            {
+                foreach (var reading in gpuInfo.Temperatures)
+                {
+                    readings.Add(BuildTemperatureMetric(
+                        "GPU",
+                        reading,
+                        idSuffix: $"{gpuInfo.DeviceId}.{reading.SensorLabel}",
+                        gpuIndex: gpuInfo.Index,
+                        gpuIsIntegrated: gpuInfo.IsIntegrated,
+                        gpuDeviceId: gpuInfo.DeviceId));
+                }
             }
         }
 
@@ -338,12 +383,12 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     // Id scheme ("temp.{category}.{idSuffix}"), same Min/Max/Average rounding.
     private static MetricReading BuildTemperatureMetric(
         string category, TemperatureReading reading, string idSuffix,
-        string? labelSuffix = null, int? gpuIndex = null, bool? gpuIsIntegrated = null,
+        int? gpuIndex = null, bool? gpuIsIntegrated = null,
         string? gpuDeviceId = null) => new()
     {
         Id = $"temp.{category}.{idSuffix}".ToLowerInvariant(),
         Category = category,
-        Label = labelSuffix is null ? reading.SensorLabel : reading.SensorLabel + labelSuffix,
+        Label = reading.SensorLabel,
         Kind = MetricKind.Temperature,
         Unit = "°C",
         IsAvailable = reading.IsAvailable,

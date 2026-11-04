@@ -245,7 +245,6 @@ public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
                 .Select(sensor => BuildTemperatureReading(sensor, isPrimary: true))
                 .ToList();
 
-            DisambiguateDuplicateLabels(readings);
             return readings;
         }
     }
@@ -276,7 +275,9 @@ public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
 
         return new TemperatureReading
         {
-            SensorLabel = sensor.Name ?? "Unknown",
+            Category = "STORAGE",
+            HardwareName = _libreHardware?.Name ?? _model,
+            SensorLabel = $"{_libreHardware?.Name ?? _model}: {sensor.Name ?? "Unknown"}",
             IsAvailable = isRealReading,
             TemperatureCelsius = isRealReading ? sensor.Value!.Value : 0,
             MinCelsius = min,
@@ -284,20 +285,6 @@ public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
             AverageCelsius = average,
             IsPrimary = isPrimary
         };
-    }
-
-    private static void DisambiguateDuplicateLabels(List<TemperatureReading> readings)
-    {
-        var groups = readings.GroupBy(r => r.SensorLabel);
-        foreach (var group in groups.Where(g => g.Count() > 1))
-        {
-            var index = 1;
-            foreach (var reading in group)
-            {
-                reading.SensorLabel = $"{reading.SensorLabel} #{index}";
-                index++;
-            }
-        }
     }
 
     public void Dispose()

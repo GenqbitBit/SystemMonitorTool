@@ -296,16 +296,19 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 
             var readings = temperatureSensors
                 .Select(sensor => BuildTemperatureReading(
+                    device.LibreHardware,
                     sensor,
                     isPrimary: string.Equals(sensor.Name?.Trim(), primarySensorName, StringComparison.OrdinalIgnoreCase)))
                 .ToList();
 
-            DisambiguateDuplicateLabels(readings);
             return readings;
         }
     }
 
-    private TemperatureReading BuildTemperatureReading(ISensor sensor, bool isPrimary)
+    private TemperatureReading BuildTemperatureReading(
+        IHardware hardware,
+        ISensor sensor,
+        bool isPrimary)
     {
         var isRealReading = sensor.Value.HasValue && sensor.Value.Value != 0;
         double average = 0, min = 0, max = 0;
@@ -331,7 +334,9 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 
         return new TemperatureReading
         {
-            SensorLabel = sensor.Name ?? "Unknown",
+            Category = "GPU",
+            HardwareName = hardware.Name,
+            SensorLabel = $"{hardware.Name}: {sensor.Name ?? "Unknown"}",
             IsAvailable = isRealReading,
             TemperatureCelsius = isRealReading ? sensor.Value!.Value : 0,
             MinCelsius = min,
@@ -367,20 +372,6 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
             $"falling back to '{fallback.Name}' (first sensor) as the primary reading. " +
             $"Sensors seen: {string.Join(", ", temperatureSensors.Select(s => $"'{s.Name}'"))}");
         return fallback.Name;
-    }
-
-    private static void DisambiguateDuplicateLabels(List<TemperatureReading> readings)
-    {
-        var groups = readings.GroupBy(r => r.SensorLabel);
-        foreach (var group in groups.Where(g => g.Count() > 1))
-        {
-            var index = 1;
-            foreach (var reading in group)
-            {
-                reading.SensorLabel = $"{reading.SensorLabel} #{index}";
-                index++;
-            }
-        }
     }
 
     private double GetGpuUsagePercent(string? luidFilter)

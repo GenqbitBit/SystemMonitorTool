@@ -19,7 +19,7 @@
         <Grid RowDefinitions="Auto,Auto,Auto">
 
             <TextBlock Grid.Row="0"
-                       Text="Data Table"
+                       Text="{Binding Title}"
                        FontSize="12"
                        FontWeight="Bold"
                        Foreground="{DynamicResource MetricValueBrush}"
