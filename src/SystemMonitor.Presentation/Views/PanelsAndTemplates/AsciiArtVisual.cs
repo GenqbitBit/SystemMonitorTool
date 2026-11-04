@@ -34,7 +34,14 @@ public sealed class AsciiArtVisual : Control
     private const double CellWidth = 6;
     private const double CellHeight = 10;
     private static readonly Typeface Mono = new("Consolas, Cascadia Mono, monospace");
-    private static readonly TimeSpan GlintInterval = TimeSpan.FromMilliseconds(80);
+    private static readonly TimeSpan GlintInterval = TimeSpan.FromMilliseconds(120);
+
+    // The shimmer is cosmetic; 12 discrete brightness steps are visually
+    // indistinguishable from a continuous gradient but keep the brush cache
+    // bounded (see GetBrush).
+    private const int GlintLevelCount = 12;
+    private const double GlintMinFactor = 0.85;
+    private const double GlintMaxFactor = 1.25;
 
     private static readonly Dictionary<(char Glyph, double FontSize), FormattedText> _glyphTextCache = new();
 
@@ -82,7 +89,11 @@ public sealed class AsciiArtVisual : Control
 
     public AsciiArtVisual()
     {
-        _themeChangedHandler = (_, _) => InvalidateVisual();
+        _themeChangedHandler = (_, _) =>
+        {
+            _brushCache.Clear();
+            InvalidateVisual();
+        };
 
         this.AttachedToVisualTree += (_, _) =>
         {
@@ -190,6 +201,12 @@ public sealed class AsciiArtVisual : Control
 
     private static FormattedText GetOrCreateFormattedText(char glyph, double fontSize)
     {
+        // Static cache shared by every AsciiArtVisual instance. Resizing used
+        // to mint a new font size (and a permanent cache entry) continuously;
+        // sizes are quantized by the caller and the cache is capped.
+        if (_glyphTextCache.Count > 512)
+            _glyphTextCache.Clear();
+
         var key = (glyph, fontSize);
         if (!_glyphTextCache.TryGetValue(key, out var ft))
         {
@@ -236,10 +253,10 @@ public sealed class AsciiArtVisual : Control
                 var cell = art[row, col];
                 if (cell.Glyph == ' ') continue;
 
-                double factor = ComputeGlintFactor(row, col, _elapsedMs);
+                double factor = QuantizeGlintFactor(ComputeGlintFactor(row, col, _elapsedMs));
                 var brush = GetBrush(AdjustForGlint(themeColor, factor));
 
-                var textSize = Math.Max(1d, CellHeight * fitScale);
+                var textSize = Math.Clamp(Math.Round(Math.Max(1d, CellHeight * fitScale) * 2) / 2, 1, 64);
                 var ft = GetOrCreateFormattedText(cell.Glyph, textSize);
                 ft.SetForegroundBrush(brush);
 
@@ -247,6 +264,15 @@ public sealed class AsciiArtVisual : Control
                 context.DrawText(ft, origin);
             }
         }
+    }
+
+    private static double QuantizeGlintFactor(double factor)
+    {
+        var normalized = Math.Clamp(
+            (factor - GlintMinFactor) / (GlintMaxFactor - GlintMinFactor), 0, 1);
+        var level = (int)Math.Round(normalized * (GlintLevelCount - 1));
+        return GlintMinFactor
+            + (GlintMaxFactor - GlintMinFactor) * level / (GlintLevelCount - 1);
     }
 
     private static byte ClampToByte(double value)

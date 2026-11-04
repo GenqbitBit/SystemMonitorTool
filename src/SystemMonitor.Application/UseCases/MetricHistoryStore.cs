@@ -33,6 +33,7 @@ public sealed class MetricHistoryStore : IMetricHistoryStore
     // inconsistent slice of history, which is what produced the
     // appearing/disappearing "cycling" segments.
     private readonly object _lock = new();
+    private readonly List<string> _pruneScratch = new();
 
     public MetricHistoryStore(TimeSpan? window = null)
     {
@@ -65,17 +66,36 @@ public sealed class MetricHistoryStore : IMetricHistoryStore
         }
     }
 
+    // Runs on every poll tick, so it avoids the three-LINQ-sequences-per-tick
+    // allocation pattern of the original implementation.
     private void PruneInactiveMetricIds(HashSet<string> activeMetricIds)
     {
-        var retainedMetricIds = _history.Keys
-            .Concat(_liveTip.Keys)
-            .Concat(_committedRange.Keys)
-            .Where(id => !activeMetricIds.Contains(id))
-            .Distinct()
-            .ToList();
+        if (_history.Count == 0 && _liveTip.Count == 0 && _committedRange.Count == 0)
+            return;
 
-        foreach (var metricId in retainedMetricIds)
+        _pruneScratch.Clear();
+
+        foreach (var metricId in _history.Keys)
         {
+            if (!activeMetricIds.Contains(metricId))
+                _pruneScratch.Add(metricId);
+        }
+
+        foreach (var metricId in _liveTip.Keys)
+        {
+            if (!activeMetricIds.Contains(metricId))
+                _pruneScratch.Add(metricId);
+        }
+
+        foreach (var metricId in _committedRange.Keys)
+        {
+            if (!activeMetricIds.Contains(metricId))
+                _pruneScratch.Add(metricId);
+        }
+
+        for (var i = 0; i < _pruneScratch.Count; i++)
+        {
+            var metricId = _pruneScratch[i];
             _history.Remove(metricId);
             _liveTip.Remove(metricId);
             _committedRange.Remove(metricId);

@@ -8,10 +8,14 @@ namespace SystemMonitor.Infrastructure.Monitoring.MacOS;
 [SupportedOSPlatform("macos")]
 public class MacOsMemoryMonitorService : IMemoryMonitorService
 {
+    // Physical memory and page size are fixed for the lifetime of the machine;
+    // reading them spawned two sysctl processes on every polling tick.
+    private static readonly Lazy<(long TotalBytes, long PageSize)> StaticMemory =
+        new(ReadStaticMemory);
+
     public MemoryInfo GetCurrentUsage()
     {
-        var totalBytes = ReadLong("hw.memsize");
-        var pageSize = ReadLong("hw.pagesize", 4096);
+        var (totalBytes, pageSize) = StaticMemory.Value;
         var pages = MacOsCommandRunner.ParseVmStat(
             MacOsCommandRunner.Run("/usr/bin/vm_stat"));
         var availablePages = GetPages(pages, "Pages free")
@@ -36,6 +40,9 @@ public class MacOsMemoryMonitorService : IMemoryMonitorService
             Manufacturer = "Unknown"
         };
     }
+
+    private static (long TotalBytes, long PageSize) ReadStaticMemory() =>
+        (ReadLong("hw.memsize"), ReadLong("hw.pagesize", 4096));
 
     private static long ReadLong(string name, long fallback = 0) =>
         MacOsCommandRunner.TryReadLong(MacOsCommandRunner.ReadSysctl(name), out var value) && value > 0

@@ -28,6 +28,13 @@ public class DotNetOsMonitorService : IOsMonitorService
     private DateTime _lastProcessSampleUtc = DateTime.MinValue;
     private OperatingSystemInfo? _lastInfo;
 
+    // Identity strings never change while the app runs; reading /etc/os-release
+    // (or rebuilding the Windows version string) on every process sample was
+    // avoidable work on the polling thread.
+    private static readonly string StaticOsName = ReadFriendlyName();
+    private static readonly string StaticOsVersion = RuntimeInformation.OSDescription;
+    private static readonly OperatingSystemPlatform StaticPlatform = DetectPlatform();
+
     [SupportedOSPlatform("windows")]
     public static bool IsProcessAccessible(Process process)
     {
@@ -89,9 +96,11 @@ public class DotNetOsMonitorService : IOsMonitorService
                     processIndex++;
                     try
                     {
-                        if (OperatingSystem.IsWindows() && !IsProcessAccessible(process))
-                            continue;
-
+                        // No OpenProcess/CloseHandle pre-check here: reading
+                        // TotalProcessorTime already performs the access check
+                        // (and throws for protected processes). The previous
+                        // probe doubled kernel transitions for every process
+                        // in the table on every sample.
                         var cpuTime = process.TotalProcessorTime;
                         nextCpuTimes[process.Id] = cpuTime;
 
@@ -158,9 +167,9 @@ public class DotNetOsMonitorService : IOsMonitorService
 
                 var result = new OperatingSystemInfo
                 {
-                    Platform = DetectPlatform(),
-                    OsName = ReadFriendlyName(),
-                    OsVersion = RuntimeInformation.OSDescription,
+                    Platform = StaticPlatform,
+                    OsName = StaticOsName,
+                    OsVersion = StaticOsVersion,
                     Uptime = TimeSpan.FromMilliseconds(Environment.TickCount64),
                     ProcessCount = processes.Length,
                     ThreadCount = threadTotal,

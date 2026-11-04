@@ -1,54 +1,63 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using Microsoft.Data.Sqlite; 
+using Microsoft.Data.Sqlite;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
 namespace SystemMonitor.Infrastructure.Persistence;
 
 /// <summary>
-/// Persists metric readings to a local SQLite database at
-/// %LocalAppData%/SystemMonitorTool/history.db, so historical charts can
-/// look back further than the in-memory store's short rolling window and
-/// survive an app restart.
+/// Persists numeric metric readings to
+/// %LocalAppData%/SystemMonitorTool/history.db.
 ///
-/// Design notes:
-///  - Writes go through a background Channel, never directly on the
-///    caller's thread. Record() just enqueues and returns immediately —
-///    safe to call every 500ms from the UI's monitoring cycle without
-///    causing jank from disk I/O.
-///  - A single background loop drains the channel and writes in batches
-///    inside one transaction per tick, which is far cheaper than one
-///    transaction per row.
-///  - Retention is fixed at 24 hours: old rows are pruned periodically
-///    so the database doesn't grow unbounded over a long-running session.
+/// Writes are enqueued and drained by one background loop into bounded
+/// transactions. Text metrics are not stored (they always carried a
+/// meaningless 0), snapshots are sampled at most every 750 ms, and a failed
+/// batch is retried instead of permanently killing persistence.
 /// </summary>
 public sealed class SqliteMetricHistoryPersistenceService : IMetricHistoryPersistenceService, IDisposable
 {
     private static readonly TimeSpan RetentionWindow = TimeSpan.FromHours(24);
     private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan SampleInterval = TimeSpan.FromMilliseconds(750);
+    private const int MaxRowsPerBatch = 500;
 
     private readonly string _connectionString;
     private readonly Channel<(string MetricId, DateTime Timestamp, double Value)> _writeQueue;
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _backgroundWriterTask;
+    private DateTime _lastRecordUtc = DateTime.MinValue;
     private DateTime _lastCleanup = DateTime.MinValue;
+    private bool _disposed;
 
     public SqliteMetricHistoryPersistenceService()
     {
-        var appDataFolder = Path.Combine(
+        var folder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SystemMonitorTool");
-        Directory.CreateDirectory(appDataFolder);
+        Directory.CreateDirectory(folder);
+        _connectionString = $"Data Source={Path.Combine(folder, "history.db")};Pooling=True";
 
-        var dbPath = Path.Combine(appDataFolder, "history.db");
-        _connectionString = $"Data Source={dbPath}";
-
-        InitializeDatabase();
+        using (var connection = new SqliteConnection(_connectionString))
+        {
+            connection.Open();
+            Configure(connection);
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = """
+                CREATE TABLE IF NOT EXISTS metric_history (
+                    metric_id TEXT NOT NULL,
+                    timestamp INTEGER NOT NULL,
+                    value REAL NOT NULL);
+                CREATE INDEX IF NOT EXISTS idx_metric_history_lookup
+                    ON metric_history (metric_id, timestamp);
+                """;
+            cmd.ExecuteNonQuery();
+        }
 
         _writeQueue = Channel.CreateBounded<(string, DateTime, double)>(
             new BoundedChannelOptions(20_000)
@@ -60,42 +69,27 @@ public sealed class SqliteMetricHistoryPersistenceService : IMetricHistoryPersis
         _backgroundWriterTask = Task.Run(BackgroundWriteLoopAsync);
     }
 
-    private void InitializeDatabase()
+    private static void Configure(SqliteConnection connection)
     {
-        using var connection = new SqliteConnection(_connectionString);
-        connection.Open();
-
-        // WAL mode lets reads and writes happen concurrently without
-        // locking each other out — matters here since GetHistoryAsync
-        // can be called while the background writer is mid-batch.
-        using (var pragma = connection.CreateCommand())
-        {
-            pragma.CommandText = "PRAGMA journal_mode=WAL;";
-            pragma.ExecuteNonQuery();
-        }
-
-        using var create = connection.CreateCommand();
-        create.CommandText = """
-            CREATE TABLE IF NOT EXISTS metric_history (
-                metric_id TEXT NOT NULL,
-                timestamp INTEGER NOT NULL,
-                value REAL NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_metric_history_lookup
-                ON metric_history (metric_id, timestamp);
-            """;
-        create.ExecuteNonQuery();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;";
+        cmd.ExecuteNonQuery();
     }
 
     public void Record(IReadOnlyList<MetricReading> snapshot)
     {
-        var now = DateTime.UtcNow;
-        foreach (var reading in snapshot)
-        {
-            if (!reading.IsAvailable) continue;
+        if (_disposed) return;
 
-            // TryWrite on an unbounded channel never blocks or fails under
-            // normal operation — safe to call from the UI thread every tick.
+        var now = DateTime.UtcNow;
+        if (now - _lastRecordUtc < SampleInterval) return;
+        _lastRecordUtc = now;
+
+        for (var i = 0; i < snapshot.Count; i++)
+        {
+            var reading = snapshot[i];
+            if (!reading.IsAvailable || reading.Kind == MetricKind.Text) continue;
+            if (double.IsNaN(reading.Value) || double.IsInfinity(reading.Value)) continue;
+
             _writeQueue.Writer.TryWrite((reading.Id, now, reading.Value));
         }
     }
@@ -104,48 +98,70 @@ public sealed class SqliteMetricHistoryPersistenceService : IMetricHistoryPersis
     {
         var reader = _writeQueue.Reader;
 
-        while (await reader.WaitToReadAsync(_cts.Token).ConfigureAwait(false))
+        try
         {
-            using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync(_cts.Token).ConfigureAwait(false);
-            using var transaction = connection.BeginTransaction();
-
-            using var insert = connection.CreateCommand();
-            insert.Transaction = transaction;
-            insert.CommandText =
-                "INSERT INTO metric_history (metric_id, timestamp, value) VALUES ($id, $ts, $val);";
-            var idParam = insert.Parameters.Add("$id", SqliteType.Text);
-            var tsParam = insert.Parameters.Add("$ts", SqliteType.Integer);
-            var valParam = insert.Parameters.Add("$val", SqliteType.Real);
-
-            // Drain everything currently queued into one batch/transaction,
-            // rather than one transaction per row.
-            while (reader.TryRead(out var point))
+            while (await reader.WaitToReadAsync(_cts.Token).ConfigureAwait(false))
             {
-                idParam.Value = point.MetricId;
-                tsParam.Value = point.Timestamp.Ticks;
-                valParam.Value = point.Value;
-                insert.ExecuteNonQuery();
+                try
+                {
+                    using var connection = new SqliteConnection(_connectionString);
+                    await connection.OpenAsync(_cts.Token).ConfigureAwait(false);
+                    Configure(connection);
+
+                    using var transaction = connection.BeginTransaction();
+                    using var cmd = connection.CreateCommand();
+                    cmd.Transaction = transaction;
+                    cmd.CommandText =
+                        "INSERT INTO metric_history (metric_id, timestamp, value) VALUES ($id, $ts, $val);";
+                    var id = cmd.Parameters.Add("$id", SqliteType.Text);
+                    var ts = cmd.Parameters.Add("$ts", SqliteType.Integer);
+                    var val = cmd.Parameters.Add("$val", SqliteType.Real);
+                    cmd.Prepare();
+
+                    var rows = 0;
+                    while (rows < MaxRowsPerBatch && reader.TryRead(out var point))
+                    {
+                        id.Value = point.MetricId;
+                        ts.Value = point.Timestamp.Ticks;
+                        val.Value = point.Value;
+                        cmd.ExecuteNonQuery();
+                        rows++;
+                    }
+
+                    transaction.Commit();
+                    MaybeCleanup(connection);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    Trace.WriteLine($"[MetricHistory] batch write failed: {ex.Message}");
+                    await Task.Delay(250, _cts.Token).ConfigureAwait(false);
+                }
             }
-
-            transaction.Commit();
-
-            await MaybeCleanupAsync(connection).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected during forced shutdown.
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"[MetricHistory] writer stopped: {ex}");
         }
     }
 
-    private async Task MaybeCleanupAsync(SqliteConnection connection)
+    private void MaybeCleanup(SqliteConnection connection)
     {
         var now = DateTime.UtcNow;
         if (now - _lastCleanup < CleanupInterval) return;
         _lastCleanup = now;
 
-        var cutoff = now - RetentionWindow;
-
-        using var delete = connection.CreateCommand();
-        delete.CommandText = "DELETE FROM metric_history WHERE timestamp < $cutoff;";
-        delete.Parameters.AddWithValue("$cutoff", cutoff.Ticks);
-        await delete.ExecuteNonQueryAsync(_cts.Token).ConfigureAwait(false);
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM metric_history WHERE timestamp < $cutoff;";
+        cmd.Parameters.AddWithValue("$cutoff", (now - RetentionWindow).Ticks);
+        cmd.ExecuteNonQuery();
     }
 
     public async Task<IReadOnlyList<MetricHistoryPoint>> GetHistoryAsync(string metricId, DateTime since)
@@ -153,22 +169,22 @@ public sealed class SqliteMetricHistoryPersistenceService : IMetricHistoryPersis
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
 
-        using var select = connection.CreateCommand();
-        select.CommandText = """
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
             SELECT timestamp, value FROM metric_history
             WHERE metric_id = $id AND timestamp >= $since
             ORDER BY timestamp;
             """;
-        select.Parameters.AddWithValue("$id", metricId);
-        select.Parameters.AddWithValue("$since", since.Ticks);
+        cmd.Parameters.AddWithValue("$id", metricId);
+        cmd.Parameters.AddWithValue("$since", since.Ticks);
 
         var results = new List<MetricHistoryPoint>();
-        using var readerResult = await select.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await readerResult.ReadAsync().ConfigureAwait(false))
+        using var reader = await cmd.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false))
         {
-            var timestamp = new DateTime(readerResult.GetInt64(0), DateTimeKind.Utc).ToLocalTime();
-            var value = readerResult.GetDouble(1);
-            results.Add(new MetricHistoryPoint(timestamp, value));
+            results.Add(new MetricHistoryPoint(
+                new DateTime(reader.GetInt64(0), DateTimeKind.Utc).ToLocalTime(),
+                reader.GetDouble(1)));
         }
 
         return results;
@@ -176,7 +192,10 @@ public sealed class SqliteMetricHistoryPersistenceService : IMetricHistoryPersis
 
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
         _writeQueue.Writer.TryComplete();
+
         try
         {
             if (!_backgroundWriterTask.Wait(TimeSpan.FromSeconds(2)))
@@ -189,6 +208,7 @@ public sealed class SqliteMetricHistoryPersistenceService : IMetricHistoryPersis
         {
             // Best-effort shutdown — don't let a slow flush block app exit.
         }
+
         _cts.Dispose();
     }
 }

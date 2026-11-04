@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using LibreHardwareMonitor.Hardware;
-using System;
 using System.Runtime.Versioning;
+using LibreHardwareMonitor.Hardware;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
@@ -38,12 +36,41 @@ public sealed class LibreHardwareMonitorHost : IHardwareRefreshService, IDisposa
     /// <summary>The shared hardware view every service reads from.</summary>
     public Computer Computer { get; }
 
+    private static readonly IReadOnlyList<TemperatureReading> EmptyReadings = Array.Empty<TemperatureReading>();
+
+    // Flattened hardware + sub-hardware, built once after Open(). Walking
+    // SubHardware again on every scan was pure overhead.
+    private IHardware[] _hardware = Array.Empty<IHardware>();
+
+    private Dictionary<string, IReadOnlyList<TemperatureReading>> _temperaturesByCategory =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private IReadOnlyList<TemperatureReading> _allTemperatureReadings = EmptyReadings;
+    private bool _temperatureCacheValid;
+    private bool _disposed;
+
     public void RefreshAll()
     {
         lock (UpdateSyncRoot)
         {
-            foreach (var hardware in Computer.Hardware)
-                UpdateRecursive(hardware);
+            if (_disposed)
+                return;
+
+            var hardware = _hardware;
+            for (var i = 0; i < hardware.Length; i++)
+            {
+                try
+                {
+                    hardware[i].Update();
+                }
+                catch (Exception ex)
+                {
+                    // One failing device must not abort the whole scan.
+                    Debug.WriteLine($"[Hardware] Update failed for '{hardware[i].Name}': {ex.Message}");
+                }
+            }
+
+            RebuildTemperatureCacheLocked();
         }
     }
 
@@ -51,12 +78,96 @@ public sealed class LibreHardwareMonitorHost : IHardwareRefreshService, IDisposa
     {
         lock (UpdateSyncRoot)
         {
-            var readings = new List<TemperatureReading>();
-            foreach (var hardware in Computer.Hardware)
-                CollectTemperatureReadings(hardware, readings);
-
-            return readings;
+            EnsureTemperatureCacheLocked();
+            return _allTemperatureReadings;
         }
+    }
+
+    /// <summary>
+    /// Cached temperature readings for one category ("CPU", "GPU",
+    /// "MOTHERBOARD", "STORAGE", "RAM", ...). Filtering is a dictionary
+    /// lookup here instead of a full hardware walk in every service.
+    /// </summary>
+    public IReadOnlyList<TemperatureReading> GetTemperatureReadings(string category)
+    {
+        lock (UpdateSyncRoot)
+        {
+            EnsureTemperatureCacheLocked();
+            return _temperaturesByCategory.TryGetValue(category, out var readings)
+                ? readings
+                : EmptyReadings;
+        }
+    }
+
+    private void EnsureTemperatureCacheLocked()
+    {
+        if (_temperatureCacheValid || _disposed)
+            return;
+
+        // The constructor already updated every sensor; building the cache
+        // from current values costs no extra Update().
+        RebuildTemperatureCacheLocked();
+    }
+
+    private void RebuildTemperatureCacheLocked()
+    {
+        var all = new List<TemperatureReading>(64);
+        Dictionary<string, List<TemperatureReading>>? byCategory = null;
+
+        foreach (var hw in _hardware)
+        {
+            var category = CategoryOf(hw.HardwareType);
+            byCategory ??= new Dictionary<string, List<TemperatureReading>>(StringComparer.OrdinalIgnoreCase);
+            if (!byCategory.TryGetValue(category, out var categoryList))
+            {
+                categoryList = new List<TemperatureReading>();
+                byCategory[category] = categoryList;
+            }
+
+            foreach (var sensor in hw.Sensors)
+            {
+                if (sensor.SensorType != SensorType.Temperature)
+                    continue;
+
+                var value = sensor.Value;
+                var available = value is { } current
+                    && float.IsFinite(current) && current > 0 && current <= 125;
+                var sensorName = sensor.Name ?? "Unknown";
+                var label = string.IsNullOrWhiteSpace(hw.Name)
+                    ? sensorName
+                    : $"{hw.Name}: {sensorName}";
+                var currentValue = available ? value!.Value : 0;
+
+                var reading = new TemperatureReading
+                {
+                    Category = category,
+                    HardwareName = hw.Name,
+                    SensorId = $"{hw.Identifier}/{sensor.Identifier}",
+                    SensorLabel = label,
+                    IsAvailable = available,
+                    TemperatureCelsius = currentValue,
+                    MinCelsius = available ? sensor.Min ?? currentValue : 0,
+                    MaxCelsius = available ? sensor.Max ?? currentValue : 0,
+                    AverageCelsius = currentValue,
+                    IsPrimary = true
+                };
+
+                all.Add(reading);
+                categoryList.Add(reading);
+            }
+        }
+
+        var categoryIndex = new Dictionary<string, IReadOnlyList<TemperatureReading>>(
+            byCategory?.Count ?? 0, StringComparer.OrdinalIgnoreCase);
+        if (byCategory is not null)
+        {
+            foreach (var pair in byCategory)
+                categoryIndex[pair.Key] = pair.Value;
+        }
+
+        _allTemperatureReadings = all;
+        _temperaturesByCategory = categoryIndex;
+        _temperatureCacheValid = true;
     }
 
     private LibreHardwareMonitorHost()
@@ -76,12 +187,33 @@ public sealed class LibreHardwareMonitorHost : IHardwareRefreshService, IDisposa
         // Warm-up pass so the very first real read already has data behind it.
         lock (UpdateSyncRoot)
         {
+            var flat = new List<IHardware>(16);
+            var pending = new Stack<IHardware>();
             foreach (var hardware in Computer.Hardware)
+                pending.Push(hardware);
+
+            while (pending.Count > 0)
             {
-                hardware.Update();
-                foreach (var subHardware in hardware.SubHardware)
-                    subHardware.Update();
+                var current = pending.Pop();
+                flat.Add(current);
+                foreach (var sub in current.SubHardware)
+                    pending.Push(sub);
             }
+
+            _hardware = flat.ToArray();
+            foreach (var hardware in _hardware)
+            {
+                try
+                {
+                    hardware.Update();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[Hardware] Warm-up update failed for '{hardware.Name}': {ex.Message}");
+                }
+            }
+
+            RebuildTemperatureCacheLocked();
         }
     }
 
@@ -134,63 +266,6 @@ public sealed class LibreHardwareMonitorHost : IHardwareRefreshService, IDisposa
     private static double? PositiveOrNull(float? value) =>
         value is { } v && v > 0 ? v : null;
 
-    private static void UpdateRecursive(IHardware hardware)
-    {
-        hardware.Update();
-        foreach (var subHardware in hardware.SubHardware)
-            UpdateRecursive(subHardware);
-    }
-
-    private static void CollectTemperatureReadings(
-        IHardware hardware,
-        List<TemperatureReading> readings)
-    {
-        try
-        {
-            hardware.Update();
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[Temperature] Update failed for '{hardware.Name}': {ex.Message}");
-        }
-
-        var sensors = hardware.Sensors
-            .Where(sensor => sensor.SensorType == SensorType.Temperature)
-            .ToList();
-
-        Debug.WriteLine(
-            $"[Temperature] Hardware='{hardware.Name}', Type={hardware.HardwareType}, " +
-            $"TemperatureSensors={sensors.Count}");
-
-        var category = CategoryOf(hardware.HardwareType);
-        foreach (var sensor in sensors)
-        {
-            var value = sensor.Value;
-            var available = value is { } current && float.IsFinite(current) && current > 0 && current <= 125;
-            var label = string.IsNullOrWhiteSpace(hardware.Name)
-                ? sensor.Name ?? "Unknown"
-                : $"{hardware.Name}: {sensor.Name ?? "Unknown"}";
-            var currentValue = available ? value!.Value : 0;
-
-            readings.Add(new TemperatureReading
-            {
-                Category = category,
-                HardwareName = hardware.Name,
-                SensorId = $"{hardware.Identifier}/{sensor.Identifier}",
-                SensorLabel = label,
-                IsAvailable = available,
-                TemperatureCelsius = currentValue,
-                MinCelsius = available ? sensor.Min ?? currentValue : 0,
-                MaxCelsius = available ? sensor.Max ?? currentValue : 0,
-                AverageCelsius = currentValue,
-                IsPrimary = true
-            });
-        }
-
-        foreach (var subHardware in hardware.SubHardware)
-            CollectTemperatureReadings(subHardware, readings);
-    }
-
     private static string CategoryOf(HardwareType type) => type switch
     {
         HardwareType.Cpu => "CPU",
@@ -205,6 +280,17 @@ public sealed class LibreHardwareMonitorHost : IHardwareRefreshService, IDisposa
     public void Dispose()
     {
         lock (UpdateSyncRoot)
+        {
+            if (_disposed)
+                return;
+
+            _disposed = true;
+            _temperatureCacheValid = false;
+            _allTemperatureReadings = EmptyReadings;
+            _temperaturesByCategory = new Dictionary<string, IReadOnlyList<TemperatureReading>>(
+                StringComparer.OrdinalIgnoreCase);
+            _hardware = Array.Empty<IHardware>();
             Computer.Close();
+        }
     }
 }

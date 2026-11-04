@@ -14,6 +14,10 @@ public class MacOsCpuMonitorService : ICpuMonitorService
     private readonly object _gate = new();
     private long[]? _previousCpuTimes;
 
+    // Model, core counts and nominal clock never change while the app runs.
+    // Each of these used to spawn a sysctl process on every polling tick.
+    private readonly Lazy<CpuIdentity> _identity = new(ReadIdentity);
+
     public CpuInfo GetCurrentUsage()
     {
         var cpuTimes = ReadCpuTimes();
@@ -30,6 +34,22 @@ public class MacOsCpuMonitorService : ICpuMonitorService
             _previousCpuTimes = cpuTimes;
         }
 
+        var identity = _identity.Value;
+
+        return new CpuInfo
+        {
+            UsagePercent = Math.Round(usage, 2),
+            ModelName = identity.ModelName,
+            ClockMhz = identity.ClockMhz,
+            CoreCount = identity.CoreCount,
+            ThreadCount = identity.ThreadCount,
+            PackagePowerWatts = null,
+            Temperatures = new()
+        };
+    }
+
+    private static CpuIdentity ReadIdentity()
+    {
         var model = MacOsCommandRunner.ReadSysctl("hw.model");
         var coreCount = ReadInt("hw.physicalcpu", Environment.ProcessorCount);
         var threadCount = ReadInt("hw.ncpu", Environment.ProcessorCount);
@@ -38,17 +58,18 @@ public class MacOsCpuMonitorService : ICpuMonitorService
         if (MacOsCommandRunner.TryReadDouble(frequency, out var frequencyHz) && frequencyHz > 0)
             clockMhz = frequencyHz / 1_000_000d;
 
-        return new CpuInfo
-        {
-            UsagePercent = Math.Round(usage, 2),
-            ModelName = string.IsNullOrWhiteSpace(model) ? "Unknown" : model,
-            ClockMhz = clockMhz,
-            CoreCount = coreCount,
-            ThreadCount = threadCount,
-            PackagePowerWatts = null,
-            Temperatures = new()
-        };
+        return new CpuIdentity(
+            string.IsNullOrWhiteSpace(model) ? "Unknown" : model,
+            coreCount,
+            threadCount,
+            clockMhz);
     }
+
+    private readonly record struct CpuIdentity(
+        string ModelName,
+        int CoreCount,
+        int ThreadCount,
+        double? ClockMhz);
 
     private static long[] ReadCpuTimes()
     {

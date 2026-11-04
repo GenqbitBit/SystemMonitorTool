@@ -87,6 +87,15 @@ public class MetricGraphView : Control
     private INotifyCollectionChanged? _subscribedCollection;
     private readonly LineGraphRenderer _defaultLineRenderer = new();
 
+    // Axis labels repeat every frame (fixed ranges, minute-aligned time ticks),
+    // so cache their laid-out text instead of rebuilding it for every graph on
+    // every poll. Bounded so a continuously changing value label cannot grow it
+    // without limit.
+    private readonly Dictionary<(string Text, double FontSize, IBrush Brush), FormattedText> _labelCache = new();
+    private const int MaxCachedLabels = 128;
+    private IBrush? _valueBrush;
+    private Color _valueBrushColor;
+
     public GraphKind? GraphKind
     {
         get => GetValue(GraphKindProperty);
@@ -253,6 +262,11 @@ public class MetricGraphView : Control
             UnsubscribeFromMetricsCollection();
             SubscribeToMetricsCollection();
         }
+        else if (change.Property == AxisBrushProperty || change.Property == AxisFontFamilyProperty)
+        {
+            // Cached FormattedText objects embed both the brush and typeface.
+            _labelCache.Clear();
+        }
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -278,6 +292,7 @@ public class MetricGraphView : Control
     private void OnThemeChanged(object? sender, Domain.Models.Theming.ThemeDefinition theme)
     {
         ApplyThemeColors();
+        _labelCache.Clear();
         InvalidateVisual();
     }
 
@@ -291,6 +306,7 @@ public class MetricGraphView : Control
 
         ApplyGraphSettings(settings);
         ApplyThemeColors();
+        _labelCache.Clear();
         InvalidateVisual();
     }
 
@@ -448,7 +464,7 @@ public class MetricGraphView : Control
                 context.DrawLine(new Pen(GridBrush, 1), new Point(plotOrigin.X, y), new Point(plotOrigin.X + plotWidth, y));
 
                 var label = MetricGraphMath.FormatAxisValue(value) + unitSuffix;
-                var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
+                var text = GetLabelText(label, typeface, fontSize, AxisBrush);
                 context.DrawText(text, new Point(2, Math.Clamp(y - text.Height / 2, 0, bounds.Height - text.Height)));
             }
 
@@ -458,7 +474,7 @@ public class MetricGraphView : Control
                 var x = plotOrigin.X + effectiveX * plotWidth;
                 context.DrawLine(new Pen(GridBrush, 1), new Point(x, plotOrigin.Y), new Point(x, plotOrigin.Y + plotHeight));
 
-                var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
+                var text = GetLabelText(label, typeface, fontSize, AxisBrush);
                 var textX = Math.Clamp(x - text.Width / 2, plotOrigin.X, bounds.Width - text.Width);
                 context.DrawText(text, new Point(textX, plotOrigin.Y + plotHeight + 2));
             }
@@ -555,7 +571,7 @@ public class MetricGraphView : Control
                 var effectiveX = ToRight ? normalizedX : 1 - normalizedX;
                 var x = plotOrigin.X + effectiveX * plotWidth;
 
-                var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
+                var text = GetLabelText(label, typeface, fontSize, AxisBrush);
                 var textX = Math.Clamp(x - text.Width / 2, plotOrigin.X, bounds.Width - text.Width);
                 // Labeled just above the top half, so it doesn't collide
                 // with the shared baseline sitting between the two halves.
@@ -575,7 +591,7 @@ public class MetricGraphView : Control
                 var effectiveX = SecondaryToRight ? normalizedX : 1 - normalizedX;
                 var x = plotOrigin.X + effectiveX * plotWidth;
 
-                var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
+                var text = GetLabelText(label, typeface, fontSize, AxisBrush);
                 var textX = Math.Clamp(x - text.Width / 2, plotOrigin.X, bounds.Width - text.Width);
                 // Labeled just below the bottom half — this is the original
                 // single-time-axis label position, kept here since bottom
@@ -624,7 +640,7 @@ public class MetricGraphView : Control
             }
     }
     
-    private static void DrawCurrentValueLabel(
+    private void DrawCurrentValueLabel(
     DrawingContext context, Point rectOrigin, IReadOnlyList<(double X, double Y)> points,
     IReadOnlyList<MetricHistoryPoint> history, IBrush brush, string unitSuffix,
     Typeface typeface, double fontSize, Rect bounds, bool toRight, double labelYOffset = 0)
@@ -632,9 +648,8 @@ public class MetricGraphView : Control
         // Use the theme's bright metric-value color only for the current live
         // tip label/marker so it stays readable even when the graph itself is
         // intentionally dimmed by the active theme. Keep the graph line colors
-        // themselves untouched.
-        var themeColor = Theming.ThemeRuntime.Service.CurrentTheme.Chrome.MetricValue;
-        var valueBrush = new SolidColorBrush(Color.FromArgb(themeColor.A, themeColor.R, themeColor.G, themeColor.B));
+        // themselves untouched. The brush is reused until the theme color moves.
+        var valueBrush = GetValueBrush();
 
         // points is ascending-by-X but its endpoint mapping to "newest" flips
         // with toRight (see MetricGraphMath.ComputePoints): points[^1] is newest
@@ -645,10 +660,41 @@ public class MetricGraphView : Control
         context.DrawEllipse(valueBrush, null, currentPoint, 2.5, 2.5);
 
         var currentLabel = MetricGraphMath.FormatAxisValue(history[^1].Value) + unitSuffix;
-        var currentText = new FormattedText(currentLabel, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, valueBrush);
+        // The live value changes nearly every frame; caching it would evict the
+        // stable axis labels, so only its brush is reused.
+        var currentText = new FormattedText(currentLabel, CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight, typeface, fontSize, valueBrush);
         var labelX = Math.Clamp(currentPoint.X + 4, 0, bounds.Width - currentText.Width - 2);
         var labelY = Math.Clamp(currentPoint.Y - currentText.Height - 2 + labelYOffset, 0, bounds.Height - currentText.Height);
         context.DrawText(currentText, new Point(labelX, labelY));
+    }
+
+    private FormattedText GetLabelText(string label, Typeface typeface, double fontSize, IBrush brush)
+    {
+        var key = (label, fontSize, brush);
+        if (_labelCache.TryGetValue(key, out var cached))
+            return cached;
+
+        if (_labelCache.Count >= MaxCachedLabels)
+            _labelCache.Clear();
+
+        var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            typeface, fontSize, brush);
+        _labelCache[key] = text;
+        return text;
+    }
+
+    private IBrush GetValueBrush()
+    {
+        var themeColor = Theming.ThemeRuntime.Service.CurrentTheme.Chrome.MetricValue;
+        var color = Color.FromArgb(themeColor.A, themeColor.R, themeColor.G, themeColor.B);
+        if (_valueBrush is null || _valueBrushColor != color)
+        {
+            _valueBrushColor = color;
+            _valueBrush = new SolidColorBrush(color);
+        }
+
+        return _valueBrush;
     }
 
     private string GetUnitSuffix(string? metricId)
@@ -669,8 +715,7 @@ public class MetricGraphView : Control
     {
         var typeface = new Typeface(AxisFontFamily);
         var message = $"{category} Graph Unavailable";
-        var text = new FormattedText(message, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            typeface, 10, AxisBrush);
+        var text = GetLabelText(message, typeface, 10, AxisBrush);
         var x = Math.Max(0, (bounds.Width - text.Width) / 2);
         var y = Math.Max(0, (bounds.Height - text.Height) / 2);
         context.DrawText(text, new Point(x, y));

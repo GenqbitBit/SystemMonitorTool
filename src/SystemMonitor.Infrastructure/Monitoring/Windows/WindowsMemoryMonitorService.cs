@@ -1,10 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Management;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using System.Collections.Generic;
-using LibreHardwareMonitor.Hardware;
 using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 
@@ -129,47 +128,12 @@ public class WindowsMemoryMonitorService : IMemoryMonitorService
         };
     }
 
+    // Reads the shared per-refresh cache; no hardware walk per tick.
     private static List<TemperatureReading> GetTemperatures()
     {
-        var readings = new List<TemperatureReading>();
-        var host = LibreHardwareMonitorHost.Instance;
-
-        lock (host.UpdateSyncRoot)
-        {
-            foreach (var hardware in host.Computer.Hardware)
-                CollectMemoryTemperatures(hardware, readings);
-        }
-
-        return readings;
-    }
-
-    private static void CollectMemoryTemperatures(
-        IHardware hardware,
-        List<TemperatureReading> readings)
-    {
-        if (hardware.HardwareType == HardwareType.Memory)
-        {
-            foreach (var sensor in hardware.Sensors.Where(s => s.SensorType == SensorType.Temperature))
-            {
-                var value = sensor.Value;
-                var available = value is { } current && float.IsFinite(current) && current > 0 && current <= 125;
-
-                readings.Add(new TemperatureReading
-                {
-                    Category = "RAM",
-                    HardwareName = hardware.Name,
-                    SensorLabel = $"{hardware.Name}: {sensor.Name}",
-                    IsAvailable = available,
-                    TemperatureCelsius = available ? value!.Value : 0,
-                    MinCelsius = available ? sensor.Min ?? value!.Value : 0,
-                    MaxCelsius = available ? sensor.Max ?? value!.Value : 0,
-                    AverageCelsius = available ? value!.Value : 0,
-                    IsPrimary = true
-                });
-            }
-        }
-
-        foreach (var subHardware in hardware.SubHardware)
-            CollectMemoryTemperatures(subHardware, readings);
+        var cached = LibreHardwareMonitorHost.Instance.GetTemperatureReadings("RAM");
+        return cached.Count == 0
+            ? new List<TemperatureReading>()
+            : new List<TemperatureReading>(cached);
     }
 }

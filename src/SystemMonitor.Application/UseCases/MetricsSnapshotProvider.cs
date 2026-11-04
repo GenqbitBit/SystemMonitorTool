@@ -22,6 +22,10 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
     private readonly Dictionary<string, (int Index, bool Integrated, string Name, string Suffix)> _gpuLabels = new();
     private readonly object _hardwareRefreshGate = new();
     private DateTime _lastHardwareRefreshUtc = DateTime.MinValue;
+    private IReadOnlyList<TemperatureReading> _lastHardwareTemperatures = Array.Empty<TemperatureReading>();
+    private bool _hardwareTemperaturesInitialized;
+    private readonly HashSet<string> _activeMetricIds = new(StringComparer.Ordinal);
+    private readonly List<string> _staleMetricIds = new();
     private static readonly TimeSpan HardwareRefreshInterval = TimeSpan.FromSeconds(2);
     private const int SmoothingWindow = 4;
     private const int DecimalPlaces = 2;
@@ -66,18 +70,26 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
 
     private IReadOnlyList<MetricReading> GetSnapshotCore()
     {
-        TryRefreshHardware();
+        var hardwareRefreshed = TryRefreshHardware();
         IReadOnlyList<TemperatureReading>? hardwareTemperatures = null;
         if (_hardwareRefresh is not null)
         {
-            try
+            // Temperature readings are produced by the same hardware scan the
+            // provider already throttles to 2 s. Re-reading them on every tick
+            // (as the old code did) forced an extra full sensor walk per tick.
+            if (hardwareRefreshed || !_hardwareTemperaturesInitialized)
             {
-                hardwareTemperatures = _hardwareRefresh.GetTemperatureReadings();
+                try
+                {
+                    _lastHardwareTemperatures = _hardwareRefresh.GetTemperatureReadings();
+                    _hardwareTemperaturesInitialized = true;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[Temperature] hardware scan failed; using component readings: {ex}");
+                }
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[Temperature] hardware scan failed; using component readings: {ex}");
-            }
+            hardwareTemperatures = _lastHardwareTemperatures;
         }
 
         var readings = new List<MetricReading>();
@@ -208,17 +220,17 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
             if (temperatureCategories.Contains(category))
                 return;
 
+            var added = false;
             foreach (var reading in fallbackReadings)
             {
                 readings.Add(BuildTemperatureMetric(
                     category,
                     reading,
                     idSuffix: idSuffix?.Invoke(reading) ?? reading.SensorLabel));
+                added = true;
             }
 
-            if (readings.Any(reading =>
-                    reading.Kind == MetricKind.Temperature &&
-                    reading.Category.Equals(category, StringComparison.OrdinalIgnoreCase)))
+            if (added)
                 temperatureCategories.Add(category);
         }
 
@@ -275,16 +287,17 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         }
     }
 
-    private void TryRefreshHardware()
+    /// <summary>Returns true when a full hardware refresh actually ran.</summary>
+    private bool TryRefreshHardware()
     {
         if (_hardwareRefresh is null)
-            return;
+            return false;
 
         var now = DateTime.UtcNow;
         lock (_hardwareRefreshGate)
         {
             if (now - _lastHardwareRefreshUtc < HardwareRefreshInterval)
-                return;
+                return false;
 
             _lastHardwareRefreshUtc = now;
         }
@@ -292,22 +305,34 @@ public class MetricsSnapshotProvider : IMetricsSnapshotProvider
         try
         {
             _hardwareRefresh.RefreshAll();
+            return true;
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"[Hardware] refresh failed; continuing with last readable services: {ex}");
+            return false;
         }
     }
 
     private void PruneSmoothingWindows(IReadOnlyList<MetricReading> readings)
     {
-        var activeIds = new HashSet<string>(readings.Select(reading => reading.Id));
-        foreach (var metricId in _smoothingWindows.Keys
-                     .Where(id => !activeIds.Contains(id))
-                     .ToList())
+        if (_smoothingWindows.Count == 0)
+            return;
+
+        // No LINQ/enumeration snapshot here: this runs on every poll tick.
+        _activeMetricIds.Clear();
+        for (var i = 0; i < readings.Count; i++)
+            _activeMetricIds.Add(readings[i].Id);
+
+        _staleMetricIds.Clear();
+        foreach (var id in _smoothingWindows.Keys)
         {
-            _smoothingWindows.Remove(metricId);
+            if (!_activeMetricIds.Contains(id))
+                _staleMetricIds.Add(id);
         }
+
+        for (var i = 0; i < _staleMetricIds.Count; i++)
+            _smoothingWindows.Remove(_staleMetricIds[i]);
     }
 
     private string GetGpuLabelSuffix(GpuInfo gpuInfo)
