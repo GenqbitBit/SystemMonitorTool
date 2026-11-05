@@ -29,4 +29,10 @@
     <ProjectReference Include="..\SystemMonitor.Application\SystemMonitor.Application.csproj" />
     <ProjectReference Include="..\SystemMonitor.Infrastructure\SystemMonitor.Infrastructure.csproj" />
   </ItemGroup>
-</Project>
+
+
+ <ItemGroup>
+    <None Update="Assets\Sounds\*.wav" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project> 

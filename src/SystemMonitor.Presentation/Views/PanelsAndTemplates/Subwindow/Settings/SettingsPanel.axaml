@@ -129,6 +129,16 @@
                         Padding="8,3"
                         FontSize="11"/>
 
+                <!-- Sound alerts -->
+                <Grid ColumnDefinitions="88,*">
+                    <TextBlock Grid.Column="0" Text="Sound alerts" Classes="settingLabel" VerticalAlignment="Center"/>
+                    <ToggleSwitch Grid.Column="1"
+                                  IsChecked="{Binding SoundAlertsEnabled}"
+                                  OnContent="On"
+                                  OffContent="Off"
+                                  FontSize="11"/>
+                </Grid>
+
                 <!-- Tick rate -->
                 <Grid ColumnDefinitions="88,*,Auto">
                     <TextBlock Grid.Column="0" Text="Update interval" Classes="settingLabel" VerticalAlignment="Center"/>

@@ -10,14 +10,15 @@ using SystemMonitor.Presentation.Views;
 using SystemMonitor.Presentation.Services;
 
 using Microsoft.Extensions.DependencyInjection;
-using SystemMonitor.Application.Interfaces;
-using SystemMonitor.Infrastructure.Monitoring;
+using SystemMonitor.Infrastructure.Monitoring;  
 using SystemMonitor.Infrastructure;
 using SystemMonitor.Infrastructure.DependencyInjection;
 using SystemMonitor.Infrastructure.Persistence;
 using SystemMonitor.Domain.AsciiArt;
 using SystemMonitor.Presentation.Views.PanelsAndTemplates;
 using SystemMonitor.Application.AsciiArt;
+using SystemMonitor.Application.Interfaces;
+using SystemMonitor.Infrastructure.Audio;
 
 namespace SystemMonitor.Presentation;
 
@@ -32,8 +33,10 @@ public partial class App : Avalonia.Application
     {
         var services = new ServiceCollection();
         services.AddPlatformMonitoringServices();
-        services.AddThemingServices();              
+        services.AddThemingServices();      
+        services.AddSingleton<IAlertSoundPlayer, CrossPlatformSoundPlayer>();         
         services.AddSingleton<ISettingsService>(_ => new JsonSettingsService(
+
             Path.Combine(AppContext.BaseDirectory, "settings.json")));
         services.AddTransient<MetricsTableViewModel>();
         services.AddSingleton<IAsciiArtConverter, AsciiArtConverter>();

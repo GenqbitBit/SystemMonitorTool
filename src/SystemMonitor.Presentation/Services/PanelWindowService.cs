@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Presentation.Views.Subwindows.Settings;
 using SystemMonitor.Presentation.Theming;
 using SystemMonitor.Presentation.Views.Subwindows.DataTable;
@@ -27,6 +28,12 @@ public class PanelWindowService : IPanelWindowService
     }
 
     private readonly Dictionary<string, Window> _openWindows = new();
+    private readonly IAlertSoundPlayer? _soundPlayer;
+
+    public PanelWindowService(IAlertSoundPlayer? soundPlayer = null)
+    {
+        _soundPlayer = soundPlayer;
+    }
 
     public void TogglePanel(string label, Window owner)
     {
@@ -126,7 +133,7 @@ public class PanelWindowService : IPanelWindowService
             ownerVm.TemperatureTable.SetActive(isActive, ownerVm.LatestSnapshot);
     }
 
-    private static Window? CreateWindow(string label, Window owner)
+    private Window? CreateWindow(string label, Window owner)
     {
         var vm = owner.DataContext as MainWindowViewModel;
 
@@ -135,7 +142,7 @@ public class PanelWindowService : IPanelWindowService
             PanelLabels.Settings => vm is not null
                 ? new SettingsWindow
                 {
-                    DataContext = new SettingsPanelViewModel(vm.Settings),
+                    DataContext = new SettingsPanelViewModel(vm.Settings, _soundPlayer),
                     WindowStartupLocation = WindowStartupLocation.Manual,
                 }
                 : null,
