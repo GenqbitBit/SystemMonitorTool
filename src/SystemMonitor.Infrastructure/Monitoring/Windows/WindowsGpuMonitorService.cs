@@ -22,14 +22,26 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
         bool IsIntegrated,
         string DeviceId,             // stable identity — LUID string, or index-based fallback
         string? LuidFilter,          // used only for GPU Engine (usage %) perf-counter matching
-        IHardware? LibreHardware);   // used for VRAM total/used sensors AND temperature sensors
+        IHardware? LibreHardware,    // used for temperature sensor filtering
+        ISensor? MemoryTotalSensor,  // resolved once; per-tick reads are O(1)
+        ISensor? MemoryUsedSensor);
 
     private readonly List<GpuDevice> _devices = new();
     private readonly Dictionary<string, PerformanceCounter> _engineCounters = new();
     private readonly Computer _computer;
-    private readonly Dictionary<ISensor, (double Sum, int Count)> _temperatureAveraging = new();
+    private readonly Dictionary<string, (double Sum, int Count)> _temperatureAveraging = new();
     private readonly Dictionary<string, (double Value, DateTime RefreshedUtc)> _usageCache = new();
     private readonly object _usageCacheGate = new();
+
+    // Enumerating the "GPU Engine" performance category is extremely
+    // expensive (hundreds of instances, registry-backed). Keep the category
+    // and the instance list instead of rebuilding both per device per tick.
+    private PerformanceCounterCategory? _engineCategory;
+    private string[] _engineInstanceNames = Array.Empty<string>();
+    private string[] _engine3dInstances = Array.Empty<string>();
+    private readonly HashSet<string> _engineInstanceSet = new(StringComparer.Ordinal);
+    private readonly List<string> _staleEngineCounters = new();
+    private DateTime _engineInstancesUtc = DateTime.MinValue;
     private static readonly TimeSpan UsageRefreshInterval = TimeSpan.FromMilliseconds(1500);
 
     public WindowsGpuMonitorService()
@@ -80,6 +92,8 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
                     $"across refreshes if enumeration order changes.");
             }
 
+            var (memoryTotalSensor, memoryUsedSensor) = ResolveMemorySensors(libreHardware);
+
             _devices.Add(new GpuDevice(
                 Index: index,
                 Name: name,
@@ -88,7 +102,9 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
                 IsIntegrated: integrated,
                 DeviceId: deviceId,
                 LuidFilter: luidFilter,
-                LibreHardware: libreHardware));
+                LibreHardware: libreHardware,
+                MemoryTotalSensor: memoryTotalSensor,
+                MemoryUsedSensor: memoryUsedSensor));
 
             index++;
         }
@@ -215,11 +231,15 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 
     public IReadOnlyList<GpuInfo> GetCurrentUsage()
     {
-        return _devices.Select(device =>
+        var devices = _devices;
+        var result = new List<GpuInfo>(devices.Count);
+
+        for (var i = 0; i < devices.Count; i++)
         {
+            var device = devices[i];
             var (totalMb, usedMb) = GetGpuMemoryMb(device);
 
-            return new GpuInfo
+            result.Add(new GpuInfo
             {
                 IsAvailable = true,
                 DeviceId = device.DeviceId,
@@ -233,145 +253,152 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
                 UsagePercent = GetGpuUsagePercent(device.LuidFilter),
                 Temperatures = GetGpuTemperatures(device),
                 Timestamp = DateTime.UtcNow
-            };
-        }).ToList();
+            });
+        }
+
+        return result;
+    }
+
+    // Resolves the two VRAM sensors once at construction. The previous read
+    // walked every sensor of every GPU on every tick to find them.
+    private static (ISensor? Total, ISensor? Used) ResolveMemorySensors(IHardware? hardware)
+    {
+        if (hardware is null)
+            return (null, null);
+
+        ISensor? total = null;
+        ISensor? used = null;
+
+        lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
+        {
+            foreach (var sensor in hardware.Sensors)
+            {
+                if (sensor.SensorType != SensorType.SmallData)
+                    continue;
+
+                if (total is null && sensor.Name == "GPU Memory Total")
+                    total = sensor;
+                else if (used is null && sensor.Name == "GPU Memory Used")
+                    used = sensor;
+            }
+        }
+
+        return (total, used);
     }
 
     private static (double totalMb, double usedMb) GetGpuMemoryMb(GpuDevice device)
     {
-        if (device.LibreHardware is null)
-        {
+        if (device.MemoryTotalSensor is null && device.MemoryUsedSensor is null)
             return (0, 0);
-        }
 
         lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
         {
-            double totalMb = 0;
-            double usedMb = 0;
-
-            foreach (var sensor in device.LibreHardware.Sensors)
-            {
-                if (sensor.SensorType != SensorType.SmallData || sensor.Value is not float value)
-                {
-                    continue;
-                }
-
-                if (sensor.Name == "GPU Memory Total")
-                {
-                    totalMb = Math.Round(value, 2);
-                }
-                else if (sensor.Name == "GPU Memory Used")
-                {
-                    usedMb = Math.Round(value, 2);
-                }
-            }
-
-            return (totalMb, usedMb);
+            return (ReadMegabytes(device.MemoryTotalSensor), ReadMegabytes(device.MemoryUsedSensor));
         }
     }
 
+    private static double ReadMegabytes(ISensor? sensor) =>
+        sensor?.Value is float value ? Math.Round(value, 2) : 0;
+
+    // Reads this device's slice of the shared temperature cache. The old
+    // version walked (and re-read) every GPU sensor on every tick.
     private List<TemperatureReading> GetGpuTemperatures(GpuDevice device)
     {
-        if (device.LibreHardware is null)
-        {
+        var cached = LibreHardwareMonitorHost.Instance.GetTemperatureReadings("GPU");
+        if (cached.Count == 0)
             return new List<TemperatureReading>();
+
+        var hardwareName = device.LibreHardware?.Name;
+        var readings = new List<TemperatureReading>(cached.Count);
+
+        foreach (var source in cached)
+        {
+            if (hardwareName is not null
+                && !string.Equals(source.HardwareName, hardwareName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (IsLimitSensor(source.SensorLabel))
+                continue;
+
+            readings.Add(WithAverage(source));
         }
 
-        lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
+        // Preserve the previous "GPU Core is primary" display rule. The
+        // cache marks every sensor primary, so choose one per device here.
+        if (readings.Count > 0)
         {
-            var temperatureSensors = device.LibreHardware.Sensors
-                .Where(s => s.SensorType == SensorType.Temperature)
-                .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
-                         && !s.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)
-                         && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase)
-                         && !s.Name.Contains("Distance to TjMax", StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            if (temperatureSensors.Count == 0)
+            var primaryIndex = -1;
+            for (var i = 0; i < readings.Count; i++)
             {
-                return new List<TemperatureReading>();
+                if (readings[i].SensorLabel.Contains("GPU Core", StringComparison.OrdinalIgnoreCase))
+                {
+                    primaryIndex = i;
+                    break;
+                }
             }
 
-            var primarySensorName = DeterminePrimaryGpuSensorName(temperatureSensors, device.Name);
+            if (primaryIndex < 0)
+            {
+                for (var i = 0; i < readings.Count; i++)
+                {
+                    if (readings[i].SensorLabel.Contains("core", StringComparison.OrdinalIgnoreCase))
+                    {
+                        primaryIndex = i;
+                        break;
+                    }
+                }
+            }
 
-            var readings = temperatureSensors
-                .Select(sensor => BuildTemperatureReading(
-                    device.LibreHardware,
-                    sensor,
-                    isPrimary: string.Equals(sensor.Name?.Trim(), primarySensorName, StringComparison.OrdinalIgnoreCase)))
-                .ToList();
+            if (primaryIndex < 0)
+                primaryIndex = 0;
 
-            return readings;
+            for (var i = 0; i < readings.Count; i++)
+                readings[i].IsPrimary = i == primaryIndex;
         }
+
+        return readings;
     }
 
-    private TemperatureReading BuildTemperatureReading(
-        IHardware hardware,
-        ISensor sensor,
-        bool isPrimary)
-    {
-        var isRealReading = sensor.Value.HasValue && sensor.Value.Value != 0;
-        double average = 0, min = 0, max = 0;
+    private static bool IsLimitSensor(string label) =>
+        label.Contains("Warning", StringComparison.OrdinalIgnoreCase)
+        || label.Contains("Critical", StringComparison.OrdinalIgnoreCase)
+        || label.Contains("Limit", StringComparison.OrdinalIgnoreCase)
+        || label.Contains("Distance to TjMax", StringComparison.OrdinalIgnoreCase);
 
-        if (isRealReading)
+    private TemperatureReading WithAverage(TemperatureReading source)
+    {
+        double average = 0;
+
+        if (source.IsAvailable)
         {
-            var currentValue = sensor.Value!.Value;
-            if (_temperatureAveraging.TryGetValue(sensor, out var existing))
+            var key = source.SensorId;
+            if (_temperatureAveraging.TryGetValue(key, out var existing))
             {
-                var newSum = existing.Sum + currentValue;
+                var newSum = existing.Sum + source.TemperatureCelsius;
                 var newCount = existing.Count + 1;
-                _temperatureAveraging[sensor] = (newSum, newCount);
+                _temperatureAveraging[key] = (newSum, newCount);
                 average = newSum / newCount;
             }
             else
             {
-                _temperatureAveraging[sensor] = (currentValue, 1);
-                average = currentValue;
+                _temperatureAveraging[key] = (source.TemperatureCelsius, 1);
+                average = source.TemperatureCelsius;
             }
-            min = sensor.Min ?? currentValue;
-            max = sensor.Max ?? currentValue;
         }
 
         return new TemperatureReading
         {
-            Category = "GPU",
-            HardwareName = hardware.Name,
-            SensorLabel = $"{hardware.Name}: {sensor.Name ?? "Unknown"}",
-            IsAvailable = isRealReading,
-            TemperatureCelsius = isRealReading ? sensor.Value!.Value : 0,
-            MinCelsius = min,
-            MaxCelsius = max,
+            Category = source.Category,
+            HardwareName = source.HardwareName,
+            SensorId = source.SensorId,
+            SensorLabel = source.SensorLabel,
+            IsAvailable = source.IsAvailable,
+            TemperatureCelsius = source.TemperatureCelsius,
+            MinCelsius = source.MinCelsius,
+            MaxCelsius = source.MaxCelsius,
             AverageCelsius = average,
-            IsPrimary = isPrimary
+            IsPrimary = source.IsPrimary
         };
-    }
-
-    private static string? DeterminePrimaryGpuSensorName(List<ISensor> temperatureSensors, string hardwareName)
-    {
-        var exactMatch = temperatureSensors.FirstOrDefault(s =>
-            string.Equals(s.Name?.Trim(), "GPU Core", StringComparison.OrdinalIgnoreCase));
-        if (exactMatch is not null)
-        {
-            return exactMatch.Name;
-        }
-
-        var containsMatch = temperatureSensors.FirstOrDefault(s =>
-            s.Name?.Contains("core", StringComparison.OrdinalIgnoreCase) == true);
-        if (containsMatch is not null)
-        {
-            Debug.WriteLine(
-                $"[Temp] GPU '{hardwareName}' has no sensor named exactly 'GPU Core' — " +
-                $"using '{containsMatch.Name}' as the primary reading instead. " +
-                $"Sensors seen: {string.Join(", ", temperatureSensors.Select(s => $"'{s.Name}'"))}");
-            return containsMatch.Name;
-        }
-
-        var fallback = temperatureSensors[0];
-        Debug.WriteLine(
-            $"[Temp] GPU '{hardwareName}' has no sensor with 'core' in its name — " +
-            $"falling back to '{fallback.Name}' (first sensor) as the primary reading. " +
-            $"Sensors seen: {string.Join(", ", temperatureSensors.Select(s => $"'{s.Name}'"))}");
-        return fallback.Name;
     }
 
     private double GetGpuUsagePercent(string? luidFilter)
@@ -389,47 +416,53 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
             }
         }
 
-        PerformanceCounterCategory category;
         try
         {
-            category = new PerformanceCounterCategory("GPU Engine");
+            // Create the category once, and enumerate instance names at most
+            // once per refresh interval — shared by every GPU device. Doing
+            // this per device per tick was the single most expensive monitor
+            // operation in the app.
+            _engineCategory ??= new PerformanceCounterCategory("GPU Engine");
+
+            if (now - _engineInstancesUtc >= UsageRefreshInterval)
+            {
+                _engineInstanceNames = _engineCategory.GetInstanceNames();
+                _engine3dInstances = FilterEngine3dInstances(_engineInstanceNames);
+                _engineInstancesUtc = now;
+
+                _engineInstanceSet.Clear();
+                foreach (var instanceName in _engineInstanceNames)
+                    _engineInstanceSet.Add(instanceName);
+
+                _staleEngineCounters.Clear();
+                foreach (var key in _engineCounters.Keys)
+                {
+                    if (!_engineInstanceSet.Contains(key))
+                        _staleEngineCounters.Add(key);
+                }
+
+                foreach (var key in _staleEngineCounters)
+                {
+                    _engineCounters[key].Dispose();
+                    _engineCounters.Remove(key);
+                }
+            }
         }
         catch
         {
             lock (_usageCacheGate)
-            {
                 _usageCache[luidFilter] = (0, now);
-            }
             return 0;
-        }
-
-        string[] instanceNames;
-        try
-        {
-            instanceNames = category.GetInstanceNames();
-        }
-        catch
-        {
-            lock (_usageCacheGate)
-            {
-                _usageCache[luidFilter] = (0, now);
-            }
-            return 0;
-        }
-
-        var allInstances = instanceNames
-            .Where(i => i.Contains("engtype_3D"))
-            .ToHashSet();
-
-        foreach (var staleKey in _engineCounters.Keys.Except(allInstances).ToList())
-        {
-            _engineCounters[staleKey].Dispose();
-            _engineCounters.Remove(staleKey);
         }
 
         double total = 0;
-        foreach (var instance in allInstances.Where(i => MatchesGpu(i, luidFilter)))
+        var instances = _engine3dInstances;
+        for (var i = 0; i < instances.Length; i++)
         {
+            var instance = instances[i];
+            if (!instance.Contains(luidFilter, StringComparison.OrdinalIgnoreCase))
+                continue;
+
             if (!_engineCounters.TryGetValue(instance, out var counter))
             {
                 try
@@ -437,12 +470,12 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
                     counter = new PerformanceCounter("GPU Engine", "Utilization Percentage", instance);
                     counter.NextValue();
                     _engineCounters[instance] = counter;
-                    continue;
                 }
                 catch
                 {
-                    continue;
+                    // Engine disappeared between enumeration and first read.
                 }
+                continue;
             }
 
             try
@@ -458,20 +491,44 @@ public class WindowsGpuMonitorService : IGpuMonitorService, IDisposable
 
         var rounded = Math.Round(total, 2);
         lock (_usageCacheGate)
-        {
             _usageCache[luidFilter] = (rounded, now);
-        }
         return rounded;
     }
 
-    private static bool MatchesGpu(string instanceName, string? luidFilter) =>
-    luidFilter != null && instanceName.Contains(luidFilter, StringComparison.OrdinalIgnoreCase);
+    // Splits the (hundreds of) GPU Engine instances down to the 3D engines
+    // once per refresh, so the per-device scan only inspects relevant entries.
+    private static string[] FilterEngine3dInstances(string[] instanceNames)
+    {
+        var count = 0;
+        for (var i = 0; i < instanceNames.Length; i++)
+        {
+            if (instanceNames[i].Contains("engtype_3D", StringComparison.Ordinal))
+                count++;
+        }
+
+        var filtered = new string[count];
+        var index = 0;
+        for (var i = 0; i < instanceNames.Length; i++)
+        {
+            if (instanceNames[i].Contains("engtype_3D", StringComparison.Ordinal))
+                filtered[index++] = instanceNames[i];
+        }
+
+        return filtered;
+    }
 
     public void Dispose()
     {
-        foreach (var counter in _engineCounters.Values)
+        lock (_usageCacheGate)
         {
-            counter.Dispose();
+            foreach (var counter in _engineCounters.Values)
+                counter.Dispose();
+
+            _engineCounters.Clear();
+            _usageCache.Clear();
+            _engineCategory = null;
+            _engineInstanceNames = Array.Empty<string>();
+            _engine3dInstances = Array.Empty<string>();
         }
     }
 }

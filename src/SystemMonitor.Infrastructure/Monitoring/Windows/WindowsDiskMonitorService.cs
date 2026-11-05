@@ -26,7 +26,12 @@ public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
     // Resolved once at construction — the LibreHardwareMonitor handle for this
     // physical disk, used only for its SMART temperature sensor(s).
     private readonly IHardware? _libreHardware;
-    private readonly Dictionary<ISensor, (double Sum, int Count)> _temperatureAveraging = new();
+    private readonly Dictionary<string, (double Sum, int Count)> _temperatureAveraging = new();
+
+    // DriveInfo resolves volume geometry through the OS on construction; the
+    // per-tick path only needs the (cheap) free-space query, so the instance is
+    // reused instead of rebuilt on every sample.
+    private DriveInfo? _drive;
 
     /// <summary>
     /// Initializes a new instance of the WindowsDiskMonitorService.
@@ -54,7 +59,7 @@ public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
 
         try
         {
-            var drive = new DriveInfo(_driveName);
+            var drive = GetDrive();
             _fileSystem = drive.DriveFormat;
         }
         catch
@@ -196,9 +201,11 @@ public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
         return start > 0 && end > start ? wmiReference.Substring(start, end - start) : null;
     }
 
+    private DriveInfo GetDrive() => _drive ??= new DriveInfo(_driveName);
+
     public DiskInfo GetCurrentUsage()
     {
-        var drive = new DriveInfo(_driveName);
+        var drive = GetDrive();
         const double bytesPerGB = 1024L * 1024 * 1024;
         const double bytesPerMB = 1024 * 1024;
 
@@ -224,66 +231,68 @@ public class WindowsDiskMonitorService : IDiskMonitorService, IDisposable
         };
     }
 
-    // Moved from the old WindowsTemperatureMonitorService, scoped to this drive's
-    // own LibreHardware handle. Usually just one "Temperature" SMART sensor.
+    // Reads the shared per-refresh cache, scoped to this drive when the
+    // LibreHardwareMonitor storage device was resolved. No hardware walk here.
     private List<TemperatureReading> GetTemperatures()
     {
-        if (_libreHardware is null)
-        {
+        var cached = LibreHardwareMonitorHost.Instance.GetTemperatureReadings("STORAGE");
+        if (cached.Count == 0)
             return new List<TemperatureReading>();
-        }
 
-        lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
+        var readings = new List<TemperatureReading>(cached.Count);
+        foreach (var reading in cached)
         {
-            var temperatureSensors = _libreHardware.Sensors
-                .Where(s => s.SensorType == SensorType.Temperature)
-                .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
-                         && !s.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)
-                         && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase));
+            if (_libreHardware is not null
+                && !string.Equals(reading.HardwareName, _libreHardware.Name, StringComparison.OrdinalIgnoreCase))
+                continue;
 
-            var readings = temperatureSensors
-                .Select(sensor => BuildTemperatureReading(sensor, isPrimary: true))
-                .ToList();
+            if (IsLimitSensor(reading.SensorLabel))
+                continue;
 
-            return readings;
+            readings.Add(WithAverage(reading));
         }
+
+        return readings;
     }
 
-    private TemperatureReading BuildTemperatureReading(ISensor sensor, bool isPrimary)
-    {
-        var isRealReading = sensor.Value.HasValue && sensor.Value.Value != 0;
-        double average = 0, min = 0, max = 0;
+    private static bool IsLimitSensor(string label) =>
+        label.Contains("Warning", StringComparison.OrdinalIgnoreCase)
+        || label.Contains("Critical", StringComparison.OrdinalIgnoreCase)
+        || label.Contains("Limit", StringComparison.OrdinalIgnoreCase);
 
-        if (isRealReading)
+    private TemperatureReading WithAverage(TemperatureReading source)
+    {
+        double average = 0;
+
+        if (source.IsAvailable)
         {
-            var currentValue = sensor.Value!.Value;
-            if (_temperatureAveraging.TryGetValue(sensor, out var existing))
+            var key = source.SensorId;
+            if (_temperatureAveraging.TryGetValue(key, out var existing))
             {
-                var newSum = existing.Sum + currentValue;
+                var newSum = existing.Sum + source.TemperatureCelsius;
                 var newCount = existing.Count + 1;
-                _temperatureAveraging[sensor] = (newSum, newCount);
+                _temperatureAveraging[key] = (newSum, newCount);
                 average = newSum / newCount;
             }
             else
             {
-                _temperatureAveraging[sensor] = (currentValue, 1);
-                average = currentValue;
+                _temperatureAveraging[key] = (source.TemperatureCelsius, 1);
+                average = source.TemperatureCelsius;
             }
-            min = sensor.Min ?? currentValue;
-            max = sensor.Max ?? currentValue;
         }
 
         return new TemperatureReading
         {
-            Category = "STORAGE",
-            HardwareName = _libreHardware?.Name ?? _model,
-            SensorLabel = $"{_libreHardware?.Name ?? _model}: {sensor.Name ?? "Unknown"}",
-            IsAvailable = isRealReading,
-            TemperatureCelsius = isRealReading ? sensor.Value!.Value : 0,
-            MinCelsius = min,
-            MaxCelsius = max,
+            Category = source.Category,
+            HardwareName = source.HardwareName,
+            SensorId = source.SensorId,
+            SensorLabel = source.SensorLabel,
+            IsAvailable = source.IsAvailable,
+            TemperatureCelsius = source.TemperatureCelsius,
+            MinCelsius = source.MinCelsius,
+            MaxCelsius = source.MaxCelsius,
             AverageCelsius = average,
-            IsPrimary = isPrimary
+            IsPrimary = source.IsPrimary
         };
     }
 

@@ -20,6 +20,7 @@ public sealed class AlertMonitor
     private readonly WindowNotificationManager _notifier;
     private readonly Dictionary<string, DateTime> _lastAlert = new();
     private readonly HashSet<string> _active = new();
+    private readonly Dictionary<string, MetricReading> _hottestByCategory = new(StringComparer.Ordinal);
 
     public AlertMonitor(Window window)
     {
@@ -34,20 +35,42 @@ public sealed class AlertMonitor
 
     public void Check(IReadOnlyList<MetricReading> snapshot)
     {
-        var ramPercent = snapshot.FirstOrDefault(m => m.Id == "memory.usage")?.Value ?? 0;
+        // Single pass over the snapshot: the previous GroupBy/MaxBy/ToList chain
+        // allocated several sequences and groupings at the poll rate, on a path
+        // whose only output is "the hottest sensor per component".
+        var ramPercent = 0d;
+        var ramFound = false;
+        _hottestByCategory.Clear();
+
+        for (var i = 0; i < snapshot.Count; i++)
+        {
+            var reading = snapshot[i];
+
+            if (!ramFound && reading.Id == "memory.usage")
+            {
+                ramPercent = reading.Value;
+                ramFound = true;
+                continue;
+            }
+
+            if (reading.Kind != MetricKind.Temperature || !reading.IsAvailable || reading.Value <= 0)
+                continue;
+
+            if (!_hottestByCategory.TryGetValue(reading.Category, out var hottest)
+                || reading.Value > hottest.Value)
+            {
+                _hottestByCategory[reading.Category] = reading;
+            }
+        }
+
         Evaluate("ram", ramPercent, RamThresholdPercent,
             "High RAM usage",
             $"RAM is at {ramPercent:F0}%. Close some apps.");
 
-        var hottestByComponent = snapshot
-            .Where(m => m.Kind == MetricKind.Temperature && m.IsAvailable && m.Value > 0)
-            .GroupBy(m => m.Category)
-            .Select(group => group.MaxBy(m => m.Value)!)
-            .ToList();
-
-        foreach (var hottest in hottestByComponent)
+        foreach (var pair in _hottestByCategory)
         {
-            var component = hottest.Category;
+            var component = pair.Key;
+            var hottest = pair.Value;
             Evaluate(
                 $"temperature:{component}",
                 hottest.Value,

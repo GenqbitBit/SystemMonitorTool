@@ -87,6 +87,27 @@ public class MetricGraphView : Control
     private INotifyCollectionChanged? _subscribedCollection;
     private readonly LineGraphRenderer _defaultLineRenderer = new();
 
+    // Axis labels repeat every frame (fixed ranges, minute-aligned time ticks),
+    // so cache their laid-out text instead of rebuilding it for every graph on
+    // every poll. Bounded so a continuously changing value label cannot grow it
+    // without limit.
+    private readonly Dictionary<(string Text, double FontSize, IBrush Brush), FormattedText> _labelCache = new();
+    private const int MaxCachedLabels = 128;
+    private IBrush? _valueBrush;
+    private Color _valueBrushColor;
+
+    // Pens are reference types allocated per pen object. The render path used to
+    // construct a fresh Pen for every grid line, axis rectangle and the baseline
+    // on every frame, for every graph. They only depend on the brushes, so they
+    // are cached and invalidated when a brush property changes.
+    private Pen? _gridPen;
+    private Pen? _axisPen;
+    private Pen? _baselinePen;
+
+    private Pen GridPen => _gridPen ??= new Pen(GridBrush, 1);
+    private Pen AxisPen => _axisPen ??= new Pen(AxisBrush, 1);
+    private Pen BaselinePen => _baselinePen ??= new Pen(BaselineBrush, 1.5);
+
     public GraphKind? GraphKind
     {
         get => GetValue(GraphKindProperty);
@@ -253,6 +274,20 @@ public class MetricGraphView : Control
             UnsubscribeFromMetricsCollection();
             SubscribeToMetricsCollection();
         }
+        else if (change.Property == AxisBrushProperty || change.Property == AxisFontFamilyProperty)
+        {
+            // Cached FormattedText objects embed both the brush and typeface.
+            _labelCache.Clear();
+        }
+
+        if (change.Property == GridBrushProperty
+            || change.Property == AxisBrushProperty
+            || change.Property == BaselineBrushProperty)
+        {
+            _gridPen = null;
+            _axisPen = null;
+            _baselinePen = null;
+        }
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -278,6 +313,10 @@ public class MetricGraphView : Control
     private void OnThemeChanged(object? sender, Domain.Models.Theming.ThemeDefinition theme)
     {
         ApplyThemeColors();
+        _labelCache.Clear();
+        _gridPen = null;
+        _axisPen = null;
+        _baselinePen = null;
         InvalidateVisual();
     }
 
@@ -291,6 +330,10 @@ public class MetricGraphView : Control
 
         ApplyGraphSettings(settings);
         ApplyThemeColors();
+        _labelCache.Clear();
+        _gridPen = null;
+        _axisPen = null;
+        _baselinePen = null;
         InvalidateVisual();
     }
 
@@ -445,10 +488,10 @@ public class MetricGraphView : Control
             foreach (var (value, normalized) in MetricGraphMath.ComputeValueAxisTicks(minValue, maxValue, valueTickCount))
             {
                 var y = plotOrigin.Y + (plotHeight - normalized * plotHeight);
-                context.DrawLine(new Pen(GridBrush, 1), new Point(plotOrigin.X, y), new Point(plotOrigin.X + plotWidth, y));
+                context.DrawLine(GridPen, new Point(plotOrigin.X, y), new Point(plotOrigin.X + plotWidth, y));
 
                 var label = MetricGraphMath.FormatAxisValue(value) + unitSuffix;
-                var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
+                var text = GetLabelText(label, typeface, fontSize, AxisBrush);
                 context.DrawText(text, new Point(2, Math.Clamp(y - text.Height / 2, 0, bounds.Height - text.Height)));
             }
 
@@ -456,15 +499,15 @@ public class MetricGraphView : Control
             {
                 var effectiveX = ToRight ? normalizedX : 1 - normalizedX;
                 var x = plotOrigin.X + effectiveX * plotWidth;
-                context.DrawLine(new Pen(GridBrush, 1), new Point(x, plotOrigin.Y), new Point(x, plotOrigin.Y + plotHeight));
+                context.DrawLine(GridPen, new Point(x, plotOrigin.Y), new Point(x, plotOrigin.Y + plotHeight));
 
-                var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
+                var text = GetLabelText(label, typeface, fontSize, AxisBrush);
                 var textX = Math.Clamp(x - text.Width / 2, plotOrigin.X, bounds.Width - text.Width);
                 context.DrawText(text, new Point(textX, plotOrigin.Y + plotHeight + 2));
             }
         }
 
-        context.DrawRectangle(new Pen(AxisBrush, 1), new Rect(plotOrigin, new Size(plotWidth, plotHeight)));
+        context.DrawRectangle(AxisPen, new Rect(plotOrigin, new Size(plotWidth, plotHeight)));
 
         var plotRect = new Rect(plotOrigin, new Size(plotWidth, plotHeight));
         _defaultLineRenderer.LineBrush = LineBrush;
@@ -529,13 +572,13 @@ public class MetricGraphView : Control
             foreach (var (_, normalized) in MetricGraphMath.ComputeValueAxisTicks(primaryRange.Min, primaryRange.Max, valueTickCount))
             {
                 var yTop = topRect.Y + (topRect.Height - normalized * topRect.Height);
-                context.DrawLine(new Pen(GridBrush, 1), new Point(topRect.X, yTop), new Point(topRect.X + topRect.Width, yTop));
+                context.DrawLine(GridPen, new Point(topRect.X, yTop), new Point(topRect.X + topRect.Width, yTop));
             }
 
             foreach (var (_, normalized) in MetricGraphMath.ComputeValueAxisTicks(secondaryRange.Min, secondaryRange.Max, valueTickCount))
             {
                 var yBottom = bottomRect.Y + normalized * bottomRect.Height;
-                context.DrawLine(new Pen(GridBrush, 1), new Point(bottomRect.X, yBottom), new Point(bottomRect.X + bottomRect.Width, yBottom));
+                context.DrawLine(GridPen, new Point(bottomRect.X, yBottom), new Point(bottomRect.X + bottomRect.Width, yBottom));
             }
 
             // Time axis is drawn independently per half rather than once for
@@ -547,7 +590,7 @@ public class MetricGraphView : Control
             {
                 var effectiveX = ToRight ? normalizedX : 1 - normalizedX;
                 var x = plotOrigin.X + effectiveX * plotWidth;
-                context.DrawLine(new Pen(GridBrush, 1), new Point(x, topRect.Y), new Point(x, topRect.Y + topRect.Height));
+                context.DrawLine(GridPen, new Point(x, topRect.Y), new Point(x, topRect.Y + topRect.Height));
             }
 
             foreach (var (normalizedX, label) in timeTicks)
@@ -555,7 +598,7 @@ public class MetricGraphView : Control
                 var effectiveX = ToRight ? normalizedX : 1 - normalizedX;
                 var x = plotOrigin.X + effectiveX * plotWidth;
 
-                var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
+                var text = GetLabelText(label, typeface, fontSize, AxisBrush);
                 var textX = Math.Clamp(x - text.Width / 2, plotOrigin.X, bounds.Width - text.Width);
                 // Labeled just above the top half, so it doesn't collide
                 // with the shared baseline sitting between the two halves.
@@ -567,7 +610,7 @@ public class MetricGraphView : Control
             {
                 var effectiveX = SecondaryToRight ? normalizedX : 1 - normalizedX;
                 var x = plotOrigin.X + effectiveX * plotWidth;
-                context.DrawLine(new Pen(GridBrush, 1), new Point(x, bottomRect.Y), new Point(x, bottomRect.Y + bottomRect.Height));
+                context.DrawLine(GridPen, new Point(x, bottomRect.Y), new Point(x, bottomRect.Y + bottomRect.Height));
             }
 
             foreach (var (normalizedX, label) in timeTicks)
@@ -575,7 +618,7 @@ public class MetricGraphView : Control
                 var effectiveX = SecondaryToRight ? normalizedX : 1 - normalizedX;
                 var x = plotOrigin.X + effectiveX * plotWidth;
 
-                var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, AxisBrush);
+                var text = GetLabelText(label, typeface, fontSize, AxisBrush);
                 var textX = Math.Clamp(x - text.Width / 2, plotOrigin.X, bounds.Width - text.Width);
                 // Labeled just below the bottom half — this is the original
                 // single-time-axis label position, kept here since bottom
@@ -586,8 +629,8 @@ public class MetricGraphView : Control
             }
         }
 
-        context.DrawRectangle(new Pen(AxisBrush, 1), topRect);
-        context.DrawRectangle(new Pen(AxisBrush, 1), bottomRect);
+        context.DrawRectangle(AxisPen, topRect);
+        context.DrawRectangle(AxisPen, bottomRect);
 
         _defaultLineRenderer.LineBrush = LineBrush;
         _defaultLineRenderer.LineThickness = LineThickness;
@@ -604,7 +647,7 @@ public class MetricGraphView : Control
             secondaryRenderer.Draw(context, bottomRect, secondaryHistory, secondaryRange.Max, secondaryRange.Min, windowStart, windowEnd, baselineAtTop: true, useFrozenValues: useFrozenValues, toRight: SecondaryToRight);
         }
 
-        context.DrawLine(new Pen(BaselineBrush, 1.5), new Point(plotOrigin.X, baselineY - halfGap / 2), new Point(plotOrigin.X + plotWidth, baselineY - halfGap / 2));
+        context.DrawLine(BaselinePen, new Point(plotOrigin.X, baselineY - halfGap / 2), new Point(plotOrigin.X + plotWidth, baselineY - halfGap / 2));
 
         var primaryUnit = GetUnitSuffix(MetricId);
         var secondaryUnit = GetUnitSuffix(SecondaryMetricId);
@@ -624,7 +667,7 @@ public class MetricGraphView : Control
             }
     }
     
-    private static void DrawCurrentValueLabel(
+    private void DrawCurrentValueLabel(
     DrawingContext context, Point rectOrigin, IReadOnlyList<(double X, double Y)> points,
     IReadOnlyList<MetricHistoryPoint> history, IBrush brush, string unitSuffix,
     Typeface typeface, double fontSize, Rect bounds, bool toRight, double labelYOffset = 0)
@@ -632,9 +675,8 @@ public class MetricGraphView : Control
         // Use the theme's bright metric-value color only for the current live
         // tip label/marker so it stays readable even when the graph itself is
         // intentionally dimmed by the active theme. Keep the graph line colors
-        // themselves untouched.
-        var themeColor = Theming.ThemeRuntime.Service.CurrentTheme.Chrome.MetricValue;
-        var valueBrush = new SolidColorBrush(Color.FromArgb(themeColor.A, themeColor.R, themeColor.G, themeColor.B));
+        // themselves untouched. The brush is reused until the theme color moves.
+        var valueBrush = GetValueBrush();
 
         // points is ascending-by-X but its endpoint mapping to "newest" flips
         // with toRight (see MetricGraphMath.ComputePoints): points[^1] is newest
@@ -645,32 +687,82 @@ public class MetricGraphView : Control
         context.DrawEllipse(valueBrush, null, currentPoint, 2.5, 2.5);
 
         var currentLabel = MetricGraphMath.FormatAxisValue(history[^1].Value) + unitSuffix;
-        var currentText = new FormattedText(currentLabel, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, valueBrush);
+        // The live value changes nearly every frame; caching it would evict the
+        // stable axis labels, so only its brush is reused.
+        var currentText = new FormattedText(currentLabel, CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight, typeface, fontSize, valueBrush);
         var labelX = Math.Clamp(currentPoint.X + 4, 0, bounds.Width - currentText.Width - 2);
         var labelY = Math.Clamp(currentPoint.Y - currentText.Height - 2 + labelYOffset, 0, bounds.Height - currentText.Height);
         context.DrawText(currentText, new Point(labelX, labelY));
     }
 
-    private string GetUnitSuffix(string? metricId)
+    private FormattedText GetLabelText(string label, Typeface typeface, double fontSize, IBrush brush)
     {
-        var metric = Metrics?.FirstOrDefault(m => m.Id == metricId);
-        return string.IsNullOrEmpty(metric?.Unit) ? string.Empty : metric!.Unit;
+        var key = (label, fontSize, brush);
+        if (_labelCache.TryGetValue(key, out var cached))
+            return cached;
+
+        if (_labelCache.Count >= MaxCachedLabels)
+            _labelCache.Clear();
+
+        var text = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            typeface, fontSize, brush);
+        _labelCache[key] = text;
+        return text;
     }
 
-    private bool IsMetricAvailable(string? metricId) =>
-        !string.IsNullOrEmpty(metricId)
-        && Metrics?.FirstOrDefault(metric => metric.Id == metricId)?.IsAvailable == true;
+    private IBrush GetValueBrush()
+    {
+        var themeColor = Theming.ThemeRuntime.Service.CurrentTheme.Chrome.MetricValue;
+        var color = Color.FromArgb(themeColor.A, themeColor.R, themeColor.G, themeColor.B);
+        if (_valueBrush is null || _valueBrushColor != color)
+        {
+            _valueBrushColor = color;
+            _valueBrush = new SolidColorBrush(color);
+        }
+
+        return _valueBrush;
+    }
+
+    // Plain indexed scan instead of LINQ FirstOrDefault: metrics are looked up
+    // several times per render, for every graph, on every frame, and the LINQ
+    // form allocated a delegate plus enumerator for each lookup.
+    private MetricReading? FindMetric(string? metricId)
+    {
+        if (string.IsNullOrEmpty(metricId))
+            return null;
+
+        var metrics = Metrics;
+        if (metrics is null)
+            return null;
+
+        for (var i = 0; i < metrics.Count; i++)
+        {
+            var candidate = metrics[i];
+            if (string.Equals(candidate.Id, metricId, StringComparison.Ordinal))
+                return candidate;
+        }
+
+        return null;
+    }
+
+    private string GetUnitSuffix(string? metricId)
+    {
+        var unit = FindMetric(metricId)?.Unit;
+        return string.IsNullOrEmpty(unit) ? string.Empty : unit!;
+    }
+
+    private bool IsMetricAvailable(string? metricId) => FindMetric(metricId)?.IsAvailable == true;
 
     private string GetMetricCategory(string? metricId) =>
-        Metrics?.FirstOrDefault(metric => metric.Id == metricId)?.Category
+        FindMetric(metricId)?.Category
         ?? (GraphRole?.ToString().StartsWith("Gpu", StringComparison.OrdinalIgnoreCase) == true ? "GPU" : "Hardware");
 
     private void DrawUnavailable(DrawingContext context, Rect bounds, string category)
     {
         var typeface = new Typeface(AxisFontFamily);
         var message = $"{category} Graph Unavailable";
-        var text = new FormattedText(message, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            typeface, 10, AxisBrush);
+        var text = GetLabelText(message, typeface, 10, AxisBrush);
         var x = Math.Max(0, (bounds.Width - text.Width) / 2);
         var y = Math.Max(0, (bounds.Height - text.Height) / 2);
         context.DrawText(text, new Point(x, y));

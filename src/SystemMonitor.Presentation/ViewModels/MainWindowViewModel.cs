@@ -42,7 +42,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private IThresholdMonitorService? _thresholdMonitor;
     private IOsMonitorService? _os;
     private AlertMonitor? _alertMonitor;
-    private IReadOnlyList<MetricReading> _latestSnapshot = Array.Empty<MetricReading>();
+    private volatile IReadOnlyList<MetricReading> _latestSnapshot = Array.Empty<MetricReading>();
+
+    // Reused when the GPU identity set is unchanged, so the polling thread does
+    // not copy the collection (and re-run GPU LINQ) on every tick.
+    private GpuDeviceDisplayInfo[] _lastGpuDevices = Array.Empty<GpuDeviceDisplayInfo>();
     private readonly object _uiUpdateGate = new();
     private Action? _pendingUiUpdate;
     private bool _uiUpdateQueued;
@@ -358,11 +362,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 _eventLog?.LogEvent(EventType.Error, ex.Message);
             }
 
-            var interval = TimeSpan.FromMilliseconds(_tickIntervalMs);
+            var interval = TimeSpan.FromMilliseconds(Math.Max(100, _tickIntervalMs));
             var remaining = interval - stopwatch.Elapsed;
 
+            // Wait on the cancellation handle rather than Thread.Sleep so a
+            // shutdown does not have to wait out the current tick interval.
             if (remaining > TimeSpan.Zero)
-                Thread.Sleep(remaining);
+                _pollingCts.Token.WaitHandle.WaitOne(remaining);
         }
     }
 
@@ -410,42 +416,68 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         if (metricsChanged || previousSnapshot.Count == 0)
         {
-            var gpuUsageRows = snapshot
-                .Where(m =>
-                    m.Id.StartsWith("gpu.usage.") &&
-                    m.GpuDeviceId != null &&
-                    m.IsAvailable)
-                .ToList();
+            // One pass over the snapshot instead of three Where(...).ToList()
+            // sequences plus DistinctBy/OrderBy rebuilds — this runs on the
+            // polling thread every tick while values are changing.
+            string? firstUsageId = null;
+            string? firstModelId = null;
+            HashSet<string>? seenDeviceIds = null;
+            List<GpuDeviceDisplayInfo>? gpuList = null;
 
-            dedicatedId = gpuUsageRows.FirstOrDefault(m => m.GpuIsIntegrated == false)?.Id
-                ?? gpuUsageRows.FirstOrDefault()?.Id;
+            for (var i = 0; i < snapshot.Count; i++)
+            {
+                var reading = snapshot[i];
+                var deviceId = reading.GpuDeviceId;
+                if (deviceId is null)
+                    continue;
 
-            integratedId = gpuUsageRows.FirstOrDefault(m => m.GpuIsIntegrated == true)?.Id
-                ?? gpuUsageRows.FirstOrDefault()?.Id;
+                if (reading.Id.StartsWith("gpu.usage.", StringComparison.Ordinal))
+                {
+                    if (!reading.IsAvailable)
+                        continue;
 
-            var gpuModelRows = snapshot
-                .Where(m =>
-                    m.Id.StartsWith("gpu.model.") &&
-                    m.GpuDeviceId != null)
-                .ToList();
+                    firstUsageId ??= reading.Id;
+                    if (reading.GpuIsIntegrated == false)
+                        dedicatedId ??= reading.Id;
+                    else if (reading.GpuIsIntegrated == true)
+                        integratedId ??= reading.Id;
 
-            dedicatedModelId = gpuModelRows.FirstOrDefault(m => m.GpuIsIntegrated == false)?.Id
-                ?? gpuModelRows.FirstOrDefault()?.Id;
+                    seenDeviceIds ??= new HashSet<string>(StringComparer.Ordinal);
+                    if (seenDeviceIds.Add(deviceId))
+                    {
+                        gpuList ??= new List<GpuDeviceDisplayInfo>(2);
+                        gpuList.Add(new GpuDeviceDisplayInfo(
+                            deviceId,
+                            reading.GpuIndex ?? 0,
+                            reading.GpuIsIntegrated ?? false,
+                            $"GPU {reading.GpuIndex} ({(reading.GpuIsIntegrated == true ? "Integrated" : "Dedicated")})"));
+                    }
+                }
+                else if (reading.Id.StartsWith("gpu.model.", StringComparison.Ordinal))
+                {
+                    firstModelId ??= reading.Id;
+                    if (reading.GpuIsIntegrated == false)
+                        dedicatedModelId ??= reading.Id;
+                    else if (reading.GpuIsIntegrated == true)
+                        integratedModelId ??= reading.Id;
+                }
+            }
 
-            integratedModelId = gpuModelRows.FirstOrDefault(m => m.GpuIsIntegrated == true)?.Id
-                ?? gpuModelRows.FirstOrDefault()?.Id;
+            // Preserve the previous single-GPU fallbacks.
+            dedicatedId ??= firstUsageId;
+            integratedId ??= firstUsageId;
+            dedicatedModelId ??= firstModelId;
+            integratedModelId ??= firstModelId;
 
-            gpus = gpuUsageRows
-                .Select(m => new GpuDeviceDisplayInfo(
-                    m.GpuDeviceId!,
-                    m.GpuIndex ?? 0,
-                    m.GpuIsIntegrated ?? false,
-                    $"GPU {m.GpuIndex} ({(m.GpuIsIntegrated == true
-                        ? "Integrated"
-                        : "Dedicated")})"))
-                .DistinctBy(g => g.DeviceId)
-                .OrderBy(g => g.Index)
-                .ToArray();
+            if (gpuList is null)
+            {
+                gpus = Array.Empty<GpuDeviceDisplayInfo>();
+            }
+            else
+            {
+                gpuList.Sort(static (a, b) => a.Index.CompareTo(b.Index));
+                gpus = gpuList.ToArray();
+            }
         }
         else
         {
@@ -453,8 +485,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             integratedId = previousIntegratedGpuMetricId;
             dedicatedModelId = previousDedicatedGpuModelId;
             integratedModelId = previousIntegratedGpuModelId;
-            gpus = DetectedGpus.ToArray();
+            gpus = _lastGpuDevices;
         }
+
+        _lastGpuDevices = gpus;
 
         var osInfo = os.LastInfo ?? os.GetCurrentInfo();
 
@@ -468,10 +502,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             || !string.Equals(previousDedicatedGpuModelId, dedicatedModelId, StringComparison.Ordinal)
             || !string.Equals(previousIntegratedGpuModelId, integratedModelId, StringComparison.Ordinal)
             || previousHasAvailableGpu != (gpus.Length > 0)
-            || !AreProcessListsEquivalent(DetectedGpus, gpus, g => g.DeviceId)
-            || !AreProcessListsEquivalent(TopProcesses, combinedProcesses, p => p.ProcessId)
-            || !AreProcessListsEquivalent(TopCpuProcesses, cpuProcesses, p => p.ProcessId)
-            || !AreProcessListsEquivalent(TopMemoryProcesses, memoryProcesses, p => p.ProcessId);
+            || !DetectedGpus.SequenceEqual(gpus)
+            || !TopProcesses.SequenceEqual(combinedProcesses)
+            || !TopCpuProcesses.SequenceEqual(cpuProcesses)
+            || !TopMemoryProcesses.SequenceEqual(memoryProcesses);
 
         if (!shouldApplyUi)
             return;
@@ -523,33 +557,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             var b = right[i];
             if (a.Id != b.Id || a.Label != b.Label || a.Value != b.Value
                 || a.IsAvailable != b.IsAvailable || a.TextValue != b.TextValue)
-                return false;
-        }
-
-        return true;
-    }
-
-    private static bool AreProcessListsEquivalent<TItem, TKey>(
-        ObservableCollection<TItem> current,
-        IReadOnlyList<TItem> latest,
-        Func<TItem, TKey> keySelector)
-        where TKey : notnull
-    {
-        if (current.Count != latest.Count)
-            return false;
-
-        var indexByKey = new Dictionary<TKey, int>(current.Count);
-        for (var i = 0; i < current.Count; i++)
-            indexByKey[keySelector(current[i])] = i;
-
-        for (var i = 0; i < latest.Count; i++)
-        {
-            var item = latest[i];
-            var key = keySelector(item);
-            if (!indexByKey.TryGetValue(key, out var currentIndex) || currentIndex != i)
-                return false;
-
-            if (!EqualityComparer<TItem>.Default.Equals(current[i], item))
                 return false;
         }
 
@@ -611,9 +618,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             _pendingUiUpdate = null;
         _pollingCts.Cancel();
 
-        _pollingThread?.Join();
+        // Bounded wait: a wedged hardware driver must not make the app
+        // unclosable. The token is only disposed when the thread exited;
+        // disposing it under a still-running loop would throw inside the
+        // background thread.
+        var pollingStopped = _pollingThread is null
+            || _pollingThread.Join(TimeSpan.FromSeconds(3));
 
-        _pollingCts.Dispose();
+        if (pollingStopped)
+            _pollingCts.Dispose();
 
         MetricsTable.Dispose();
         TemperatureTable.Dispose();

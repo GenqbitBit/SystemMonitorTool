@@ -37,7 +37,7 @@ public sealed class SqliteEventLogService : IEventLogService, IAsyncDisposable, 
     private static readonly TimeSpan DrainTimeout = TimeSpan.FromSeconds(5);
 
     private DateTime _lastCleanup = DateTime.MinValue;
-    private bool _disposed;
+    private volatile bool _disposed;
     private long _droppedEventCount;
 
     public SqliteEventLogService()
@@ -72,7 +72,11 @@ public sealed class SqliteEventLogService : IEventLogService, IAsyncDisposable, 
     private void InitializeDatabase()
     {
         using var pragma = _connection.CreateCommand();
-        pragma.CommandText = "PRAGMA journal_mode=WAL;";
+        // WAL for concurrent readers; busy_timeout so this writer waits for
+        // the metric-history writer instead of failing with "database is locked".
+        // synchronous=NORMAL pairs with WAL: one fsync per checkpoint instead
+        // of one per commit, without risking database corruption.
+        pragma.CommandText = "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;";
         pragma.ExecuteNonQuery();
 
         using var create = _connection.CreateCommand();

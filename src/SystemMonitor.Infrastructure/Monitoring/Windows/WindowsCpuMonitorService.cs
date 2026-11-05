@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Management;
 using System.Runtime.Versioning;
 using LibreHardwareMonitor.Hardware;
@@ -25,12 +24,9 @@ public class WindowsCpuMonitorService : ICpuMonitorService, IDisposable
     private readonly int _coreCount;
     private readonly int _threadCount;
 
-    // Shared Computer/driver handle — same instance every monitor service borrows.
-    private readonly Computer _computer = LibreHardwareMonitorHost.Instance.Computer;
-
-    // Per-sensor running average, keyed by the ISensor reference itself so it
-    // survives across GetCurrentUsage() calls for the lifetime of this service.
-    private readonly Dictionary<ISensor, (double Sum, int Count)> _temperatureAveraging = new();
+    // Running average per sensor, keyed by stable sensor id. The host's cached
+    // readings are shared between services, so they must not be mutated.
+    private readonly Dictionary<string, (double Sum, int Count)> _temperatureAveraging = new();
 
     public WindowsCpuMonitorService()
     {
@@ -73,78 +69,65 @@ public class WindowsCpuMonitorService : ICpuMonitorService, IDisposable
         };
     }
 
-    // Moved from the old WindowsTemperatureMonitorService — same sensor
-    // filtering and 0°C-is-fake handling, scoped to just this device's hardware.
+    // Reads the shared per-refresh temperature cache instead of walking every
+    // hardware/sensor on each tick. The filter mirrors the previous behaviour:
+    // firmware limit/distance sensors are not real temperatures.
     private List<TemperatureReading> GetTemperatures()
     {
-        var readings = new List<TemperatureReading>();
+        var cached = LibreHardwareMonitorHost.Instance.GetTemperatureReadings("CPU");
+        if (cached.Count == 0)
+            return new List<TemperatureReading>();
 
-        lock (LibreHardwareMonitorHost.Instance.UpdateSyncRoot)
+        var readings = new List<TemperatureReading>(cached.Count);
+        foreach (var reading in cached)
         {
-            foreach (var hardware in _computer.Hardware)
-            {
-                if (hardware.HardwareType != HardwareType.Cpu) continue;
-                var temperatureSensors = hardware.Sensors
-                    .Where(s => s.SensorType == SensorType.Temperature)
-                    .Where(s => !s.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
-                             && !s.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)
-                             && !s.Name.Contains("Limit", StringComparison.OrdinalIgnoreCase)
-                             && !s.Name.Contains("Distance to TjMax", StringComparison.OrdinalIgnoreCase));
-
-                // CPU has no "primary vs sub-reading" distinction like GPU does —
-                // every CPU temp sensor (Package, per-core, per-CCD) is reported
-                // as primary, matching the old service's behavior for category != GPU.
-                readings.AddRange(temperatureSensors.Select(sensor =>
-                    BuildTemperatureReading(hardware, sensor, isPrimary: true)));
-            }
+            if (IsLimitSensor(reading.SensorLabel))
+                continue;
+            readings.Add(WithAverage(reading));
         }
 
         return readings;
     }
 
-    private TemperatureReading BuildTemperatureReading(
-        IHardware hardware,
-        ISensor sensor,
-        bool isPrimary)
-    {
-        // A reading of exactly 0°C is never real for these components — see
-        // investigation notes: confirmed not permissions/version/AV related,
-        // appears to be OEM firmware restricting SMU telemetry on some laptops.
-        var isRealReading = sensor.Value.HasValue && sensor.Value.Value != 0;
-        double average = 0, min = 0, max = 0;
+    private static bool IsLimitSensor(string label) =>
+        label.Contains("Warning", StringComparison.OrdinalIgnoreCase)
+        || label.Contains("Critical", StringComparison.OrdinalIgnoreCase)
+        || label.Contains("Limit", StringComparison.OrdinalIgnoreCase)
+        || label.Contains("Distance to TjMax", StringComparison.OrdinalIgnoreCase);
 
-        if (isRealReading)
+    private TemperatureReading WithAverage(TemperatureReading source)
+    {
+        double average = 0;
+
+        if (source.IsAvailable)
         {
-            var currentValue = sensor.Value!.Value;
-            if (_temperatureAveraging.TryGetValue(sensor, out var existing))
+            var key = source.SensorId;
+            if (_temperatureAveraging.TryGetValue(key, out var existing))
             {
-                var newSum = existing.Sum + currentValue;
+                var newSum = existing.Sum + source.TemperatureCelsius;
                 var newCount = existing.Count + 1;
-                _temperatureAveraging[sensor] = (newSum, newCount);
+                _temperatureAveraging[key] = (newSum, newCount);
                 average = newSum / newCount;
             }
             else
             {
-                _temperatureAveraging[sensor] = (currentValue, 1);
-                average = currentValue;
+                _temperatureAveraging[key] = (source.TemperatureCelsius, 1);
+                average = source.TemperatureCelsius;
             }
-            // Min/Max are tracked natively by the library since Computer.Open() —
-            // no need to compute these ourselves.
-            min = sensor.Min ?? currentValue;
-            max = sensor.Max ?? currentValue;
         }
 
         return new TemperatureReading
         {
-            Category = "CPU",
-            HardwareName = hardware.Name,
-            SensorLabel = $"{hardware.Name}: {sensor.Name ?? "Unknown"}",
-            IsAvailable = isRealReading,
-            TemperatureCelsius = isRealReading ? sensor.Value!.Value : 0,
-            MinCelsius = min,
-            MaxCelsius = max,
+            Category = source.Category,
+            HardwareName = source.HardwareName,
+            SensorId = source.SensorId,
+            SensorLabel = source.SensorLabel,
+            IsAvailable = source.IsAvailable,
+            TemperatureCelsius = source.TemperatureCelsius,
+            MinCelsius = source.MinCelsius,
+            MaxCelsius = source.MaxCelsius,
             AverageCelsius = average,
-            IsPrimary = isPrimary
+            IsPrimary = source.IsPrimary
         };
     }
 

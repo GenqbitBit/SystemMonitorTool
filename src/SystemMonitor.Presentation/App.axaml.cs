@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,6 +13,7 @@ using SystemMonitor.Presentation.Services;
 
 using Microsoft.Extensions.DependencyInjection;
 using SystemMonitor.Infrastructure.Monitoring;  
+using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Infrastructure;
 using SystemMonitor.Infrastructure.DependencyInjection;
 using SystemMonitor.Infrastructure.Persistence;
@@ -35,6 +38,7 @@ public partial class App : Avalonia.Application
         services.AddPlatformMonitoringServices();
         services.AddThemingServices();      
         services.AddSingleton<IAlertSoundPlayer, CrossPlatformSoundPlayer>();         
+        services.AddThemingServices();
         services.AddSingleton<ISettingsService>(_ => new JsonSettingsService(
 
             Path.Combine(AppContext.BaseDirectory, "settings.json")));
@@ -42,11 +46,11 @@ public partial class App : Avalonia.Application
         services.AddSingleton<IAsciiArtConverter, AsciiArtConverter>();
         var provider = services.BuildServiceProvider();
 
-        var themeService = provider.GetRequiredService<IThemeService>();  
-        SystemMonitor.Presentation.Theming.ThemeRuntime.Service = themeService; 
-        SystemMonitor.Presentation.Theming.ThemeResourceApplier.Apply(themeService.CurrentTheme); 
+        var themeService = provider.GetRequiredService<IThemeService>();
+        SystemMonitor.Presentation.Theming.ThemeRuntime.Service = themeService;
+        SystemMonitor.Presentation.Theming.ThemeResourceApplier.Apply(themeService.CurrentTheme);
         themeService.ThemeChanged += (_, theme) =>
-            SystemMonitor.Presentation.Theming.ThemeResourceApplier.Apply(theme); 
+            SystemMonitor.Presentation.Theming.ThemeResourceApplier.Apply(theme);
         SystemMonitor.Presentation.Common.SettingsRuntime.Initialize(
             provider.GetRequiredService<ISettingsService>());
 
@@ -61,40 +65,74 @@ public partial class App : Avalonia.Application
             desktop.MainWindow = mainWindow;
 
             var mainViewModel = (MainWindowViewModel)mainWindow.DataContext;
-            AsciiArtPanelViewModel? asciiArtViewModel = null;
             var startupCancellation = new CancellationTokenSource();
             var backendInitialization = mainViewModel.InitializeBackendAsync(provider, startupCancellation.Token);
 
-            desktop.ShutdownRequested += (_, _) =>
-            {
-                startupCancellation.Cancel();
-                mainViewModel?.Dispose();
-                asciiArtViewModel?.Dispose();
-                _ = FinishShutdownAsync(backendInitialization, provider, startupCancellation);
-            };
-
             var converter = provider.GetRequiredService<IAsciiArtConverter>();
-            asciiArtViewModel = new AsciiArtPanelViewModel(converter, mainWindow.StorageProvider);
+            var asciiArtViewModel = new AsciiArtPanelViewModel(converter, mainWindow.StorageProvider);
             mainWindow.AsciiPanel.DataContext = asciiArtViewModel;
+
+            // Deterministic shutdown: cancel startup, let the (possibly
+            // half-finished) backend attach settle, stop polling, then drain
+            // SQLite and close the LibreHardwareMonitor driver. The previous
+            // fire-and-forget handler let the process exit before queued
+            // events were flushed.
+            var shutdownStarted = 0;
+            mainWindow.Closing += (_, e) =>
+            {
+                if (Interlocked.Exchange(ref shutdownStarted, 1) != 0)
+                    return;
+
+                e.Cancel = true;
+                Dispatcher.UIThread.Post(() => CompleteShutdownAsync(
+                    desktop,
+                    provider,
+                    startupCancellation,
+                    backendInitialization,
+                    mainViewModel,
+                    asciiArtViewModel));
+            };
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
-    private static async Task FinishShutdownAsync(
-        Task backendInitialization,
+    private static async void CompleteShutdownAsync(
+        IClassicDesktopStyleApplicationLifetime desktop,
         ServiceProvider provider,
-        CancellationTokenSource startupCancellation)
+        CancellationTokenSource startupCancellation,
+        Task backendInitialization,
+        MainWindowViewModel mainViewModel,
+        AsciiArtPanelViewModel asciiArtViewModel)
     {
         try
         {
-            await backendInitialization.ConfigureAwait(false);
+            startupCancellation.Cancel();
+
+            // Never block the UI thread here: backend initialization resumes
+            // through Dispatcher.UIThread.InvokeAsync, so a blocking Wait()
+            // would deadlock. Awaiting keeps the dispatcher pumping.
+            var initializationFinished = await Task.WhenAny(
+                backendInitialization,
+                Task.Delay(TimeSpan.FromSeconds(5))).ConfigureAwait(true) == backendInitialization;
+
+            if (!initializationFinished)
+                Trace.WriteLine("Backend initialization did not finish before shutdown timeout.");
+
+            try { mainViewModel.Dispose(); }
+            catch (Exception ex) { Trace.WriteLine($"ViewModel shutdown failed: {ex}"); }
+
+            try { asciiArtViewModel.Dispose(); }
+            catch (Exception ex) { Trace.WriteLine($"ASCII panel shutdown failed: {ex}"); }
+
+            try { provider.Dispose(); }
+            catch (Exception ex) { Trace.WriteLine($"Service shutdown failed: {ex}"); }
+
+            startupCancellation.Dispose();
         }
         finally
         {
-            provider.Dispose();
-            startupCancellation.Dispose();
+            desktop.Shutdown();
         }
     }
-
 }

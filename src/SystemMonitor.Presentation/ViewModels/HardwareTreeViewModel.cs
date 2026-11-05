@@ -18,7 +18,9 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
     private readonly ManualResetEventSlim _stopSignal = new();
     private volatile bool _running;
     private volatile bool _disposed;
-    private List<Domain.Models.HardwareTreeNode> _roots = new();
+    // Written by the discovery thread, read by the value-refresh thread.
+    private volatile List<Domain.Models.HardwareTreeNode> _roots = new();
+    private int _discovering;
 
     private static readonly TimeSpan ValueRefreshInterval = TimeSpan.FromSeconds(2);
 
@@ -45,24 +47,32 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
         _pollThread.Start();
     }
 
+    // A manual refresh used to run a full LibreHardwareMonitor discovery on
+    // the UI thread, freezing the window for the duration of the scan.
     [RelayCommand]
-    private void Refresh() => Discover();
+    private void Refresh() => ThreadPool.QueueUserWorkItem(_ => Discover());
 
     private void Discover()
     {
         var provider = _provider;
-        if (provider is null)
+        if (provider is null || _disposed)
+            return;
+
+        // Serialize overlapping manual/poll discoveries; the scan is expensive.
+        if (Interlocked.Exchange(ref _discovering, 1) != 0)
             return;
 
         try
         {
-            _roots = provider.DiscoverTree().ToList();
-        }
-        catch (Exception ex)
-        {
-            _eventLog?.LogEvent(EventType.Error, ex.Message);
-            _roots = new List<Domain.Models.HardwareTreeNode>();
-        }
+            try
+            {
+                _roots = provider.DiscoverTree().ToList();
+            }
+            catch (Exception ex)
+            {
+                _eventLog?.LogEvent(EventType.Error, ex.Message);
+                _roots = new List<Domain.Models.HardwareTreeNode>();
+            }
 
         if (_roots.Count == 0)
         {
@@ -95,6 +105,11 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
             Roots.Clear();
             foreach (var vm in vms) Roots.Add(vm);
         });
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _discovering, 0);
+        }
     }
 
     private void PollLoop()
@@ -145,7 +160,7 @@ public partial class HardwareTreeViewModel : ObservableObject, IDisposable
         _disposed = true;
         _running = false;
         _stopSignal.Set();
-        _pollThread?.Join();
+        _pollThread?.Join(TimeSpan.FromSeconds(2));
         _stopSignal.Dispose();
     }
 }
