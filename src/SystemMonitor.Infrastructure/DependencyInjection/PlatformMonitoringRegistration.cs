@@ -31,7 +31,8 @@ public static class PlatformMonitoringRegistration
                     new MetricThreshold("cpu.usage", WarningValue: 80, CriticalValue: 90),
                     new MetricThreshold("memory.usage", WarningValue: 50, CriticalValue: 95),
                     new MetricThreshold("disk.usage", WarningValue: 85, CriticalValue: 95),
-                }));
+                },
+                sp.GetRequiredService<IAlertSoundPlayer>()));
 
         // Register platform-specific services
         if (OperatingSystem.IsWindows())

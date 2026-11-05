@@ -11,6 +11,7 @@ using SystemMonitor.Application.Interfaces;
 using SystemMonitor.Domain.Models;
 using SystemMonitor.Application.UseCases;
 using SystemMonitor.Infrastructure.Monitoring.CrossPlatform;
+using SystemMonitor.Infrastructure.Audio;
 using SystemMonitor.Infrastructure.Persistence;
 using SystemMonitor.Presentation.Common;
 using SystemMonitor.Presentation.Services;
@@ -29,10 +30,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         public IEventLogService EventLog { get; } = new SqliteEventLogService();
         public MetricsTableViewModel MetricsTable { get; } = new MetricsTableViewModel();
         public IHardwareTreeProvider HardwareTreeProvider { get; } = new DesignTimeHardwareTreeProvider();
+        public IAlertSoundPlayer SoundPlayer { get; } = new CrossPlatformSoundPlayer { IsEnabled = false };
         public ISettingsService Settings { get; } = new JsonSettingsService(
             Path.Combine(AppContext.BaseDirectory, "settings.json"));
     }
-
     private IMetricsSnapshotProvider? _metricsProvider;
     private readonly IMetricHistoryStore _historyStore;
     private readonly HardwareTreeViewModel _hardwareTree;
@@ -138,7 +139,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             dependencies.Os,
             dependencies.HistoryPersistence,
             dependencies.EventLog,
-            new ThresholdMonitorService(dependencies.EventLog, Array.Empty<MetricThreshold>()),
+            new ThresholdMonitorService(
+                dependencies.EventLog,
+                Array.Empty<MetricThreshold>(),
+                dependencies.SoundPlayer),
             dependencies.MetricsTable,
             dependencies.HardwareTreeProvider,
             dependencies.Settings)

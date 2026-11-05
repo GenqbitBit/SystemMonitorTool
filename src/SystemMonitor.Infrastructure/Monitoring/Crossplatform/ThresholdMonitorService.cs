@@ -18,12 +18,17 @@ namespace SystemMonitor.Infrastructure.Monitoring.CrossPlatform;
 public sealed class ThresholdMonitorService : IThresholdMonitorService
 {
     private readonly IEventLogService _eventLog;
+    private readonly IAlertSoundPlayer _soundPlayer;
     private readonly Dictionary<string, MetricThreshold> _thresholds;
     private readonly HashSet<string> _currentlyOverThreshold = new();
 
-    public ThresholdMonitorService(IEventLogService eventLog, IEnumerable<MetricThreshold> thresholds)
+    public ThresholdMonitorService(
+        IEventLogService eventLog,
+        IEnumerable<MetricThreshold> thresholds,
+        IAlertSoundPlayer soundPlayer)
     {
         _eventLog = eventLog;
+        _soundPlayer = soundPlayer;
         _thresholds = thresholds.ToDictionary(t => t.MetricId);
     }
 
@@ -41,6 +46,7 @@ public sealed class ThresholdMonitorService : IThresholdMonitorService
                 _eventLog.LogEvent(
                     EventType.ThresholdCrossed,
                     $"{reading.Id} crossed {threshold.CriticalValue} (value: {reading.Value})");
+                _soundPlayer.Play(reading.Id, AlertLevel.Critical);
                 _currentlyOverThreshold.Add(reading.Id);
             }
             else if (!isOver && wasOver)

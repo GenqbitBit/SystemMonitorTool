@@ -9,7 +9,11 @@ namespace SystemMonitor.Presentation.ViewModels;
 public partial class SettingsPanelViewModel : ViewModelBase
 {
     private readonly ISettingsService _settings;
+    private readonly IAlertSoundPlayer? _soundPlayer;
     private bool _suppressUpdates; // guards against re-entrant writes while loading Current into the properties below
+
+    [ObservableProperty]
+    private bool soundAlertsEnabled = true;
 
     [ObservableProperty]
     private int tickIntervalMs;
@@ -55,10 +59,13 @@ public partial class SettingsPanelViewModel : ViewModelBase
     {
     }
 
-    public SettingsPanelViewModel(ISettingsService settings)
+    public SettingsPanelViewModel(ISettingsService settings, IAlertSoundPlayer? soundPlayer = null)
     {
         _settings = settings;
+        _soundPlayer = soundPlayer;
         LoadFrom(_settings.Current);
+
+        SoundAlertsEnabled = soundPlayer?.IsEnabled ?? true;
     }
 
     private void LoadFrom(AppSettings s)
@@ -82,6 +89,12 @@ public partial class SettingsPanelViewModel : ViewModelBase
         BarFontSize = s.Braille.BarFontSize;
 
         _suppressUpdates = false;
+    }
+
+    partial void OnSoundAlertsEnabledChanged(bool value)
+    {
+        if (_soundPlayer is not null)
+            _soundPlayer.IsEnabled = value;
     }
 
     partial void OnTickIntervalMsChanged(int value)
